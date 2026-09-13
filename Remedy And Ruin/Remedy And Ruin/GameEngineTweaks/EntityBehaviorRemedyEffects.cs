@@ -514,6 +514,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                         List<TreeAttribute> rrpoisons = RRPoisonEffects.value.ToList<TreeAttribute>();
                         rrpoisons.Clear();
                         RRPoisonEffects = new TreeArrayAttribute(rrpoisons.ToArray());
+                        threadManager.HandleForcefulEnd();
                         drankAntidote = false;
                         timeAntidoteConsumed = DateTime.MinValue;
                     }
