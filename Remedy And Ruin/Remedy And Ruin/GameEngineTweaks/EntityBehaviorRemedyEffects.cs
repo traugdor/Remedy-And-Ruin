@@ -284,84 +284,39 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             TreeAttribute[] rrpoisons = RRPoisonEffects.value;
             foreach (var poison in rrpoisons)
             {
-                //extract effectname and uid from it.
                 string effectname = poison.GetString("effectname");
-                string[] t = effectname.Split("|");
-                effectname = t[0];
-                string guid = t[1];
+                string guid = effectname.Split("|")[1];
                 liveKeys.Add(guid);
-                //lookup effectsApplied using effectuid
-                if (!effectsApplied.TryGetValue(guid, out bool applied))
+                if (!effectsApplied.ContainsKey(guid))
                 {
-                    //apply effect using name and effect data in rrpoisons
-                    //register effect
                     effectsApplied[guid] = true;
+                    threadManager.ApplyPoisonEffect(guid);
                 }
-                /*
-                 * string EffectType
-                 * float EffectMult
-                 * float EffectOnset
-                 * string GUID
-                 * DateTime start
-                 * object TimeSpanOrStop
-                 * string secondaryEffectType = null
-                 * float? secondaryEffectMult = null
-                 */
-                string effecttype = ""; //derive from effectname using some logic switch
-                float effectMult = poison.GetFloat("effectMultiplier");
-                float effectOnset = poison.GetFloat("onsetMultiplier");
-                DateTime start = DateTime.Now;
-                object timeSpanOrStop;
-                double timeleft = poison.GetDouble("timeleft");
-                float toxicEffectMultiplier = poison.GetFloat("toxicEffectMultiplier");
-                string secondaryEffectType = toxicEffectMultiplier > 0f ? "toxic" : null;
-                float? secondaryEffectMult = toxicEffectMultiplier > 0f ? toxicEffectMultiplier : (float?)null;
-                if (Remedy_And_RuinModSystem.Config.allowEffectsToExpireWhenOffline)
-                {
-                    //hard stop time - calendar hours, not a real DateTime, since this must
-                    //track the in-game calendar rather than the wall clock
-                    timeSpanOrStop = entity.World.Calendar.TotalHours + timeleft;
-                }
-                else
-                {
-                    timeSpanOrStop = timeleft; // we just send the timeleft and calculate the end time on the other side.
-                }
-                threadManager.ApplyPoisonEffect(effecttype, effectMult, effectOnset, guid, start, timeSpanOrStop, secondaryEffectType, secondaryEffectMult);
             }
             //repeat for potions and illnesses
             TreeAttribute[] rrillnesses = RRIllnessEffects.value;
             foreach (var illness in rrillnesses)
             {
-                //extract effectname and uid from it.
                 string effectname = illness.GetString("effectname");
-                string[] t = effectname.Split("|");
-                effectname = t[0];
-                string guid = t[1];
+                string guid = effectname.Split("|")[1];
                 liveKeys.Add(guid);
-                //lookup effectsApplied using effectuid
-                if (!effectsApplied.TryGetValue(guid, out bool applied))
+                if (!effectsApplied.ContainsKey(guid))
                 {
-                    //apply effect using name and effect data in rrillnesses
-                    //register effect
                     effectsApplied[guid] = true;
+                    threadManager.ApplyIllnessEffect(guid);
                 }
             }
 
             TreeAttribute[] rrpotions = RRPotionEffects.value;
             foreach (var potion in rrpotions)
             {
-                //extract effectname and uid from it.
                 string effectname = potion.GetString("effectname");
-                string[] t = effectname.Split("|");
-                effectname = t[0];
-                string guid = t[1];
+                string guid = effectname.Split("|")[1];
                 liveKeys.Add(guid);
-                //lookup effectsApplied using effectuid
-                if (!effectsApplied.TryGetValue(guid, out bool applied))
+                if (!effectsApplied.ContainsKey(guid))
                 {
-                    //apply effect using name and effect data in rrpotions
-                    //register effect
                     effectsApplied[guid] = true;
+                    threadManager.ApplyPotionEffect(guid);
                 }
             }
 
