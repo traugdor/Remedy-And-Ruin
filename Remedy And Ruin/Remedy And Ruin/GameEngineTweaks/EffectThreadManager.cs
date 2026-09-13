@@ -15,6 +15,20 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         Potion
     }
 
+    public readonly struct StatModifier
+    {
+        public readonly string Category;
+        public readonly float Value;
+        public readonly bool Persistent;
+
+        public StatModifier(string category, float value, bool persistent = false)
+        {
+            Category = category;
+            Value = value;
+            Persistent = persistent;
+        }
+    }
+
     internal sealed class ActiveEffectReport
     {
         public Guid Guid;
@@ -53,6 +67,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         public double EndTotalHours { get; }
         public string SecondaryEffectType { get; }
         public float? SecondaryEffectMult { get; }
+        public IReadOnlyList<StatModifier> StatModifiers { get; }
 
         private static readonly TimeSpan CalendarPollInterval = TimeSpan.FromSeconds(10);
 
@@ -64,6 +79,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             Guid guid, EffectBucket bucket, string cluster, float effectMult, float effectOnset,
             double startTotalHours, double endTotalHours, Func<double> getTotalHours,
             string secondaryEffectType, float? secondaryEffectMult,
+            IReadOnlyList<StatModifier> statModifiers,
             Action<EffectTimerThread> onSaveReport,
             Action<EffectTimerThread> onNaturalEnd,
             Action<EffectTimerThread> onForcedEnd)
@@ -77,6 +93,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             EndTotalHours = endTotalHours;
             SecondaryEffectType = secondaryEffectType;
             SecondaryEffectMult = secondaryEffectMult;
+            StatModifiers = statModifiers;
             this.getTotalHours = getTotalHours;
 
             System.Threading.Tasks.Task.Run(() => Run(onSaveReport, onNaturalEnd, onForcedEnd));
@@ -159,37 +176,97 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         //============== APPLYING EFFECTS ==============//
 
-        public void ApplyPoisonEffect(string EffectType, float EffectMult, float EffectOnset, string GUID, double start, double TimeSpanOrStop, string secondaryEffectType = null, float? secondaryEffectMult = null)
-            => ApplyEffect(EffectBucket.Poison, EffectType, EffectMult, EffectOnset, GUID, start, TimeSpanOrStop, secondaryEffectType, secondaryEffectMult);
+        public void ApplyPoisonEffect(string guid) => ApplyEffect(EffectBucket.Poison, guid);
+        public void ApplyIllnessEffect(string guid) => ApplyEffect(EffectBucket.Illness, guid);
+        public void ApplyPotionEffect(string guid) => ApplyEffect(EffectBucket.Potion, guid);
 
-        public void ApplyIllnessEffect(string EffectType, float EffectMult, string GUID, double start, double TimeSpanOrStop, string secondaryEffectType = null, float? secondaryEffectMult = null)
-            => ApplyEffect(EffectBucket.Illness, EffectType, EffectMult, 0f, GUID, start, TimeSpanOrStop, secondaryEffectType, secondaryEffectMult);
-
-        public void ApplyPotionEffect(string EffectType, float EffectMult, string GUID, double start, double TimeSpanOrStop, string secondaryEffectType = null, float? secondaryEffectMult = null)
-            => ApplyEffect(EffectBucket.Potion, EffectType, EffectMult, 0f, GUID, start, TimeSpanOrStop, secondaryEffectType, secondaryEffectMult);
-
-        // start = calendar TotalHours when this instance began; TimeSpanOrStop = absolute
-        // calendar TotalHours it ends at. Both already computed by the caller - this method
-        // just hands them straight to the timer.
-        private void ApplyEffect(EffectBucket bucket, string cluster, float effectMult, float effectOnset, string guid, double start, double endTotalHours, string secondaryEffectType, float? secondaryEffectMult)
+        // Reads the matching WatchedAttributes entry for guid, decides what entity.Stats
+        // modifiers it applies (via DetermineStatModifiers), and spawns its timer thread.
+        // effectMultiplier/onsetMultiplier are read as already-final, tolerance-discounted
+        // values - this method never applies additional tolerance math to them.
+        private void ApplyEffect(EffectBucket bucket, string guid)
         {
-            /*
-             * PLACEHOLDER
-             * Apply this effect - and, if present, the secondary effect - to entity.Stats here.
-             * Use guid as the stat source/code so this instance can be independently blended
-             * against any other active effect on the same stat category, and independently
-             * removed later without disturbing the others.
-             */
+            var remedyEffects = entity.GetBehavior<EntityBehaviorRemedyEffects>();
+            if (remedyEffects == null) return;
+
+            TreeArrayAttribute source = bucket switch
+            {
+                EffectBucket.Poison => remedyEffects.RRPoisonEffects,
+                EffectBucket.Illness => remedyEffects.RRIllnessEffects,
+                EffectBucket.Potion => remedyEffects.RRPotionEffects,
+                _ => null
+            };
+            if (source == null) return;
+
+            TreeAttribute entry = source.value.FirstOrDefault(t => ExtractGuid(t) == guid);
+            if (entry == null) return; // effect no longer present - nothing to apply
+
+            string cluster = entry.GetString("cluster");
+            float effectMult = entry.GetFloat("effectMultiplier");
+            float effectOnset = entry.GetFloat("onsetMultiplier");
+            float toxicEffectMultiplier = entry.GetFloat("toxicEffectMultiplier");
+            double timeleft = entry.GetDouble("timeleft");
+
+            // "now" is correct as this effect's start point the one time this method runs for a
+            // given guid (parseEffectsAndApply's effectsApplied guard ensures that) - for a
+            // brand-new effect this genuinely is when it started. Preserving the true original
+            // start/end across a server restart is Plan 7's job once it adds persisted
+            // reconnection state; this does not attempt that.
+            double totalHoursNow = entity.World.Calendar.TotalHours;
+            double startTotalHours = totalHoursNow;
+            double endTotalHours = totalHoursNow + timeleft;
+
+            IReadOnlyList<StatModifier> statModifiers = DetermineStatModifiers(cluster, effectMult, effectOnset, toxicEffectMultiplier);
 
             var thread = new EffectTimerThread(
                 Guid.Parse(guid), bucket, cluster, effectMult, effectOnset,
-                start, endTotalHours, () => entity.World.Calendar.TotalHours,
-                secondaryEffectType, secondaryEffectMult,
+                startTotalHours, endTotalHours, () => entity.World.Calendar.TotalHours,
+                null, null, statModifiers,
                 onSaveReport: OnSaveReport,
                 onNaturalEnd: OnNaturalEnd,
                 onForcedEnd: OnForcedEnd);
 
             threads[thread.Guid] = thread;
+
+            if (statModifiers.Count > 0)
+            {
+                entity.Api.Event.EnqueueMainThreadTask(() => ApplyStatModifiers(thread), "rrEffectApplyStats");
+            }
+        }
+
+        // PLACEHOLDER dispatch point - Plan 12 (poison clusters) and Plan 13 (remedy potions)
+        // decide each cluster's real entity.Stats/DoT effect here, using the multipliers already
+        // read off the WatchedAttributes entry in ApplyEffect.
+        private static IReadOnlyList<StatModifier> DetermineStatModifiers(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier)
+        {
+            switch (cluster)
+            {
+                case "TOXICPOISON":
+                case "NOXIOUSPOISON":
+                case "CARDIACPOISON":
+                case "NEUROTOXICPOISON":
+                case "MINDPOISON":
+                    break;
+                default:
+                    break;
+            }
+            return Array.Empty<StatModifier>();
+        }
+
+        private void ApplyStatModifiers(EffectTimerThread t)
+        {
+            foreach (StatModifier modifier in t.StatModifiers)
+            {
+                entity.Stats.Set(modifier.Category, t.Guid.ToString(), modifier.Value, modifier.Persistent);
+            }
+        }
+
+        private void RemoveStatModifiers(EffectTimerThread t)
+        {
+            foreach (StatModifier modifier in t.StatModifiers)
+            {
+                entity.Stats.Remove(modifier.Category, t.Guid.ToString());
+            }
         }
 
         //============== WORLD SAVE ==============//
@@ -264,6 +341,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         private void OnForcedEnd(EffectTimerThread t)
         {
             threads.TryRemove(t.Guid, out _);
+            entity.Api.Event.EnqueueMainThreadTask(() => RemoveStatModifiers(t), "rrEffectForcedEndStats");
+            // Must stay synchronous and immediate, not nested inside the enqueued action above:
+            // HandleForcefulEnd blocks the main thread on pendingForcedEndCountdown.Wait(...), so
+            // gating this signal behind its own main-thread task would stall it for the full
+            // timeout waiting on a task the main thread can't run until it stops waiting.
             pendingForcedEndGuids?.Add(t.Guid);
             pendingForcedEndCountdown?.Signal();
         }
@@ -271,14 +353,20 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         private void OnNaturalEnd(EffectTimerThread t)
         {
             threads.TryRemove(t.Guid, out _);
-            RemoveGuidsFromWatchedAttributes(new[] { t.Guid });
+            entity.Api.Event.EnqueueMainThreadTask(() =>
+            {
+                RemoveStatModifiers(t);
+                RemoveGuidsFromWatchedAttributes(new[] { t.Guid });
 
-            /*
-             * PLACEHOLDER
-             * Natural expiry only - award tolerance progression etc. here once that logic
-             * exists. Forced end (OnForcedEnd, above) must never take this path: effects lost
-             * to an antidote or death do not count towards tolerance.
-             */
+                /*
+                 * PLACEHOLDER
+                 * Natural expiry only - award tolerance progression here once that logic exists.
+                 * Forced end (above) must never take this path: effects lost to an antidote or
+                 * death do not count towards tolerance. Belongs in this same enqueued task,
+                 * since it needs main-thread access to WatchedAttributes-backed tolerance
+                 * counters.
+                 */
+            }, "rrEffectNaturalEnd");
         }
 
         private static ActiveEffectReport BuildReport(EffectTimerThread t) => new ActiveEffectReport
