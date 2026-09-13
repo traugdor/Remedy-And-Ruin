@@ -6,6 +6,7 @@ using System.Threading;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Datastructures;
+using Vintagestory.GameContent;
 
 namespace Remedy_And_Ruin.GameEngineTweaks
 {
