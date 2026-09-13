@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Datastructures;
 
@@ -26,6 +27,26 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             Category = category;
             Value = value;
             Persistent = persistent;
+        }
+    }
+
+    public readonly struct DoTSpec
+    {
+        public readonly EnumDamageSource DamageSource;
+        public readonly EnumDamageType DamageType;
+        public readonly int DamageTier;
+        public readonly float TotalDamage;
+        public readonly TimeSpan TotalTime;
+        public readonly int TicksNumber;
+
+        public DoTSpec(EnumDamageSource damageSource, EnumDamageType damageType, int damageTier, float totalDamage, TimeSpan totalTime, int ticksNumber)
+        {
+            DamageSource = damageSource;
+            DamageType = damageType;
+            DamageTier = damageTier;
+            TotalDamage = totalDamage;
+            TotalTime = totalTime;
+            TicksNumber = ticksNumber;
         }
     }
 
@@ -68,6 +89,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         public string SecondaryEffectType { get; }
         public float? SecondaryEffectMult { get; }
         public IReadOnlyList<StatModifier> StatModifiers { get; }
+        public DoTSpec? DoT { get; }
 
         private static readonly TimeSpan CalendarPollInterval = TimeSpan.FromSeconds(10);
 
@@ -80,6 +102,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             double startTotalHours, double endTotalHours, Func<double> getTotalHours,
             string secondaryEffectType, float? secondaryEffectMult,
             IReadOnlyList<StatModifier> statModifiers,
+            DoTSpec? dot,
             Action<EffectTimerThread> onSaveReport,
             Action<EffectTimerThread> onNaturalEnd,
             Action<EffectTimerThread> onForcedEnd)
@@ -94,6 +117,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             SecondaryEffectType = secondaryEffectType;
             SecondaryEffectMult = secondaryEffectMult;
             StatModifiers = statModifiers;
+            DoT = dot;
             this.getTotalHours = getTotalHours;
 
             System.Threading.Tasks.Task.Run(() => Run(onSaveReport, onNaturalEnd, onForcedEnd));
