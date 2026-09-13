@@ -511,7 +511,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     {
                         //within the time frame
                         //erase all poison effects
-                        List<TreeAttribute> rrpoisons = RRPotionEffects.value.ToList<TreeAttribute>();
+                        List<TreeAttribute> rrpoisons = RRPoisonEffects.value.ToList<TreeAttribute>();
                         rrpoisons.Clear();
                         RRPoisonEffects = new TreeArrayAttribute(rrpoisons.ToArray());
                         drankAntidote = false;
