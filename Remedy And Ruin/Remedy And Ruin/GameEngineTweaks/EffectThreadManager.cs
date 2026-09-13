@@ -241,20 +241,25 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             double endTotalHours = totalHoursNow + timeleft;
 
             IReadOnlyList<StatModifier> statModifiers = DetermineStatModifiers(cluster, effectMult, effectOnset, toxicEffectMultiplier);
+            DoTSpec? dotSpec = DetermineDoTEffect(cluster, effectMult, effectOnset, toxicEffectMultiplier);
 
             var thread = new EffectTimerThread(
                 Guid.Parse(guid), bucket, cluster, effectMult, effectOnset,
                 startTotalHours, endTotalHours, () => entity.World.Calendar.TotalHours,
-                null, null, statModifiers,
+                null, null, statModifiers, dotSpec,
                 onSaveReport: OnSaveReport,
                 onNaturalEnd: OnNaturalEnd,
                 onForcedEnd: OnForcedEnd);
 
             threads[thread.Guid] = thread;
 
-            if (statModifiers.Count > 0)
+            if (statModifiers.Count > 0 || dotSpec != null)
             {
-                entity.Api.Event.EnqueueMainThreadTask(() => ApplyStatModifiers(thread), "rrEffectApplyStats");
+                entity.Api.Event.EnqueueMainThreadTask(() =>
+                {
+                    ApplyStatModifiers(thread);
+                    ApplyDoT(thread);
+                }, "rrEffectApply");
             }
         }
 
@@ -277,6 +282,30 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return Array.Empty<StatModifier>();
         }
 
+        // PLACEHOLDER dispatch point - Plan 12 decides each cluster's real DoT effect here, using
+        // the multipliers already read off the WatchedAttributes entry in ApplyEffect.
+        private static DoTSpec? DetermineDoTEffect(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier)
+        {
+            switch (cluster)
+            {
+                case "TOXICPOISON":
+                    /* PLACEHOLDER - Plan 12 decides Toxic Poison's real liver-failure DoT here, once
+                       the design's 15%-of-undiscounted-magnitude threshold and tolerance discount are
+                       both available to this method. */
+                    break;
+                case "NOXIOUSPOISON":
+                case "CARDIACPOISON":
+                case "NEUROTOXICPOISON":
+                case "MINDPOISON":
+                    /* PLACEHOLDER - Plan 12 decides whether this cluster needs a DoT at all. */
+                    break;
+                default:
+                    /* Remedy potions don't use DoT. */
+                    break;
+            }
+            return null;
+        }
+
         private void ApplyStatModifiers(EffectTimerThread t)
         {
             foreach (StatModifier modifier in t.StatModifiers)
@@ -291,6 +320,25 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             {
                 entity.Stats.Remove(modifier.Category, t.Guid.ToString());
             }
+        }
+
+        private void ApplyDoT(EffectTimerThread t)
+        {
+            if (t.DoT == null) return;
+            var health = entity.GetBehavior<EntityBehaviorHealth>();
+            if (health == null) return;
+
+            DoTSpec spec = t.DoT.Value;
+            health.ApplyDoTEffect(spec.DamageSource, spec.DamageType, spec.DamageTier, spec.TotalDamage, spec.TotalTime, spec.TicksNumber, t.Guid.GetHashCode());
+        }
+
+        private void RemoveDoT(EffectTimerThread t)
+        {
+            if (t.DoT == null) return;
+            var health = entity.GetBehavior<EntityBehaviorHealth>();
+            if (health == null) return;
+
+            health.StopDoTEffect(t.Guid.GetHashCode());
         }
 
         //============== WORLD SAVE ==============//
@@ -365,7 +413,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         private void OnForcedEnd(EffectTimerThread t)
         {
             threads.TryRemove(t.Guid, out _);
-            entity.Api.Event.EnqueueMainThreadTask(() => RemoveStatModifiers(t), "rrEffectForcedEndStats");
+            entity.Api.Event.EnqueueMainThreadTask(() =>
+            {
+                RemoveStatModifiers(t);
+                RemoveDoT(t);
+            }, "rrEffectForcedEndStats");
             // Must stay synchronous and immediate, not nested inside the enqueued action above:
             // HandleForcefulEnd blocks the main thread on pendingForcedEndCountdown.Wait(...), so
             // gating this signal behind its own main-thread task would stall it for the full
@@ -380,6 +432,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             entity.Api.Event.EnqueueMainThreadTask(() =>
             {
                 RemoveStatModifiers(t);
+                RemoveDoT(t);
                 RemoveGuidsFromWatchedAttributes(new[] { t.Guid });
 
                 /*
