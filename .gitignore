@@ -28,3 +28,6 @@ publish/
 # OS files
 Thumbs.db
 .DS_Store
+
+# git worktrees
+.worktrees/
