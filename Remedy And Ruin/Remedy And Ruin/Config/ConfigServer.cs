@@ -27,6 +27,12 @@ namespace Remedy_And_Ruin
         [JsonProperty(Order = 5)]
         public bool allowEffectsToExpireWhenOffline {  get; set; } = false;
 
+        [JsonProperty(Order = 6)]
+        public float toxicityDecayPerRealSecond { get; set; } = 0.01f;
+
+        [JsonProperty(Order = 7)]
+        public float toxicityOverdoseThreshold { get; set; } = 1.0f;
+
         public ConfigServer(ICoreAPI api, ConfigServer previousConfig = null)
         {
             if (previousConfig == null) return;
@@ -34,6 +40,8 @@ namespace Remedy_And_Ruin
             debugMode = previousConfig.debugMode;
             concussionWobbleEnabled = previousConfig.concussionWobbleEnabled;
             allowEffectsToExpireWhenOffline = previousConfig.allowEffectsToExpireWhenOffline;
+            toxicityDecayPerRealSecond = previousConfig.toxicityDecayPerRealSecond;
+            toxicityOverdoseThreshold = previousConfig.toxicityOverdoseThreshold;
         }
     }
 }
