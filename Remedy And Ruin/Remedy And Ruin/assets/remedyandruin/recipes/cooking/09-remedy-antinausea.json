@@ -1,0 +1,81 @@
+{
+	"code": "remedyandruin-remedy-antinausea",
+	"shape": {
+		"base": "block/food/meal/liquid"
+	},
+	"perishableProps": {
+		"type": "Perish",
+		"freshHours": {
+			"avg": 2
+		},
+		"transitionHours": {
+			"avg": 1
+		},
+		"transitionRatio": 1,
+		"transitionedStack": {
+			"type": "item",
+			"code": "game:rot"
+		}
+	},
+	"ingredients": [
+		{
+			"code": "water",
+			"minQuantity": 1,
+			"maxQuantity": 1,
+			"portionSizeLitres": 1,
+			"validStacks": [
+				{
+					"type": "item",
+					"code": "game:waterportion"
+				}
+			]
+		},
+		{
+			"code": "antinauseaplant",
+			"minQuantity": 3,
+			"maxQuantity": 3,
+			"validStacks": [
+				{
+					"type": "block",
+					"code": "game:herb-basil",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:herb-cilantro",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:herb-marjoram",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:herb-mint",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:herb-chamomile",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-mugwort-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:fern-hartstongue",
+					"stackSize": 6
+				}
+			]
+		}
+	],
+	"cooksInto": {
+		"type": "Item",
+		"code": "remedyandruin:potionbase-antinausea",
+		"quantity": 1
+	}
+}

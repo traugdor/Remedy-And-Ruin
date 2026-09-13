@@ -1,0 +1,154 @@
+[
+	{
+		"code": "remedyandruin-poison-noxiouspoison-gi",
+		"shape": {
+			"base": "block/food/meal/liquid"
+		},
+		"perishableProps": {
+			"type": "Perish",
+			"freshHours": {
+				"avg": 2
+			},
+			"transitionHours": {
+				"avg": 1
+			},
+			"transitionRatio": 1,
+			"transitionedStack": {
+				"type": "item",
+				"code": "game:rot"
+			}
+		},
+		"ingredients": [
+			{
+				"code": "water",
+				"minQuantity": 1,
+				"maxQuantity": 1,
+				"portionSizeLitres": 1,
+				"validStacks": [
+					{
+						"type": "item",
+						"code": "game:waterportion"
+					}
+				]
+			},
+			{
+				"code": "noxiouspoisonplant",
+				"minQuantity": 3,
+				"maxQuantity": 3,
+				"validStacks": [
+					{
+						"type": "block",
+						"code": "game:mushroom-sickener-normal",
+						"stackSize": 6
+					},
+					{
+						"type": "block",
+						"code": "game:mushroom-jackolantern-normal",
+						"stackSize": 6
+					},
+					{
+						"type": "block",
+						"code": "game:mushroom-witchhat-normal",
+						"stackSize": 6
+					},
+					{
+						"type": "block",
+						"code": "game:mushroom-devilbolete-normal",
+						"stackSize": 6
+					},
+					{
+						"type": "block",
+						"code": "game:mushroom-earthball-normal",
+						"stackSize": 6
+					},
+					{
+						"type": "block",
+						"code": "game:mushroom-elfinsaddle-normal",
+						"stackSize": 6
+					},
+					{
+						"type": "block",
+						"code": "game:mushroom-golddropmilkcap-normal",
+						"stackSize": 6
+					},
+					{
+						"type": "block",
+						"code": "game:mushroom-pinkbonnet-normal-north",
+						"stackSize": 6
+					}
+				]
+			}
+		],
+		"cooksInto": {
+			"type": "Item",
+			"code": "remedyandruin:potionbase-noxiouspoison",
+			"quantity": 1
+		}
+	},
+	{
+		"code": "remedyandruin-poison-noxiouspoison-situational",
+		"shape": {
+			"base": "block/food/meal/liquid"
+		},
+		"perishableProps": {
+			"type": "Perish",
+			"freshHours": {
+				"avg": 2
+			},
+			"transitionHours": {
+				"avg": 1
+			},
+			"transitionRatio": 1,
+			"transitionedStack": {
+				"type": "item",
+				"code": "game:rot"
+			}
+		},
+		"ingredients": [
+			{
+				"code": "water",
+				"minQuantity": 1,
+				"maxQuantity": 1,
+				"portionSizeLitres": 1,
+				"validStacks": [
+					{
+						"type": "item",
+						"code": "game:waterportion"
+					}
+				]
+			},
+			{
+				"code": "noxiouspoisonplant",
+				"minQuantity": 3,
+				"maxQuantity": 3,
+				"validStacks": [
+					{
+						"type": "block",
+						"code": "game:mushroom-commonmorel-normal",
+						"stackSize": 6
+					},
+					{
+						"type": "item",
+						"code": "game:bamboostakes",
+						"stackSize": 6
+					},
+					{
+						"type": "block",
+						"code": "game:mushroom-honeymushroom-normal",
+						"stackSize": 6
+					},
+					{
+						"type": "block",
+						"code": "game:fern-eaglefern",
+						"stackSize": 6
+					}
+				]
+			}
+		],
+		"cooksInto": {
+			"type": "Item",
+			"code": "remedyandruin:potionbase-noxiouspoison",
+			"quantity": 1
+		}
+	}
+]

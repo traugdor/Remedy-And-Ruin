@@ -1,0 +1,536 @@
+{
+	"code": "remedyandruin-sludge",
+	"shape": {
+		"base": "block/food/meal/liquid"
+	},
+	"perishableProps": {
+		"type": "Perish",
+		"freshHours": {
+			"avg": 2
+		},
+		"transitionHours": {
+			"avg": 1
+		},
+		"transitionRatio": 1,
+		"transitionedStack": {
+			"type": "item",
+			"code": "game:rot"
+		}
+	},
+	"ingredients": [
+		{
+			"code": "water",
+			"minQuantity": 1,
+			"maxQuantity": 1,
+			"portionSizeLitres": 1,
+			"validStacks": [
+				{
+					"type": "item",
+					"code": "game:waterportion"
+				}
+			]
+		},
+		{
+			"code": "sludgeplant",
+			"minQuantity": 3,
+			"maxQuantity": 3,
+			"validStacks": [
+				{
+					"type": "block",
+					"code": "game:flower-forgetmenot-*",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-westerngorse-*",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-redtopgrass-*",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:fern-deerfern",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:wildvine-*",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:wildvinestatic-*",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-croton-*",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-rafflesia-brown",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-rafflesia-red",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:saguarocactus-*",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:barrelcactus-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:silvertorchcactus",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:tallplant-papyrus-*",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:tallplant-tule-*",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:tallplant-brownsedge-*",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:ferntree-normal-*",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:tallfern",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:hay-*",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-fieldmushroom-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-redwinecap-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-bitterbolete-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-blacktrumpet-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-chanterelle-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-greencrackedrussula-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-indigomilkcap-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-kingbolete-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-lobster-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-orangeoakbolete-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-paddystraw-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-puffball-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-saffronmilkcap-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-violetwebcap-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-pinkoyster-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-dryadsaddle-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-deerear-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "item",
+					"code": "game:cattailtops",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:lichen-oldmansbeard-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-wilddaisy-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-woad-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:herb-sage",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:herb-thyme",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-heather-*",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:fern-hartstongue",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-devilstooth-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-catmint-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:herb-chamomile",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:herb-lavender",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:waterlily",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-mugwort-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-goldenpoppy-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-edelweiss-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:fern-cinnamonfern",
+					"stackSize": 6
+				},
+				{
+					"type": "item",
+					"code": "game:bamboostakes",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-orangemallow-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-daffodil-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-bluebell-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-lupine-blue-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-lupine-orange-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-lupine-purple-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-lupine-red-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-lupine-white-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-cowparsley-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-reishi-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-shiitake-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-beardedtooth-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-chickenofthewoods-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-almondmushroom-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-tinderhoof-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-whiteoyster-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "item",
+					"code": "game:herbbundle-saffron",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-livermushroom-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:herb-mint",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-cornflower-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-horsetail-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:herb-basil",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:herb-cilantro",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:herb-marjoram",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-deathcap-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-funeralbell-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-foolsconecap-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-sickener-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-jackolantern-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-witchhat-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-devilbolete-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-earthball-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-elfinsaddle-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-golddropmilkcap-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-pinkbonnet-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-commonmorel-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-honeymushroom-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:fern-eaglefern",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-lilyofthevalley-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-libertycap-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-goldcap-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-wavycap-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-bluemeanie-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-laughingjim-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-flyagaric-normal",
+					"stackSize": 6
+				}
+			]
+		}
+	],
+	"cooksInto": {
+		"type": "Item",
+		"code": "remedyandruin:sludge",
+		"quantity": 1
+	}
+}

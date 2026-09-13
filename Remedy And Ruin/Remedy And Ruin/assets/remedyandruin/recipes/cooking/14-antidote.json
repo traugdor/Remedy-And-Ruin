@@ -1,0 +1,75 @@
+{
+	"code": "remedyandruin-remedy-antidote",
+	"shape": {
+		"base": "block/food/meal/liquid"
+	},
+	"perishableProps": {
+		"type": "Perish",
+		"freshHours": {
+			"avg": 2
+		},
+		"transitionHours": {
+			"avg": 1
+		},
+		"transitionRatio": 1,
+		"transitionedStack": {
+			"type": "item",
+			"code": "game:rot"
+		}
+	},
+	"ingredients": [
+		{
+			"code": "water",
+			"minQuantity": 1,
+			"maxQuantity": 1,
+			"portionSizeLitres": 1,
+			"validStacks": [
+				{
+					"type": "item",
+					"code": "game:waterportion"
+				}
+			]
+		},
+		{
+			"code": "fieldmushroom",
+			"minQuantity": 1,
+			"maxQuantity": 1,
+			"validStacks": [
+				{
+					"type": "block",
+					"code": "game:mushroom-fieldmushroom-normal",
+					"stackSize": 6
+				}
+			]
+		},
+		{
+			"code": "redwinecap",
+			"minQuantity": 1,
+			"maxQuantity": 1,
+			"validStacks": [
+				{
+					"type": "block",
+					"code": "game:mushroom-redwinecap-normal",
+					"stackSize": 6
+				}
+			]
+		},
+		{
+			"code": "bitterbolete",
+			"minQuantity": 1,
+			"maxQuantity": 1,
+			"validStacks": [
+				{
+					"type": "block",
+					"code": "game:mushroom-bitterbolete-normal",
+					"stackSize": 6
+				}
+			]
+		}
+	],
+	"cooksInto": {
+		"type": "Item",
+		"code": "remedyandruin:potionbase-antidote",
+		"quantity": 1
+	}
+}

@@ -1,0 +1,31 @@
+[
+	{
+		"op": "add",
+		"file": "game:blocktypes/glass/full-plain.json",
+		"path": "/combustiblePropsByType",
+		"value": {
+			"glass-plain": {
+				"meltingPoint": 1100,
+				"meltingDuration": 30,
+				"smeltedRatio": 2,
+				"smeltedStack": { "type": "block", "code": "glass-plain" }
+			}
+		}
+	},
+	{
+		"op": "add",
+		"file": "game:blocktypes/glass/full-plain.json",
+		"path": "/storageFlags",
+		"value": 5
+	},
+	{
+		// Confirmed required, not just storageFlags: full-plain is a real building block and
+		// defaults to CollectibleObject's 0.5x0.5x0.5 Dimensions, which fails the Crucible's
+		// cooking-slot maxContentDimensions check (0.125x0.25x0.125) on its own. Shrunk to
+		// match nugget.json's own "size" value, the smallest known-working precedent.
+		"op": "add",
+		"file": "game:blocktypes/glass/full-plain.json",
+		"path": "/size",
+		"value": { "width": 0.0625, "height": 0.0625, "length": 0.0625 }
+	}
+]

@@ -1,0 +1,76 @@
+{
+	"code": "remedyandruin-poison-mindpoison-psychoactive",
+	"shape": {
+		"base": "block/food/meal/liquid"
+	},
+	"perishableProps": {
+		"type": "Perish",
+		"freshHours": {
+			"avg": 2
+		},
+		"transitionHours": {
+			"avg": 1
+		},
+		"transitionRatio": 1,
+		"transitionedStack": {
+			"type": "item",
+			"code": "game:rot"
+		}
+	},
+	"ingredients": [
+		{
+			"code": "water",
+			"minQuantity": 1,
+			"maxQuantity": 1,
+			"portionSizeLitres": 1,
+			"validStacks": [
+				{
+					"type": "item",
+					"code": "game:waterportion"
+				}
+			]
+		},
+		{
+			"code": "mindpoisonplant",
+			"minQuantity": 3,
+			"maxQuantity": 3,
+			"validStacks": [
+				{
+					"type": "block",
+					"code": "game:mushroom-libertycap-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-goldcap-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-wavycap-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-bluemeanie-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-laughingjim-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-flyagaric-normal",
+					"stackSize": 6
+				}
+			]
+		}
+	],
+	"cooksInto": {
+		"type": "Item",
+		"code": "remedyandruin:potionbase-mindpoison",
+		"quantity": 1
+	}
+}

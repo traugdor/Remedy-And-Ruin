@@ -1,0 +1,21 @@
+{
+	"code": "remedyandruin-barrel-analgesic",
+	"ingredients": [
+		{
+			"type": "item",
+			"code": "game:waterportion",
+			"litres": 10
+		},
+		{
+			"type": "item",
+			"code": "remedyandruin:potionbase-analgesic",
+			"quantity": 1
+		}
+	],
+	"sealHours": 168,
+	"output": {
+		"type": "item",
+		"code": "remedyandruin:dilutedpotion-analgesic",
+		"litres": 10
+	}
+}

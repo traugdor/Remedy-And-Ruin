@@ -1,0 +1,21 @@
+{
+	"code": "remedyandruin-barrel-sedative",
+	"ingredients": [
+		{
+			"type": "item",
+			"code": "game:waterportion",
+			"litres": 10
+		},
+		{
+			"type": "item",
+			"code": "remedyandruin:potionbase-sedative",
+			"quantity": 1
+		}
+	],
+	"sealHours": 168,
+	"output": {
+		"type": "item",
+		"code": "remedyandruin:dilutedpotion-sedative",
+		"litres": 10
+	}
+}

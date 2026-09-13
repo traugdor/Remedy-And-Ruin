@@ -1,0 +1,61 @@
+{
+	"code": "remedyandruin-poison-toxicpoison-hepatotoxic",
+	"shape": {
+		"base": "block/food/meal/liquid"
+	},
+	"perishableProps": {
+		"type": "Perish",
+		"freshHours": {
+			"avg": 2
+		},
+		"transitionHours": {
+			"avg": 1
+		},
+		"transitionRatio": 1,
+		"transitionedStack": {
+			"type": "item",
+			"code": "game:rot"
+		}
+	},
+	"ingredients": [
+		{
+			"code": "water",
+			"minQuantity": 1,
+			"maxQuantity": 1,
+			"portionSizeLitres": 1,
+			"validStacks": [
+				{
+					"type": "item",
+					"code": "game:waterportion"
+				}
+			]
+		},
+		{
+			"code": "toxicpoisonplant",
+			"minQuantity": 3,
+			"maxQuantity": 3,
+			"validStacks": [
+				{
+					"type": "block",
+					"code": "game:mushroom-deathcap-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-funeralbell-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-foolsconecap-normal",
+					"stackSize": 6
+				}
+			]
+		}
+	],
+	"cooksInto": {
+		"type": "Item",
+		"code": "remedyandruin:potionbase-toxicpoison",
+		"quantity": 1
+	}
+}

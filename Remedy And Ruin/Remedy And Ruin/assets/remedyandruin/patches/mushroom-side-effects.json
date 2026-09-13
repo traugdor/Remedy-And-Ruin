@@ -1,0 +1,11 @@
+[
+	{
+		"op": "add",
+		"file": "game:blocktypes/plant/mushroom-side.json",
+		"path": "/attributes/remedyandruinEffectByType",
+		"value": {
+			"*-funeralbell-*": { "cluster": "ToxicPoison", "effectMultiplier": 0.8, "onsetMultiplier": 1.0 },
+			"*-pinkbonnet-*": { "cluster": "NoxiousPoison", "effectMultiplier": 1.0, "onsetMultiplier": 1.0, "toxicEffectMultiplier": 0.2, "toxicOnsetMultiplier": 0.5 }
+		}
+	}
+]

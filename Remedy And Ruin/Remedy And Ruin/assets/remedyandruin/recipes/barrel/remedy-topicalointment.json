@@ -1,0 +1,21 @@
+{
+	"code": "remedyandruin-barrel-topicalointment",
+	"ingredients": [
+		{
+			"type": "item",
+			"code": "game:waterportion",
+			"litres": 10
+		},
+		{
+			"type": "item",
+			"code": "remedyandruin:potionbase-topicalointment",
+			"quantity": 1
+		}
+	],
+	"sealHours": 168,
+	"output": {
+		"type": "item",
+		"code": "remedyandruin:dilutedpotion-topicalointment",
+		"litres": 10
+	}
+}

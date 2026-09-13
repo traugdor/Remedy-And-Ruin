@@ -1,0 +1,106 @@
+{
+	"code": "remedyandruin-remedy-tonic",
+	"shape": {
+		"base": "block/food/meal/liquid"
+	},
+	"perishableProps": {
+		"type": "Perish",
+		"freshHours": {
+			"avg": 2
+		},
+		"transitionHours": {
+			"avg": 1
+		},
+		"transitionRatio": 1,
+		"transitionedStack": {
+			"type": "item",
+			"code": "game:rot"
+		}
+	},
+	"ingredients": [
+		{
+			"code": "water",
+			"minQuantity": 1,
+			"maxQuantity": 1,
+			"portionSizeLitres": 1,
+			"validStacks": [
+				{
+					"type": "item",
+					"code": "game:waterportion"
+				}
+			]
+		},
+		{
+			"code": "tonicplant",
+			"minQuantity": 3,
+			"maxQuantity": 3,
+			"validStacks": [
+				{
+					"type": "block",
+					"code": "game:mushroom-reishi-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-shiitake-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-beardedtooth-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-chickenofthewoods-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-almondmushroom-normal",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-tinderhoof-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-whiteoyster-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "item",
+					"code": "game:herbbundle-saffron",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-livermushroom-normal-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-heather-*",
+					"stackSize": 6
+				},
+				{
+					"type": "item",
+					"code": "game:cattailtops",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-cowparsley-free",
+					"stackSize": 6
+				}
+			]
+		}
+	],
+	"cooksInto": {
+		"type": "Item",
+		"code": "remedyandruin:potionbase-tonic",
+		"quantity": 1
+	}
+}

@@ -1,0 +1,24 @@
+[
+	{
+		"op": "add",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/attributes/remedyandruinEffectByType",
+		"value": {
+			"*-deathcap-*": { "cluster": "ToxicPoison", "effectMultiplier": 1.0, "onsetMultiplier": 1.0 },
+			"*-foolsconecap-*": { "cluster": "ToxicPoison", "effectMultiplier": 0.4, "onsetMultiplier": 0.8 },
+			"*-devilbolete-*": { "cluster": "NoxiousPoison", "effectMultiplier": 1.0, "onsetMultiplier": 1.0, "toxicEffectMultiplier": 0.2, "toxicOnsetMultiplier": 0.5 },
+			"*-earthball-*": { "cluster": "NoxiousPoison", "effectMultiplier": 0.8, "onsetMultiplier": 1.0, "toxicEffectMultiplier": 0.16, "toxicOnsetMultiplier": 0.4 },
+			"*-sickener-*": { "cluster": "NoxiousPoison", "effectMultiplier": 0.7, "onsetMultiplier": 1.0, "toxicEffectMultiplier": 0.14, "toxicOnsetMultiplier": 0.4 },
+			"*-elfinsaddle-*": { "cluster": "NoxiousPoison", "effectMultiplier": 0.7, "onsetMultiplier": 1.0, "toxicEffectMultiplier": 0.14, "toxicOnsetMultiplier": 0.4 },
+			"*-jackolantern-*": { "cluster": "NoxiousPoison", "effectMultiplier": 0.6, "onsetMultiplier": 1.0, "toxicEffectMultiplier": 0.12, "toxicOnsetMultiplier": 0.3 },
+			"*-golddropmilkcap-*": { "cluster": "NoxiousPoison", "effectMultiplier": 0.25, "onsetMultiplier": 1.0, "toxicEffectMultiplier": 0.05, "toxicOnsetMultiplier": 0.2 },
+			"*-witchhat-*": { "cluster": "NoxiousPoison", "effectMultiplier": 0.05, "onsetMultiplier": 1.0 },
+			"*-bluemeanie-*": { "cluster": "MindPoison", "effectMultiplier": 1.0, "onsetMultiplier": 1.0 },
+			"*-libertycap-*": { "cluster": "MindPoison", "effectMultiplier": 0.7, "onsetMultiplier": 0.7 },
+			"*-goldcap-*": { "cluster": "MindPoison", "effectMultiplier": 0.5, "onsetMultiplier": 0.7 },
+			"*-wavycap-*": { "cluster": "MindPoison", "effectMultiplier": 0.4, "onsetMultiplier": 0.7 },
+			"*-laughingjim-*": { "cluster": "MindPoison", "effectMultiplier": 0.3, "onsetMultiplier": 0.9, "toxicEffectMultiplier": 0.2, "toxicOnsetMultiplier": 0.5 },
+			"*-flyagaric-*": { "cluster": "MindPoison", "effectMultiplier": 0.2, "onsetMultiplier": 1.1, "toxicEffectMultiplier": 0.13, "toxicOnsetMultiplier": 0.4 }
+		}
+	}
+]

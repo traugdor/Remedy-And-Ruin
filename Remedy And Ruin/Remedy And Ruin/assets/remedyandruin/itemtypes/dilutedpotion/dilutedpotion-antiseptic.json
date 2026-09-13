@@ -1,0 +1,77 @@
+{
+	"code": "dilutedpotion-antiseptic",
+	"class": "ItemLiquidPortion",
+	"matterState": "liquid",
+	"attributes": {
+		"handbook": {
+			"ignoreCreativeInvStacks": true
+		},
+		"nutritionProps": {
+			"satiety": 0,
+			"health": 0,
+			"foodcategory": "NoNutrition"
+		},
+		"waterTightContainerProps": {
+			"containable": true,
+			"itemsPerLitre": 100,
+			"texture": {
+				"base": "item/liquid/antiseptic_generated",
+				"alpha": 110
+			},
+			"allowSpill": true,
+			"whenSpilled": {
+				"action": "PlaceBlock",
+				"stack": {
+					"type": "block",
+					"code": "water-still-3"
+				}
+			}
+		},
+		"distillationProps": {
+			"distilledStack": {
+				"type": "item",
+				"code": "remedyandruin:potion-antiseptic"
+			},
+			"ratio": 0.25
+		},
+		"remedyandruinEffect": {
+			"cluster": "Antiseptic",
+			"tier": "DilutedPotion",
+			"isPoison": false
+		}
+	},
+	"shape": {
+		"base": "game:item/liquid"
+	},
+	"texture": {
+		"base": "item/liquid/antiseptic_generated",
+		"alpha": 110
+	},
+	"maxstacksize": 5000,
+	"materialDensity": 200,
+	"guiTransform": {
+		"translation": {
+			"x": 0,
+			"y": 1,
+			"z": 0
+		},
+		"rotation": {
+			"x": 123,
+			"y": -33,
+			"z": -13
+		},
+		"origin": {
+			"x": 0.5,
+			"y": 0,
+			"z": 0.5
+		},
+		"scale": 1.4
+	},
+	"tpHandTransform": {
+		"translation": {
+			"x": -1.5,
+			"y": -1,
+			"z": -1.4
+		}
+	}
+}

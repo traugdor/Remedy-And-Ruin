@@ -1,0 +1,167 @@
+{
+	"editor": {
+		"allAngles": false,
+		"entityTextureMode": false
+	},
+	"textureWidth": 16,
+	"textureHeight": 16,
+	"textureSizes": {
+	},
+	"textures": {
+		"pelt": "game:item/resource/hide/pelt",
+		"clearquartz": "game:item/resource/ungraded/clearquartz"
+	},
+	"elements": [
+		{
+			"name": "SpearsOriginCube",
+			"from": [ 0.0, 0.0, 0.0 ],
+			"to": [ 0.0, 0.0, 0.0 ],
+			"faces": {
+				"north": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+				"east": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+				"south": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+				"west": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+				"up": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+				"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ] }
+			},
+			"children": [
+				{
+					"name": "ActualCork",
+					"from": [ 0.0, -4.0, 0.0 ],
+					"to": [ 0.0, -4.0, 0.0 ],
+					"rotationOrigin": [ 7.0, 7.0, 7.0 ],
+					"faces": {
+						"north": { "texture": "#pelt", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"east": { "texture": "#pelt", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"south": { "texture": "#pelt", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"west": { "texture": "#pelt", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"up": { "texture": "#pelt", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"down": { "texture": "#pelt", "uv": [ 0.0, 0.0, 0.5, 0.5 ] }
+					},
+					"children": [
+						{
+							"name": "CorkBase",
+							"from": [ 7.5, 10.5, 7.5 ],
+							"to": [ 8.5, 11.0, 8.5 ],
+							"renderPass": 1,
+							"rotationOrigin": [ 7.5, 10.5, 7.5 ],
+							"faces": {
+								"north": { "texture": "#pelt", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+								"east": { "texture": "#pelt", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+								"south": { "texture": "#pelt", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+								"west": { "texture": "#pelt", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+								"up": { "texture": "#pelt", "uv": [ 0.0, 0.0, 1.0, 1.0 ] },
+								"down": { "texture": "#pelt", "uv": [ 0.0, 0.0, 1.0, 1.0 ] }
+							}
+						},
+						{
+							"name": "CorkLip",
+							"from": [ 7.0, 11.0, 7.0 ],
+							"to": [ 9.0, 11.5, 9.0 ],
+							"renderPass": 1,
+							"rotationOrigin": [ 7.0, 11.0, 7.0 ],
+							"faces": {
+								"north": { "texture": "#pelt", "uv": [ 0.0, 0.0, 2.0, 0.5 ] },
+								"east": { "texture": "#pelt", "uv": [ 0.0, 0.0, 2.0, 0.5 ] },
+								"south": { "texture": "#pelt", "uv": [ 0.0, 0.0, 2.0, 0.5 ] },
+								"west": { "texture": "#pelt", "uv": [ 0.0, 0.0, 2.0, 0.5 ] },
+								"up": { "texture": "#pelt", "uv": [ 0.0, 0.0, 2.0, 2.0 ] },
+								"down": { "texture": "#pelt", "uv": [ 0.0, 0.0, 2.0, 2.0 ] }
+							}
+						}
+					]
+				},
+				{
+					"name": "Vial",
+					"from": [ 0.0, -0.5, 0.0 ],
+					"to": [ 0.0, -0.5, 0.0 ],
+					"rotationOrigin": [ 7.0, 0.0, 7.0 ],
+					"faces": {
+						"north": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"east": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"south": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"west": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"up": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
+						"down": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 0.5 ] }
+					},
+					"children": [
+						{
+							"name": "VialBase",
+							"from": [ 7.5, 0.5, 7.5 ],
+							"to": [ 8.5, 1.0, 8.5 ],
+							"renderPass": 3,
+							"rotationOrigin": [ 7.5, 0.5, 7.5 ],
+							"faces": {
+								"north": { "texture": "#clearquartz", "uv": [ 0.0, 11.0, 1.0, 11.5 ] },
+								"east": { "texture": "#clearquartz", "uv": [ 0.0, 11.0, 1.0, 11.5 ] },
+								"south": { "texture": "#clearquartz", "uv": [ 0.0, 11.0, 1.0, 11.5 ] },
+								"west": { "texture": "#clearquartz", "uv": [ 0.0, 11.0, 1.0, 11.5 ] },
+								"up": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 1.0, 1.0 ] },
+								"down": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 1.0, 1.0 ] }
+							}
+						},
+						{
+							"name": "VialWallN",
+							"from": [ 7.5, 1.0, 7.0 ],
+							"to": [ 8.5, 7.5, 7.5 ],
+							"renderPass": 3,
+							"rotationOrigin": [ 7.5, 1.0, 7.0 ],
+							"faces": {
+								"north": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 1.0, 6.5 ] },
+								"east": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 6.5 ] },
+								"south": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 1.0, 6.5 ] },
+								"west": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 6.5 ] },
+								"up": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+								"down": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 1.0, 0.5 ] }
+							}
+						},
+						{
+							"name": "VialWallE",
+							"from": [ 8.5, 1.0, 7.5 ],
+							"to": [ 9.0, 7.5, 8.5 ],
+							"renderPass": 3,
+							"rotationOrigin": [ 8.5, 1.0, 7.5 ],
+							"faces": {
+								"north": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 6.5 ] },
+								"east": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 1.0, 6.5 ] },
+								"south": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 6.5 ] },
+								"west": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 1.0, 6.5 ] },
+								"up": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 1.0 ] },
+								"down": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 1.0 ] }
+							}
+						},
+						{
+							"name": "VialWallS",
+							"from": [ 7.5, 1.0, 8.5 ],
+							"to": [ 8.5, 7.5, 9.0 ],
+							"renderPass": 3,
+							"rotationOrigin": [ 7.5, 1.0, 8.5 ],
+							"faces": {
+								"north": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 1.0, 6.5 ] },
+								"east": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 6.5 ] },
+								"south": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 1.0, 6.5 ] },
+								"west": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 6.5 ] },
+								"up": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 1.0, 0.5 ] },
+								"down": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 1.0, 0.5 ] }
+							}
+						},
+						{
+							"name": "VialWallW",
+							"from": [ 7.0, 1.0, 7.5 ],
+							"to": [ 7.5, 7.5, 8.5 ],
+							"renderPass": 3,
+							"rotationOrigin": [ 7.0, 1.0, 7.5 ],
+							"faces": {
+								"north": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 6.5 ] },
+								"east": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 1.0, 6.5 ] },
+								"south": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 6.5 ] },
+								"west": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 1.0, 6.5 ] },
+								"up": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 1.0 ] },
+								"down": { "texture": "#clearquartz", "uv": [ 0.0, 0.0, 0.5, 1.0 ] }
+							}
+						}
+					]
+				}
+			]
+		}
+	]}

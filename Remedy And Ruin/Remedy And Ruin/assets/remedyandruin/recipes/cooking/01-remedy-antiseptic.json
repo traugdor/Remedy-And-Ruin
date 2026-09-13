@@ -1,0 +1,91 @@
+{
+	"code": "remedyandruin-remedy-antiseptic",
+	"shape": {
+		"base": "block/food/meal/liquid"
+	},
+	"perishableProps": {
+		"type": "Perish",
+		"freshHours": {
+			"avg": 2
+		},
+		"transitionHours": {
+			"avg": 1
+		},
+		"transitionRatio": 1,
+		"transitionedStack": {
+			"type": "item",
+			"code": "game:rot"
+		}
+	},
+	"ingredients": [
+		{
+			"code": "water",
+			"minQuantity": 1,
+			"maxQuantity": 1,
+			"portionSizeLitres": 1,
+			"validStacks": [
+				{
+					"type": "item",
+					"code": "game:waterportion"
+				}
+			]
+		},
+		{
+			"code": "antisepticplant",
+			"minQuantity": 3,
+			"maxQuantity": 3,
+			"validStacks": [
+				{
+					"type": "item",
+					"code": "game:cattailtops",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:lichen-oldmansbeard-north",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-wilddaisy-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-woad-free",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:herb-sage",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:herb-thyme",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:flower-heather-*",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:fern-hartstongue",
+					"stackSize": 6
+				},
+				{
+					"type": "block",
+					"code": "game:mushroom-devilstooth-normal",
+					"stackSize": 6
+				}
+			]
+		}
+	],
+	"cooksInto": {
+		"type": "Item",
+		"code": "remedyandruin:potionbase-antiseptic",
+		"quantity": 1
+	}
+}

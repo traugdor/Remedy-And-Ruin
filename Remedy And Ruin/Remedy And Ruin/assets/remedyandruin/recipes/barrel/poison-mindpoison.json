@@ -1,0 +1,21 @@
+{
+	"code": "remedyandruin-barrel-mindpoison",
+	"ingredients": [
+		{
+			"type": "item",
+			"code": "game:waterportion",
+			"litres": 10
+		},
+		{
+			"type": "item",
+			"code": "remedyandruin:potionbase-mindpoison",
+			"quantity": 1
+		}
+	],
+	"sealHours": 168,
+	"output": {
+		"type": "item",
+		"code": "remedyandruin:dilutedpotion-mindpoison",
+		"litres": 10
+	}
+}
