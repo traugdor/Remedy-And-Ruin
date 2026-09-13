@@ -467,7 +467,8 @@ code.
 ## §2. Barrel — Dilution
 
 - 1x Potion Base + 10L water, sealed in a barrel, at a fixed 1:10 ratio.
-- Real-time steep duration, default ~1 week, defined per-recipe (same `SealHours` field as
+- Game-calendar steep duration, default ~1 week of in-game
+  time, defined per-recipe (same `SealHours` field as
   `BarrelRecipe`, so different remedies/poisons can have different steep times).
 - Output: 10L of **Diluted Potion** liquid.
 - Batches scale: barrels hold up to 50L, and `BarrelRecipe`'s existing output-scaling logic
@@ -597,7 +598,11 @@ on dose consumption or on-hit (arrows), backed by two existing engine primitives
 - `EntityStats` — named, source-keyed float-stat buffs/debuffs (`Set`/`Remove`/`GetBlended`), so
   multiple simultaneous potion/poison effects can stack or blend without stomping each other and
   can be independently removed when their duration ends.
-- `EntityBehaviorHealth`'s DoT tick loop — for damage-over-time poisons/toxins.
+- `EntityBehaviorHealth`'s DoT tick loop — for damage-over-time poisons/toxins. DoT ticks run on
+  real (engine) elapsed time, not the game calendar - `EntityBehaviorHealth`'s tick loop is not
+  scaled by `Calendar.SpeedOfTime`/`CalendarSpeedMul`; any poison-duration math in this document
+  that assumes DoT ticks scale with calendar speed does not hold, and the tick interval itself
+  should be expressed in real seconds.
 
 The actual catalog of effects (Part 3) is what fills this hook in.
 
@@ -669,7 +674,7 @@ Not a final schema — illustrates the shape implied by the decisions above:
 
 - Cluster/category recipe matching ("any of a list satisfies this slot") — `CookingRecipe.cs`,
   `CookingRecipeIngredient.cs`.
-- Sealed real-time steeping — `BlockEntityBarrel.cs`/`BarrelRecipe.cs` (§2).
+- Sealed game-calendar-time steeping — `BlockEntityBarrel.cs`/`BarrelRecipe.cs` (§2).
 - Boiler/condenser distillation — `BlockEntityBoiler.cs`, `BlockEntityCondenser.cs`,
   `DistillationProps.cs`.
 - Generic "drink from any container" — `BlockLiquidContainerBase.cs`.
@@ -1242,7 +1247,7 @@ consistent with the halve/zero pattern used everywhere else Mind Tonic reaches.
   away; outdoors, **15-50 blocks**, scaled by line of sight — closer in wooded/brushy terrain,
   farther when the ground ahead is clear. Always placed within the player's current field of view.
 - **Bowtorn: spawns invisibly, and deliberately never in view.** It spawns a real entity, kept
-  invisible for its entire lifetime, at a point **roughly 20 blocks away, randomized within the
+  invisible for its entire lifetime, at a point **13-17 blocks away, randomized within the
   half of the world behind the player's current facing** — the opposite placement rule from
   Drifter/Shiver, on purpose. From there it plays its own real windup sound (the sound the real
   creature makes drawing its bow before firing), waits 5 seconds, then despawns — never
@@ -1271,6 +1276,11 @@ consistent with the halve/zero pattern used everywhere else Mind Tonic reaches.
   poisoned arrow) — Mind Poison's confusion/mind-fog drives both Temporal Fog's screen
   wobble/vignette and Hallucination's apparition spawns together, not a choice between them the
   way Mind Tonic overdose is.
+- Only the client/server sync channel and a per-position stability read have been verified against
+  source so far - the specific tiered-threshold structure this document wants to mirror has not
+  been confirmed and needs its own read of `TemporalStabilityEffects.cs` (past its sync-channel
+  setup) and `SystemTemporalStability.cs` before any implementation plan treats its exact
+  thresholds as precedent.
 - **Effect: screen wobble + a genuinely new custom vignette — not a `FrostVignetting` reuse.**
   Checked the actual shader (`assets/game/shaders/final.fsh`): `frostVignetting` isn't a plain
   darkened edge at all — it runs gradient noise (`gnoise`) to paint an icy, crystalline frost
@@ -1828,7 +1838,10 @@ Connections that span multiple parts, not obvious from reading any single part i
   (→ Flu or Bronchitis → Pneumonia, branching/reconverging), Liver Disease (→ Liver Failure), and
   broken bones' tier ladders. Not a named, system-wide architecture — each is its own concrete
   instance.
-- **`healingeffectivness` and `walkSpeed`** (`EntityStats`) are the two workhorse debuff stats,
+- **`healingeffectivness` and `walkspeed`** (`EntityStats` — note the category string is all
+  lowercase, `"walkspeed"`, confirmed against `EntityPlayer.cs`'s own `Stats.Register` calls; the
+  camelCase `walkSpeed` used elsewhere in this doc is descriptive prose, not the literal string to
+  pass to `Stats.Set`/`GetBlended`) are the two workhorse debuff stats,
   reused across Wound Infection, Skin Irritation, Liver Failure's early warning, Flu's fever, and
   Weakness/Paralysis.
 - **Room-based classification** (`RoomRegistry.GetRoomForPosition`) does three unrelated jobs:
@@ -1928,6 +1941,18 @@ surfaces as a real, one-time jump (more or less time remaining) the next time th
 `PlayerDisconnect` write, so a stale `TimeLeft` can lag behind by up to the periodic world-save
 interval. Bounded and not an exploit vector (worst case: a few extra minutes of frozen time no
 different in kind from a normal logout), not worth solving further.
+
+**Sleep-driven calendar jumps affect the same `TimeStarted`/`TimeLeft` bookkeeping above.** There
+is no engine event fired when sleep ends or by how many hours it advanced the calendar - confirmed
+against `ModSleeping.cs` (a continuous time-speed-modifier ramp, not a discrete jump) and
+`EntityBehaviorTiredness.cs` (which detects elapsed sleep purely by polling `Calendar.TotalHours`
+before and after its own tick - the same approach this mod must use).
+
+The real-time-to-game-time ratio (default 48 real minutes per game day) is server-configurable at
+runtime via `CalendarSpeedMul` and `SpeedOfTime` - any code converting between real time and game
+time must read `Calendar.SpeedOfTime * Calendar.CalendarSpeedMul` live rather than hardcoding the
+default ratio, matching how vanilla's own `EntityBehaviorHealth.ApplyRegenAndHunger` does this
+conversion.
 
 **Handbook page explaining the mod's mechanics** — deliberately held until mechanics are settled.
 Recipe integration itself is automatic (standard vanilla behavior) and doesn't wait on this.
