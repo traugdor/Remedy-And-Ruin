@@ -33,9 +33,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
                 JsonObject effectData = stack?.Collectible?.Attributes?["remedyandruinEffect"];
                 if (effectData == null || !effectData.Exists)
                 {
-                    // TODO: also check remedyandruinEffectByType (raw poison mushrooms,
-                    // wildcard-keyed by the specific variant code) once a helper exists to
-                    // resolve it against stack.Collectible.Code.
+                    effectData = EffectByTypeResolver.Resolve(stack?.Collectible);
+                }
+                if (effectData == null)
+                {
                     continue;
                 }
 
