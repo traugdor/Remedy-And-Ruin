@@ -143,6 +143,56 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             }
         }
 
+        //============== TOXICITY ==============//
+
+        public float ToxicityCounter
+        {
+            get => RREffects.GetFloat("toxicityCounter", 0f);
+            set
+            {
+                value = GameMath.Clamp(value, 0f, float.MaxValue);
+                RREffects.SetFloat("toxicityCounter", value);
+                MarkDirty();
+            }
+        }
+
+        public void IncreaseToxicity(string cluster, float amount)
+        {
+            float previous = ToxicityCounter;
+            float updated = previous + amount;
+            ToxicityCounter = updated;
+
+            if (previous < Remedy_And_RuinModSystem.Config.toxicityOverdoseThreshold
+                && updated >= Remedy_And_RuinModSystem.Config.toxicityOverdoseThreshold)
+            {
+                TriggerOverdose(cluster);
+            }
+        }
+
+        private void TriggerOverdose(string cluster)
+        {
+            /*
+             * PLACEHOLDER
+             * §6's overdose-effect-per-potion-type table decides what actually happens here, once
+             * Plan 12/13 builds real potion effects to construct an overdose instance from. cluster
+             * identifies which potion caused this crossing (the only input this method needs later).
+             */
+        }
+
+        private long toxicityDecayListenerId;
+
+        private void DecayToxicity(float dt)
+        {
+            float gameSpeedMultiplier = entity.World.Calendar.SpeedOfTime * entity.World.Calendar.CalendarSpeedMul / 30f;
+            float decayAmount = Remedy_And_RuinModSystem.Config.toxicityDecayPerRealSecond * gameSpeedMultiplier;
+            if (decayAmount <= 0f) return;
+
+            float current = ToxicityCounter;
+            if (current <= 0f) return;
+
+            ToxicityCounter = Math.Max(0f, current - decayAmount);
+        }
+
         //============== PROPERTIES ===============//
 
         bool     drankAntidote = false;
@@ -173,7 +223,17 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 MarkDirty("rrpotions");
             }
             threadManager = new EffectThreadManager(entity);
+            toxicityDecayListenerId = entity.World.RegisterGameTickListener(DecayToxicity, 1000);
             lastKnownEffectsAdvanceOffline = Remedy_And_RuinModSystem.Config.allowEffectsToExpireWhenOffline;
+        }
+
+        public override void OnEntityDespawn(EntityDespawnData despawn)
+        {
+            base.OnEntityDespawn(despawn);
+            if (toxicityDecayListenerId != 0)
+            {
+                entity.World.UnregisterGameTickListener(toxicityDecayListenerId);
+            }
         }
 
         public void DestroyProgress()
