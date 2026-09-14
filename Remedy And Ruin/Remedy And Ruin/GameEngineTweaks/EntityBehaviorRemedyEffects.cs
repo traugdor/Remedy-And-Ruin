@@ -600,7 +600,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             }
             //write to treeArrayAttribute
             TreeAttribute neweffect = new TreeAttribute();
-            neweffect.SetString("effectName", effectname);
+            neweffect.SetString("effectname", effectname);
             neweffect.SetString("cluster", effect.cluster.ToString());
             neweffect.SetBool("isConcentrated", effect.isConcentrated);
             neweffect.SetDouble("timestarted", effect.timestarted);
