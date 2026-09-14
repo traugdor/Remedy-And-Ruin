@@ -70,6 +70,8 @@ namespace Remedy_And_Ruin
                 //EntityBehaviorRemedyEffects RRBehavior = entity.GetBehavior<EntityBehaviorRemedyEffects>();
                 if(entity != null && entity.GetBehavior<EntityBehaviorRemedyEffects>() is EntityBehaviorRemedyEffects RRBehavior)
                 {
+                    RRBehavior.ResetToleranceDecayCheckpoint();
+
                     if (Config.allowEffectsToExpireWhenOffline != RRBehavior.lastKnownEffectsAdvanceOffline)
                     {
                         Mod.Logger.Warning($"Config setting 'allowEffectsToExpireWhenOffline' changed. Wiping progress for player: {player.PlayerName}.");
