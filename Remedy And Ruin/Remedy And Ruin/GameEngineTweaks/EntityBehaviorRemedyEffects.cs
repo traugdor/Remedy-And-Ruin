@@ -338,6 +338,12 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             }
         }
 
+        public override void OnEntityDeath(DamageSource damageSourceForDeath)
+        {
+            base.OnEntityDeath(damageSourceForDeath);
+            threadManager.HandleForcefulEnd();
+        }
+
         public void DestroyProgress()
         {
             //I warned you not to.
