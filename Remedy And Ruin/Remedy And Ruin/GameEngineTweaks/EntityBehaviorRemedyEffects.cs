@@ -143,6 +143,102 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             }
         }
 
+        private int GetTolerance(string cluster)
+        {
+            switch (cluster)
+            {
+                case "TOXICPOISON": return toxicTolerance;
+                case "NOXIOUSPOISON": return noxiousTolerance;
+                case "CARDIACPOISON": return cardiacTolerance;
+                case "NEUROTOXICPOISON": return neurotoxicTolerance;
+                case "MINDPOISON": return brainrotTolerance;
+                default: return 0;
+            }
+        }
+
+        private void SetTolerance(string cluster, int value)
+        {
+            switch (cluster)
+            {
+                case "TOXICPOISON": toxicTolerance = value; break;
+                case "NOXIOUSPOISON": noxiousTolerance = value; break;
+                case "CARDIACPOISON": cardiacTolerance = value; break;
+                case "NEUROTOXICPOISON": neurotoxicTolerance = value; break;
+                case "MINDPOISON": brainrotTolerance = value; break;
+            }
+        }
+
+        private double GetLastExposureDay(string cluster) => RREffects.GetDouble(cluster + "LastExposureDay", 0.0);
+
+        private void SetLastExposureDay(string cluster, double value)
+        {
+            RREffects.SetDouble(cluster + "LastExposureDay", value);
+            MarkDirty();
+        }
+
+        private float GetToleranceDecayAccumulator(string cluster) => RREffects.GetFloat(cluster + "ToleranceDecayAccumulator", 0f);
+
+        private void SetToleranceDecayAccumulator(string cluster, float value)
+        {
+            RREffects.SetFloat(cluster + "ToleranceDecayAccumulator", value);
+            MarkDirty();
+        }
+
+        public bool GetPendingToleranceCredit(string cluster) => RREffects.GetBool(cluster + "PendingToleranceCredit", false);
+
+        public void SetPendingToleranceCredit(string cluster, bool value)
+        {
+            RREffects.SetBool(cluster + "PendingToleranceCredit", value);
+            MarkDirty();
+        }
+
+        public void RegisterSurvivedExposure(string cluster)
+        {
+            int current = GetTolerance(cluster);
+            SetTolerance(cluster, Math.Min(27, current + 1));
+            SetLastExposureDay(cluster, entity.World.Calendar.TotalDays);
+            SetToleranceDecayAccumulator(cluster, 0f);
+        }
+
+        private static readonly string[] ToleranceClusters = { "TOXICPOISON", "NOXIOUSPOISON", "CARDIACPOISON", "NEUROTOXICPOISON", "MINDPOISON" };
+
+        private long toleranceDecayListenerId;
+        private int lastToleranceDecayCheckDay;
+
+        public void ResetToleranceDecayCheckpoint()
+        {
+            lastToleranceDecayCheckDay = (int)Math.Floor(entity.World.Calendar.TotalDays);
+        }
+
+        private void DecayTolerances(float dt)
+        {
+            int today = (int)Math.Floor(entity.World.Calendar.TotalDays);
+            int daysPassed = today - lastToleranceDecayCheckDay;
+            if (daysPassed <= 0) return;
+            lastToleranceDecayCheckDay = today;
+
+            double daysPerMonth = entity.World.Calendar.DaysPerMonth;
+
+            foreach (string cluster in ToleranceClusters)
+            {
+                int tolerance = GetTolerance(cluster);
+                if (tolerance <= 0) continue;
+
+                double lastExposureDay = GetLastExposureDay(cluster);
+                double daysSinceExposure = entity.World.Calendar.TotalDays - lastExposureDay;
+                if (daysSinceExposure < daysPerMonth) continue; // still in the grace period
+
+                float accumulator = GetToleranceDecayAccumulator(cluster) + (27f * 0.05f * daysPassed);
+                while (accumulator >= 1f && tolerance > 0)
+                {
+                    tolerance--;
+                    accumulator -= 1f;
+                }
+                SetTolerance(cluster, tolerance);
+                SetToleranceDecayAccumulator(cluster, accumulator);
+            }
+        }
+
         //============== TOXICITY ==============//
 
         public float ToxicityCounter
@@ -224,6 +320,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             }
             threadManager = new EffectThreadManager(entity);
             toxicityDecayListenerId = entity.World.RegisterGameTickListener(DecayToxicity, 1000);
+            lastToleranceDecayCheckDay = (int)Math.Floor(entity.World.Calendar.TotalDays);
+            toleranceDecayListenerId = entity.World.RegisterGameTickListener(DecayTolerances, 60000);
             lastKnownEffectsAdvanceOffline = Remedy_And_RuinModSystem.Config.allowEffectsToExpireWhenOffline;
         }
 
@@ -233,6 +331,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             if (toxicityDecayListenerId != 0)
             {
                 entity.World.UnregisterGameTickListener(toxicityDecayListenerId);
+            }
+            if (toleranceDecayListenerId != 0)
+            {
+                entity.World.UnregisterGameTickListener(toleranceDecayListenerId);
             }
         }
 
