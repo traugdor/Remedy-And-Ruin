@@ -91,6 +91,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         public float? SecondaryEffectMult { get; }
         public IReadOnlyList<StatModifier> StatModifiers { get; }
         public DoTSpec? DoT { get; }
+        public bool EligibleForTolerance { get; }
 
         private static readonly TimeSpan CalendarPollInterval = TimeSpan.FromSeconds(10);
 
@@ -104,6 +105,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             string secondaryEffectType, float? secondaryEffectMult,
             IReadOnlyList<StatModifier> statModifiers,
             DoTSpec? dot,
+            bool eligibleForTolerance,
             Action<EffectTimerThread> onSaveReport,
             Action<EffectTimerThread> onNaturalEnd,
             Action<EffectTimerThread> onForcedEnd)
@@ -119,6 +121,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             SecondaryEffectMult = secondaryEffectMult;
             StatModifiers = statModifiers;
             DoT = dot;
+            EligibleForTolerance = eligibleForTolerance;
             this.getTotalHours = getTotalHours;
 
             System.Threading.Tasks.Task.Run(() => Run(onSaveReport, onNaturalEnd, onForcedEnd));
@@ -231,6 +234,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             float effectOnset = entry.GetFloat("onsetMultiplier");
             float toxicEffectMultiplier = entry.GetFloat("toxicEffectMultiplier");
             double timeleft = entry.GetDouble("timeleft");
+            bool eligibleForTolerance = entry.GetBool("toleranceEligible");
 
             // "now" is correct as this effect's start point the one time this method runs for a
             // given guid (parseEffectsAndApply's effectsApplied guard ensures that) - for a
@@ -248,6 +252,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 Guid.Parse(guid), bucket, cluster, effectMult, effectOnset,
                 startTotalHours, endTotalHours, () => entity.World.Calendar.TotalHours,
                 null, null, statModifiers, dotSpec,
+                eligibleForTolerance,
                 onSaveReport: OnSaveReport,
                 onNaturalEnd: OnNaturalEnd,
                 onForcedEnd: OnForcedEnd);
@@ -418,6 +423,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             {
                 RemoveStatModifiers(t);
                 RemoveDoT(t);
+
+                if (t.Bucket == EffectBucket.Poison)
+                {
+                    ResolveToleranceForCluster(t.Cluster, becameEligibleNow: false);
+                }
             }, "rrEffectForcedEndStats");
             // Must stay synchronous and immediate, not nested inside the enqueued action above:
             // HandleForcefulEnd blocks the main thread on pendingForcedEndCountdown.Wait(...), so
@@ -436,15 +446,35 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 RemoveDoT(t);
                 RemoveGuidsFromWatchedAttributes(new[] { t.Guid });
 
-                /*
-                 * PLACEHOLDER
-                 * Natural expiry only - award tolerance progression here once that logic exists.
-                 * Forced end (above) must never take this path: effects lost to an antidote or
-                 * death do not count towards tolerance. Belongs in this same enqueued task,
-                 * since it needs main-thread access to WatchedAttributes-backed tolerance
-                 * counters.
-                 */
+                if (t.Bucket == EffectBucket.Poison)
+                {
+                    ResolveToleranceForCluster(t.Cluster, becameEligibleNow: t.EligibleForTolerance);
+                }
             }, "rrEffectNaturalEnd");
+        }
+
+        // Awards a held tolerance credit only once every active thread for this cluster has
+        // ended - naturally or by force. At most one eligible exposure can exist per overlapping
+        // chain (later exposures of the same cluster are never eligible), so a single pending
+        // flag per cluster is sufficient; becameEligibleNow must be false for any forced-end
+        // caller, since a cured instance never itself earns credit, only its removal can release
+        // an already-pending one from an earlier sibling.
+        private void ResolveToleranceForCluster(string cluster, bool becameEligibleNow)
+        {
+            var remedyEffects = entity.GetBehavior<EntityBehaviorRemedyEffects>();
+            if (remedyEffects == null) return;
+
+            if (becameEligibleNow)
+            {
+                remedyEffects.SetPendingToleranceCredit(cluster, true);
+            }
+
+            bool clusterStillActive = threads.Values.Any(other => other.Bucket == EffectBucket.Poison && other.Cluster == cluster);
+            if (!clusterStillActive && remedyEffects.GetPendingToleranceCredit(cluster))
+            {
+                remedyEffects.RegisterSurvivedExposure(cluster);
+                remedyEffects.SetPendingToleranceCredit(cluster, false);
+            }
         }
 
         private static ActiveEffectReport BuildReport(EffectTimerThread t) => new ActiveEffectReport
