@@ -1478,11 +1478,17 @@ Not a single-drink cure. The Antidote must be consumed twice in sequence to work
    - **Imposes a 2-in-game-hour restricted diet, not a total lockout.** Solid food is still
      off-limits, but **drinks are allowed, restricted to broths and fruit juice — no alcohol.**
      Eating solid food, or drinking alcohol, during the window **re-triggers vomiting**.
-   - **Any potion drunk during the window carries a high risk of triggering vomiting and voiding
+   - **Any potion drunk during the window has a 50% chance of triggering vomiting and voiding
      that potion's effect entirely** — a strong disincentive against chaining potions right after
      the Antidote.
    - **Grants poison immunity for the same 2-hour window against external sources too** — e.g. a
      poisoned arrow hitting the player during this window does not apply its poison effect.
+   - **Also applies a 15% penalty to melee damage dealt and healing effectiveness, for the same
+     2-hour window** — the purged poisons are gone, but their lingering aftereffects aren't instant
+     to shake off. Runs on the same single timer as the restricted diet and poison immunity above,
+     not a separate duration. Distinct from Neurotoxic Poison's own named Weakness stage (a
+     `walkSpeed` penalty, above) — this is a different debuff with the same plain-English name,
+     not a reuse of that mechanic.
 
 ---
 
