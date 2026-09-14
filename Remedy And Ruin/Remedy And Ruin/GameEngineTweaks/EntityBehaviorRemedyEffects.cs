@@ -355,6 +355,12 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             lastKnownEffectsAdvanceOffline = Remedy_And_RuinModSystem.Config.allowEffectsToExpireWhenOffline;
         }
 
+        public bool HandleDisconnect() => threadManager.HandleDisconnect();
+
+        public bool HandleGameWorldSaving() => threadManager.HandleGameWorldSaving();
+
+        public void ReconstructActiveEffectsOnLogin() => parseEffectsAndApply();
+
         public override string PropertyName()
         {
             return "remedyandruinEffects";
