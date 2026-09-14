@@ -1,0 +1,122 @@
+[
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/nutritionPropsByType/*-deathcap-*/health",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/attributes/nutritionPropsWhenInMeal/healthByType/*-deathcap-*",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/nutritionPropsByType/*-foolsconecap-*/health",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/attributes/nutritionPropsWhenInMeal/healthByType/*-foolsconecap-*",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/nutritionPropsByType/*-devilbolete-*/health",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/attributes/nutritionPropsWhenInMeal/healthByType/*-devilbolete-*",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/nutritionPropsByType/*-earthball-*/health",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/attributes/nutritionPropsWhenInMeal/healthByType/*-earthball-*",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/nutritionPropsByType/*-sickener-*/health",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/attributes/nutritionPropsWhenInMeal/healthByType/*-sickener-*",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/nutritionPropsByType/*-elfinsaddle-*/health",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/attributes/nutritionPropsWhenInMeal/healthByType/*-elfinsaddle-*",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/nutritionPropsByType/*-jackolantern-*/health",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/attributes/nutritionPropsWhenInMeal/healthByType/*-jackolantern-*",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/nutritionPropsByType/*-golddropmilkcap-*/health",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/attributes/nutritionPropsWhenInMeal/healthByType/*-golddropmilkcap-*",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/nutritionPropsByType/*-laughingjim-*/health",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/attributes/nutritionPropsWhenInMeal/healthByType/*-laughingjim-*",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/nutritionPropsByType/*-flyagaric-*/health",
+		"value": 0
+	},
+	{
+		"op": "replace",
+		"file": "game:blocktypes/plant/mushroom.json",
+		"path": "/attributes/nutritionPropsWhenInMeal/healthByType/*-flyagaric-*",
+		"value": 0
+	}
+]
