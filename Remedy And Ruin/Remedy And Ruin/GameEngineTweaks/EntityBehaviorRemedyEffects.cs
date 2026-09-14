@@ -497,6 +497,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             if (poison)
             {
                 List<TreeAttribute> rrpoisons = RRPoisonEffects.value.ToList<TreeAttribute>();
+                bool toleranceEligible = !rrpoisons.Any(existing => existing.GetString("cluster") == effect.cluster.ToString());
+                neweffect.SetBool("toleranceEligible", toleranceEligible);
                 neweffect.SetBool("isPoison", true);
                 neweffect.SetFloat("onsetMultiplier", effect.onsetMultiplier); //only used for poisons
                 rrpoisons.Add(neweffect);
