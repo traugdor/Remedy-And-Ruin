@@ -62,6 +62,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         public double EndTotalHours;
         public string SecondaryEffectType;
         public float? SecondaryEffectMult;
+        public bool EligibleForTolerance;
     }
 
     /// <summary>
@@ -98,6 +99,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         private readonly Func<double> getTotalHours;
         private readonly ManualResetEventSlim saveRequested = new ManualResetEventSlim(false);
         private readonly ManualResetEventSlim forceStopRequested = new ManualResetEventSlim(false);
+        private readonly ManualResetEventSlim disconnectRequested = new ManualResetEventSlim(false);
 
         public EffectTimerThread(
             Guid guid, EffectBucket bucket, string cluster, float effectMult, float effectOnset,
@@ -108,7 +110,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             bool eligibleForTolerance,
             Action<EffectTimerThread> onSaveReport,
             Action<EffectTimerThread> onNaturalEnd,
-            Action<EffectTimerThread> onForcedEnd)
+            Action<EffectTimerThread> onForcedEnd,
+            Action<EffectTimerThread> onDisconnect)
         {
             Guid = guid;
             Bucket = bucket;
@@ -124,15 +127,16 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             EligibleForTolerance = eligibleForTolerance;
             this.getTotalHours = getTotalHours;
 
-            System.Threading.Tasks.Task.Run(() => Run(onSaveReport, onNaturalEnd, onForcedEnd));
+            System.Threading.Tasks.Task.Run(() => Run(onSaveReport, onNaturalEnd, onForcedEnd, onDisconnect));
         }
 
         public void RequestSaveReport() => saveRequested.Set();
         public void RequestForcedEnd() => forceStopRequested.Set();
+        public void RequestDisconnect() => disconnectRequested.Set();
 
-        private void Run(Action<EffectTimerThread> onSaveReport, Action<EffectTimerThread> onNaturalEnd, Action<EffectTimerThread> onForcedEnd)
+        private void Run(Action<EffectTimerThread> onSaveReport, Action<EffectTimerThread> onNaturalEnd, Action<EffectTimerThread> onForcedEnd, Action<EffectTimerThread> onDisconnect)
         {
-            WaitHandle[] handles = { saveRequested.WaitHandle, forceStopRequested.WaitHandle };
+            WaitHandle[] handles = { saveRequested.WaitHandle, forceStopRequested.WaitHandle, disconnectRequested.WaitHandle };
             try
             {
                 while (true)
@@ -156,6 +160,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                         onForcedEnd(this);
                         return;
                     }
+                    if (signalled == 2) // disconnect requested - report final state and stop
+                    {
+                        onDisconnect(this);
+                        return;
+                    }
                     // WaitHandle.WaitTimeout -> loop back to re-check expiry / re-poll
                 }
             }
@@ -163,6 +172,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             {
                 saveRequested.Dispose();
                 forceStopRequested.Dispose();
+                disconnectRequested.Dispose();
             }
         }
     }
@@ -196,6 +206,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         private readonly object forcedEndLock = new object();
         private ConcurrentBag<Guid> pendingForcedEndGuids;
         private CountdownEvent pendingForcedEndCountdown;
+
+        private readonly object disconnectLock = new object();
+        private ConcurrentBag<ActiveEffectReport> pendingDisconnectReports;
+        private CountdownEvent pendingDisconnectCountdown;
+        private static readonly TimeSpan DisconnectTimeout = TimeSpan.FromSeconds(5);
 
         public EffectThreadManager(Entity entity)
         {
@@ -243,7 +258,15 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             // reconnection state; this does not attempt that.
             double totalHoursNow = entity.World.Calendar.TotalHours;
             double startTotalHours = totalHoursNow;
-            double endTotalHours = totalHoursNow + timeleft;
+            double endTotalHours;
+            if (Remedy_And_RuinModSystem.Config.allowEffectsToExpireWhenOffline && entry.HasAttribute("absoluteEndTotalHours"))
+            {
+                endTotalHours = entry.GetDouble("absoluteEndTotalHours");
+            }
+            else
+            {
+                endTotalHours = totalHoursNow + timeleft;
+            }
 
             IReadOnlyList<StatModifier> statModifiers = DetermineStatModifiers(cluster, effectMult, effectOnset, toxicEffectMultiplier);
             DoTSpec? dotSpec = DetermineDoTEffect(cluster, effectMult, effectOnset, toxicEffectMultiplier);
@@ -255,7 +278,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 eligibleForTolerance,
                 onSaveReport: OnSaveReport,
                 onNaturalEnd: OnNaturalEnd,
-                onForcedEnd: OnForcedEnd);
+                onForcedEnd: OnForcedEnd,
+                onDisconnect: OnDisconnect);
 
             threads[thread.Guid] = thread;
 
@@ -408,6 +432,35 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             }
         }
 
+        //============== DISCONNECT (pause without removing) ==============//
+
+        public bool HandleDisconnect()
+        {
+            lock (disconnectLock)
+            {
+                List<EffectTimerThread> snapshot = threads.Values.ToList();
+                if (snapshot.Count == 0) return true;
+
+                pendingDisconnectReports = new ConcurrentBag<ActiveEffectReport>();
+                pendingDisconnectCountdown = new CountdownEvent(snapshot.Count);
+
+                foreach (EffectTimerThread t in snapshot)
+                {
+                    t.RequestDisconnect();
+                }
+
+                bool allStopped = pendingDisconnectCountdown.Wait(DisconnectTimeout);
+
+                WriteReportsToWatchedAttributes(pendingDisconnectReports);
+
+                pendingDisconnectCountdown.Dispose();
+                pendingDisconnectCountdown = null;
+                pendingDisconnectReports = null;
+
+                return allStopped;
+            }
+        }
+
         //============== THREAD CALLBACKS ==============//
 
         private void OnSaveReport(EffectTimerThread t)
@@ -435,6 +488,13 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             // timeout waiting on a task the main thread can't run until it stops waiting.
             pendingForcedEndGuids?.Add(t.Guid);
             pendingForcedEndCountdown?.Signal();
+        }
+
+        private void OnDisconnect(EffectTimerThread t)
+        {
+            threads.TryRemove(t.Guid, out _);
+            pendingDisconnectReports?.Add(BuildReport(t));
+            pendingDisconnectCountdown?.Signal();
         }
 
         private void OnNaturalEnd(EffectTimerThread t)
@@ -497,7 +557,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             StartTotalHours = t.StartTotalHours,
             EndTotalHours = t.EndTotalHours,
             SecondaryEffectType = t.SecondaryEffectType,
-            SecondaryEffectMult = t.SecondaryEffectMult
+            SecondaryEffectMult = t.SecondaryEffectMult,
+            EligibleForTolerance = t.EligibleForTolerance
         };
 
         //============== WATCHEDATTRIBUTES I/O (single writer) ==============//
@@ -508,6 +569,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             if (remedyEffects == null) return;
 
             double totalHoursNow = entity.World.Calendar.TotalHours;
+            bool calendarAnchored = Remedy_And_RuinModSystem.Config.allowEffectsToExpireWhenOffline;
 
             var poisons = new List<TreeAttribute>();
             var illnesses = new List<TreeAttribute>();
@@ -515,7 +577,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
             foreach (ActiveEffectReport report in reports)
             {
-                TreeAttribute entry = BuildTreeAttribute(report, totalHoursNow);
+                TreeAttribute entry = BuildTreeAttribute(report, totalHoursNow, calendarAnchored);
                 switch (report.Bucket)
                 {
                     case EffectBucket.Poison: poisons.Add(entry); break;
@@ -556,17 +618,29 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return separator >= 0 ? effectname.Substring(separator + 1) : effectname;
         }
 
-        private static TreeAttribute BuildTreeAttribute(ActiveEffectReport report, double totalHoursNow)
+        private static TreeAttribute BuildTreeAttribute(ActiveEffectReport report, double totalHoursNow, bool calendarAnchored)
         {
             var t = new TreeAttribute();
             t.SetString("effectname", report.Cluster + "|" + report.Guid);
             t.SetString("cluster", report.Cluster);
             t.SetBool("isPoison", report.Bucket == EffectBucket.Poison);
             t.SetBool("isConcentrated", false); // no source data in ApplyEffect's current inputs
+            t.SetBool("toleranceEligible", report.EligibleForTolerance);
             t.SetDouble("timestarted", report.StartTotalHours);
-            // remaining game-hours as of this save - read back in as "timeleft" to rebuild
-            // EndTotalHours fresh (totalHoursNow-at-that-point + timeleft) on the next login
-            t.SetDouble("timeleft", Math.Max(0.0, report.EndTotalHours - totalHoursNow));
+            if (calendarAnchored)
+            {
+                // The original, never-recomputed absolute target. Read back directly at
+                // reconstruction - if the calendar has already passed it, the effect is treated as
+                // having expired naturally, exactly like a live expiry would.
+                t.SetDouble("absoluteEndTotalHours", report.EndTotalHours);
+                t.SetDouble("timeleft", 0.0); // unused in this mode; present only for schema consistency
+            }
+            else
+            {
+                // Remaining game-hours as of this write - read back in as "timeleft" to rebuild
+                // EndTotalHours fresh (totalHoursNow-at-reconnect + timeleft) next time this fires.
+                t.SetDouble("timeleft", Math.Max(0.0, report.EndTotalHours - totalHoursNow));
+            }
             t.SetFloat("effectMultiplier", report.EffectMult);
             t.SetFloat("onsetMultiplier", report.EffectOnset);
             t.SetFloat("toxicEffectMultiplier", report.SecondaryEffectMult ?? 0f);
