@@ -71,12 +71,26 @@ namespace Remedy_And_Ruin
                 if(entity != null && entity.GetBehavior<EntityBehaviorRemedyEffects>() is EntityBehaviorRemedyEffects RRBehavior)
                 {
                     RRBehavior.ResetToleranceDecayCheckpoint();
+                    RRBehavior.ReconstructActiveEffectsOnLogin();
 
                     if (Config.allowEffectsToExpireWhenOffline != RRBehavior.lastKnownEffectsAdvanceOffline)
                     {
                         Mod.Logger.Warning($"Config setting 'allowEffectsToExpireWhenOffline' changed. Wiping progress for player: {player.PlayerName}.");
                         RRBehavior.DestroyProgress();
                     }
+                }
+            };
+
+            api.Event.PlayerDisconnect += (IServerPlayer player) =>
+            {
+                player.Entity?.GetBehavior<EntityBehaviorRemedyEffects>()?.HandleDisconnect();
+            };
+
+            api.Event.GameWorldSave += () =>
+            {
+                foreach (IPlayer player in api.World.AllOnlinePlayers)
+                {
+                    player.Entity?.GetBehavior<EntityBehaviorRemedyEffects>()?.HandleGameWorldSaving();
                 }
             };
         }
