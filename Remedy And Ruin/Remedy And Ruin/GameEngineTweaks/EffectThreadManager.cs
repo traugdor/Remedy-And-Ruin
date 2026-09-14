@@ -426,7 +426,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
                 if (t.Bucket == EffectBucket.Poison)
                 {
-                    ResolveToleranceForCluster(t.Cluster, becameEligibleNow: false);
+                    DiscardPendingToleranceOnForcedEnd(t.Cluster);
                 }
             }, "rrEffectForcedEndStats");
             // Must stay synchronous and immediate, not nested inside the enqueued action above:
@@ -454,11 +454,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         }
 
         // Awards a held tolerance credit only once every active thread for this cluster has
-        // ended - naturally or by force. At most one eligible exposure can exist per overlapping
-        // chain (later exposures of the same cluster are never eligible), so a single pending
-        // flag per cluster is sufficient; becameEligibleNow must be false for any forced-end
-        // caller, since a cured instance never itself earns credit, only its removal can release
-        // an already-pending one from an earlier sibling.
+        // ended naturally. At most one eligible exposure can exist per overlapping chain (later
+        // exposures of the same cluster are never eligible), so a single pending flag per
+        // cluster is sufficient. Only ever called from OnNaturalEnd - a forced end (Antidote)
+        // never awards or preserves credit, see DiscardPendingToleranceOnForcedEnd below.
         private void ResolveToleranceForCluster(string cluster, bool becameEligibleNow)
         {
             var remedyEffects = entity.GetBehavior<EntityBehaviorRemedyEffects>();
@@ -475,6 +474,17 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 remedyEffects.RegisterSurvivedExposure(cluster);
                 remedyEffects.SetPendingToleranceCredit(cluster, false);
             }
+        }
+
+        // A forced end (Antidote) never earns or releases tolerance credit for this cluster - it
+        // unconditionally discards whatever is pending, even credit already banked by an
+        // earlier, fully-resolved natural survival of a different instance in the same cluster.
+        private void DiscardPendingToleranceOnForcedEnd(string cluster)
+        {
+            var remedyEffects = entity.GetBehavior<EntityBehaviorRemedyEffects>();
+            if (remedyEffects == null) return;
+
+            remedyEffects.SetPendingToleranceCredit(cluster, false);
         }
 
         private static ActiveEffectReport BuildReport(EffectTimerThread t) => new ActiveEffectReport
