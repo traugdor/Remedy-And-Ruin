@@ -785,19 +785,18 @@ Rationale for scaled-onset delivery generally:
 ### Stacking
 
 Every simultaneous poison exposure — from raw bites, a multi-ingredient stew, drinking, or a
-poisoned arrow — is tracked as its own instance, keyed by cluster and onset value:
+poisoned arrow — is tracked as its own fully independent instance: its own timer, its own effect
+magnitude, its own tolerance mitigation (below). Exposures never combine into a shared instance or
+timeline, regardless of cluster or onset value — not even repeated bites of the exact same
+mushroom. Eating three Fly Agarics produces three separate, independently-timed Mind Poison
+instances, not one instance at 3× effect; a stew containing Fly Agaric and Devil's Bolete produces
+two separate Toxic Poison tracks for the same reason any two exposures of that cluster would,
+regardless of whether their onset values happen to match. Onset value is only ever a per-instance
+speed setting (how quickly that one instance's own effect ramps up) — it has no bearing on whether
+two exposures share or don't share a track.
 
-- **Two exposures with matching onset values merge additively** into one combined-magnitude
-  instance on one shared timeline.
-- **Two exposures with different onset values remain fully separate**, each running its own
-  independent timer, own effect magnitude, own tolerance mitigation (below).
-
-This is one uniform rule regardless of source. Eating the same mushroom multiple times merges
-naturally (identical substances share identical onset, so three Fly Agarics become one Mind
-Poison instance at 3× effect with onset unchanged); eating different mushrooms whose onsets don't
-line up spawns genuinely separate tracks even if they nominally share a cluster (e.g. a stew
-containing Fly Agaric and Devil's Bolete produces two separate Toxic Poison tracks, since their
-Toxic Onset values, 0.4 and 0.5, don't match).
+This is one uniform rule regardless of source: nothing about *how* a poison was delivered changes
+this — eating, drinking, or a poisoned arrow all produce their own independent instance every time.
 
 ### Stews and cooked meals
 
