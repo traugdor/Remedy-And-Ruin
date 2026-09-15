@@ -71,6 +71,44 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             handling = EnumHandling.PreventSubsequent;
         }
 
+        public override void OnCreatedByCrafting(ItemSlot[] allInputSlots, ItemSlot outputSlot, IRecipeBase byRecipe, ref EnumHandling bhHandling)
+        {
+            ItemSlot vialSlot = System.Array.Find(allInputSlots, slot => slot.Itemstack?.Collectible is BlockVial);
+            if (vialSlot == null)
+            {
+                bhHandling = EnumHandling.PassThrough;
+                return;
+            }
+
+            ItemStack vialStack = vialSlot.Itemstack;
+            int charges = vialStack.Attributes.GetInt("poisonCharges", 0);
+            if (charges <= 0)
+            {
+                bhHandling = EnumHandling.PassThrough;
+                return;
+            }
+
+            ItemStack content = ((BlockVial)vialStack.Collectible).GetContent(vialStack);
+            JsonObject effectData = content?.Collectible?.Attributes?["remedyandruinEffect"];
+            if (effectData == null || !effectData.Exists || !effectData["isPoison"].AsBool())
+            {
+                bhHandling = EnumHandling.PassThrough;
+                return;
+            }
+
+            outputSlot.Itemstack.Attributes.SetString("remedyandruinArrowPoisonCluster", effectData["cluster"].AsString()?.ToUpper());
+            outputSlot.Itemstack.Attributes.SetFloat("remedyandruinArrowPoisonEffectMultiplier", effectData["effectMultiplier"].AsFloat());
+            int chargesRemaining = charges - 1;
+            vialStack.Attributes.SetInt("poisonCharges", chargesRemaining);
+            if (chargesRemaining <= 0)
+            {
+                // Same rule as dipping (Task 2): spending the last charge genuinely empties the Vial.
+                ((BlockVial)vialStack.Collectible).SetContent(vialStack, null);
+            }
+            vialSlot.MarkDirty();
+            bhHandling = EnumHandling.PreventSubsequent;
+        }
+
         private static (string cluster, float effectMultiplier) ReadVialPoison(ItemStack sourceStack)
         {
             if (!(sourceStack?.Collectible is BlockVial)) return (null, 0f);
