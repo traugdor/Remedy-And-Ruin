@@ -2,14 +2,14 @@
 	"code": "dilutedpotion-cardiacpoison",
 	"class": "ItemLiquidPortion",
 	"matterState": "liquid",
+	"nutritionProps": {
+		"satiety": 0,
+		"health": 0,
+		"foodcategory": "NoNutrition"
+	},
 	"attributes": {
 		"handbook": {
 			"ignoreCreativeInvStacks": true
-		},
-		"nutritionProps": {
-			"satiety": 0,
-			"health": 0,
-			"foodcategory": "NoNutrition"
 		},
 		"waterTightContainerProps": {
 			"containable": true,
