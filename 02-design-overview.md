@@ -1466,10 +1466,11 @@ Not a single-drink cure. The Antidote must be consumed twice in sequence to work
    Bolete itself carries genuine toxicity (one of the mild-toxin mushrooms in Part 1's own poison
    research) — the cure makes you sick before it can work.
 2. **Second dose is when it actually takes effect.** The two doses must land within roughly one
-   real-world minute of each other, or the sequence resets and both doses are wasted. Any new
-   poisoning that occurs between the first and second dose also resets the sequence — a fresh
-   exposure means starting the two-dose cycle over. Once the second dose successfully lands as
-   the second in sequence, it:
+   real-world minute of each other, or the sequence resets and both doses are wasted. **Consuming
+   anything else at all between the first and second dose — a new poisoning, any potion, or any
+   ordinary food or drink — also resets the sequence.** Only the Antidote's own two doses ever
+   advance the cycle; literally anything else consumed in between means starting over from a fresh
+   first dose. Once the second dose successfully lands as the second in sequence, it:
    - **Cures every currently active poison outright, all at once**, including any still in a
      silent pre-onset delay — stops an in-progress Weakness → Paralysis → Cardiac Arrest ladder,
      ends every active Toxic Poison drain, clears whatever poison state is currently running or
