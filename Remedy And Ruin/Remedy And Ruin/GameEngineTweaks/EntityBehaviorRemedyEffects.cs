@@ -502,7 +502,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         //============== ACTUAL CODE ==============//
 
-        public void ApplyEffect(EffectStruct effect) // only called when an item is eaten so it can never apply an illness.
+        public void ApplyEffect(EffectStruct effect) => ApplyEffect(effect, forceIneligibleForTolerance: false);
+
+        // only called when an item is eaten or an arrow lands so it can never apply an illness.
+        public void ApplyEffect(EffectStruct effect, bool forceIneligibleForTolerance)
         {
             Guid uid = Guid.NewGuid();
             string effectname = effect.cluster.ToString() + "|" + uid.ToString();
@@ -613,7 +616,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 if (!IsPostAntidoteWindowActive())
                 {
                     List<TreeAttribute> rrpoisons = RRPoisonEffects.value.ToList<TreeAttribute>();
-                    bool toleranceEligible = !rrpoisons.Any(existing => existing.GetString("cluster") == effect.cluster.ToString());
+                    bool toleranceEligible = !forceIneligibleForTolerance
+                        && !rrpoisons.Any(existing => existing.GetString("cluster") == effect.cluster.ToString());
                     neweffect.SetBool("toleranceEligible", toleranceEligible);
                     neweffect.SetBool("isPoison", true);
                     neweffect.SetFloat("onsetMultiplier", effect.onsetMultiplier); //only used for poisons
