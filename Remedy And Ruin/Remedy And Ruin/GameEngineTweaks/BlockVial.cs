@@ -1,4 +1,6 @@
+using System.Text;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.GameContent;
 
 namespace Remedy_And_Ruin.GameEngineTweaks
@@ -29,6 +31,16 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 containerStack.Attributes.SetInt("poisonCharges", 9);
             }
             return litresPut;
+        }
+
+        public override void GetHeldItemInfo(ItemSlot inSlot, StringBuilder dsc, IWorldAccessor world, bool withDebugInfo)
+        {
+            base.GetHeldItemInfo(inSlot, dsc, world, withDebugInfo);
+            if (GetContent(inSlot.Itemstack) != null)
+            {
+                int charges = inSlot.Itemstack.Attributes.GetInt("poisonCharges", 9);
+                dsc.AppendLine(Lang.Get("remedyandruin:vial-charges", charges));
+            }
         }
     }
 }

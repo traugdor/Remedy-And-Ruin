@@ -66,8 +66,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 return;
             }
 
-            string clusterDisplayName = Lang.Get("item-potion-" + cluster.ToString().ToLowerInvariant());
-            dsc.AppendLine(Lang.Get("arrow-poisoned", clusterDisplayName));
+            string clusterDisplayName = Lang.Get("remedyandruin:item-potion-" + cluster.ToString().ToLowerInvariant());
+            dsc.AppendLine(Lang.Get("remedyandruin:arrow-poisoned", clusterDisplayName));
         }
 
         public override void OnUnloaded(ICoreAPI api)

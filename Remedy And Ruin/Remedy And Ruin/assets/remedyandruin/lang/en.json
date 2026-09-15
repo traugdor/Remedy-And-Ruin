@@ -1,6 +1,7 @@
 {
   "hello": "hello world!",
   "arrow-poisoned": "Poisoned: {0}",
+  "vial-charges": "Charges: {0}/9",
   "block-vial": "Vial",
   "item-sludge": "Sludge",
   "block-vialmold-blue-raw": "Vial Mold (Raw)",
