@@ -306,6 +306,12 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 case "NEUROTOXICPOISON":
                 case "MINDPOISON":
                     break;
+                case "ANTIDOTEAFTERMATH":
+                    return new StatModifier[]
+                    {
+                        new StatModifier("meleeWeaponsDamage", -0.15f),
+                        new StatModifier("healingeffectivness", -0.15f)
+                    };
                 default:
                     break;
             }

@@ -610,13 +610,18 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             neweffect.SetFloat("toxicOnsetMultiplier", effect.toxicOnsetMultiplier);
             if (poison)
             {
-                List<TreeAttribute> rrpoisons = RRPoisonEffects.value.ToList<TreeAttribute>();
-                bool toleranceEligible = !rrpoisons.Any(existing => existing.GetString("cluster") == effect.cluster.ToString());
-                neweffect.SetBool("toleranceEligible", toleranceEligible);
-                neweffect.SetBool("isPoison", true);
-                neweffect.SetFloat("onsetMultiplier", effect.onsetMultiplier); //only used for poisons
-                rrpoisons.Add(neweffect);
-                RRPoisonEffects = new TreeArrayAttribute(rrpoisons.ToArray());
+                if (!IsPostAntidoteWindowActive())
+                {
+                    List<TreeAttribute> rrpoisons = RRPoisonEffects.value.ToList<TreeAttribute>();
+                    bool toleranceEligible = !rrpoisons.Any(existing => existing.GetString("cluster") == effect.cluster.ToString());
+                    neweffect.SetBool("toleranceEligible", toleranceEligible);
+                    neweffect.SetBool("isPoison", true);
+                    neweffect.SetFloat("onsetMultiplier", effect.onsetMultiplier); //only used for poisons
+                    rrpoisons.Add(neweffect);
+                    RRPoisonEffects = new TreeArrayAttribute(rrpoisons.ToArray());
+                }
+                // else: poison immunity is active during the post-Antidote window - this exposure
+                // never happened at all.
             }
             else if (!antidote)
             {
@@ -679,7 +684,26 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         private void ApplyAntidoteAftermathEffect()
         {
-            /* implemented in a later task of this plan */
+            Guid uid = Guid.NewGuid();
+            TreeAttribute neweffect = new TreeAttribute();
+            neweffect.SetString("effectname", "ANTIDOTEAFTERMATH|" + uid.ToString());
+            neweffect.SetString("cluster", "ANTIDOTEAFTERMATH");
+            neweffect.SetBool("isConcentrated", false);
+            neweffect.SetBool("isPoison", false);
+            neweffect.SetDouble("timestarted", 0.0);
+            neweffect.SetDouble("timeleft", 2.0); // 2 in-game hours - the single shared window duration
+            neweffect.SetFloat("effectMultiplier", 1.0f);
+            neweffect.SetFloat("toxicEffectMultiplier", 0f);
+            neweffect.SetFloat("toxicOnsetMultiplier", 0f);
+
+            List<TreeAttribute> rrpotions = RRPotionEffects.value.ToList<TreeAttribute>();
+            rrpotions.Add(neweffect);
+            RRPotionEffects = new TreeArrayAttribute(rrpotions.ToArray());
+        }
+
+        public bool IsPostAntidoteWindowActive()
+        {
+            return RRPotionEffects.value.Any(e => e.GetString("cluster") == "ANTIDOTEAFTERMATH");
         }
 
         private void VoidStomachContents(double chance)
