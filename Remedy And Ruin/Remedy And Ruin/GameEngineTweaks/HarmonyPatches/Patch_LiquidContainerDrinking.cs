@@ -18,21 +18,25 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
     [HarmonyPatch(typeof(BlockLiquidContainerBase), "tryEatStop")]
     public static class Patch_LiquidContainerDrinking
     {
-        public static void Prefix(BlockLiquidContainerBase __instance, ItemSlot slot, out ItemStack __state)
+        public static void Prefix(BlockLiquidContainerBase __instance, ItemSlot slot, out (ItemStack contentBefore, int chargesBefore) __state)
         {
-            __state = __instance.GetContent(slot?.Itemstack)?.Clone();
+            int chargesBefore = (__instance is BlockVial && slot?.Itemstack != null)
+                ? slot.Itemstack.Attributes.GetInt("poisonCharges", 9)
+                : 9;
+            __state = (__instance.GetContent(slot?.Itemstack)?.Clone(), chargesBefore);
         }
 
-        public static void Postfix(BlockLiquidContainerBase __instance, ItemSlot slot, EntityAgent byEntity, ItemStack __state)
+        public static void Postfix(BlockLiquidContainerBase __instance, ItemSlot slot, EntityAgent byEntity, (ItemStack contentBefore, int chargesBefore) __state)
         {
-            if (__state == null)
+            ItemStack contentBefore = __state.contentBefore;
+            if (contentBefore == null)
             {
                 return;
             }
 
             ItemStack contentAfter = __instance.GetContent(slot?.Itemstack);
             int sizeAfter = contentAfter?.StackSize ?? 0;
-            if (sizeAfter >= __state.StackSize)
+            if (sizeAfter >= contentBefore.StackSize)
             {
                 return; // nothing was actually drunk
             }
@@ -40,26 +44,26 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
             float potencyScale = 1.0f;
             if (__instance is BlockVial && slot?.Itemstack != null)
             {
-                int chargesBeforeDrink = slot.Itemstack.Attributes.GetInt("poisonCharges", 9);
-                potencyScale = chargesBeforeDrink / 9f;
-                slot.Itemstack.Attributes.SetInt("poisonCharges", 0); // drinking always fully depletes it
-                slot.MarkDirty();
+                // Drinking always fully drains the Vial's content, so the original tryEatStop call
+                // above already emptied it via SetContent(null), which Patch_VialChargeNormalization
+                // has already cleared poisonCharges for - no need to touch the attribute here.
+                potencyScale = __state.chargesBefore / 9f;
             }
 
             EntityBehaviorRemedyEffects remedyBehavior = byEntity.GetBehavior<EntityBehaviorRemedyEffects>();
-            remedyBehavior?.OnAnyItemConsumed(__state, byEntity.World);
+            remedyBehavior?.OnAnyItemConsumed(contentBefore, byEntity.World);
 
-            JsonObject effectData = __state.Collectible?.Attributes?["remedyandruinEffect"];
+            JsonObject effectData = contentBefore.Collectible?.Attributes?["remedyandruinEffect"];
             if (effectData == null || !effectData.Exists)
             {
-                effectData = EffectByTypeResolver.Resolve(__state.Collectible);
+                effectData = EffectByTypeResolver.Resolve(contentBefore.Collectible);
             }
             if (effectData == null)
             {
                 return;
             }
 
-            remedyBehavior?.OnItemConsumed(__state, effectData, potencyScale);
+            remedyBehavior?.OnItemConsumed(contentBefore, effectData, potencyScale);
         }
     }
 }
