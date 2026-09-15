@@ -1,0 +1,8 @@
+[
+	{
+		"op": "add",
+		"file": "game:itemtypes/tool/arrow.json",
+		"path": "/behaviors",
+		"value": [{ "name": "RemedyArrowPoisoning" }]
+	}
+]

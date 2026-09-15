@@ -32,6 +32,8 @@ namespace Remedy_And_Ruin
 
             api.RegisterBlockEntityClass("VialMold", typeof(BlockEntityVialMold));
             api.RegisterEntityBehaviorClass("remedyandruinEffects", typeof(EntityBehaviorRemedyEffects));
+            api.RegisterCollectibleBehaviorClass("RemedyArrowPoisoning", typeof(CollectibleBehaviorArrowPoisoning));
+            api.RegisterBlockClass("Remedy_And_Ruin.GameEngineTweaks.BlockVial", typeof(BlockVial));
 
             SetupConfig(api);
 
