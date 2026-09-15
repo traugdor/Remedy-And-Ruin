@@ -627,30 +627,59 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             }
             if (antidote)
             {
-                //register time now and set 
-                if (!drankAntidote)
+                if (!drankAntidote || timeAntidoteConsumed.AddSeconds(60) <= DateTime.Now)
                 {
-                    //first time drinking
+                    // First dose of a fresh sequence - either genuinely the first dose, or a stale
+                    // sequence whose 60-second window already lapsed without a valid second dose
+                    // landing. Either way this dose starts over; it never continues a dead sequence.
                     timeAntidoteConsumed = DateTime.Now;
                     drankAntidote = true;
-                    //trigger stomach void
                     VoidStomachContents(new Random().NextDouble());
                 }
                 else
                 {
-                    if (timeAntidoteConsumed.AddSeconds(60) > DateTime.Now)
-                    {
-                        //within the time frame
-                        //erase all poison effects
-                        List<TreeAttribute> rrpoisons = RRPoisonEffects.value.ToList<TreeAttribute>();
-                        rrpoisons.Clear();
-                        RRPoisonEffects = new TreeArrayAttribute(rrpoisons.ToArray());
-                        threadManager.HandleForcefulEnd();
-                        drankAntidote = false;
-                        timeAntidoteConsumed = DateTime.MinValue;
-                    }
+                    // Second dose, landing within the window - the cure actually takes effect.
+                    List<TreeAttribute> rrpoisons = RRPoisonEffects.value.ToList<TreeAttribute>();
+                    rrpoisons.Clear();
+                    RRPoisonEffects = new TreeArrayAttribute(rrpoisons.ToArray());
+                    threadManager.HandleForcefulEnd();
+                    drankAntidote = false;
+                    timeAntidoteConsumed = DateTime.MinValue;
+                    ApplyAntidoteAftermathEffect();
                 }
             }
+        }
+
+        public void OnAnyItemConsumed(ItemStack stack, IWorldAccessor world)
+        {
+            if (drankAntidote && !IsAntidoteItem(stack))
+            {
+                // Consuming literally anything else between the Antidote's two doses resets the
+                // sequence - only the Antidote's own two doses ever advance it.
+                drankAntidote = false;
+                timeAntidoteConsumed = DateTime.MinValue;
+            }
+        }
+
+        private static bool IsAntidoteItem(ItemStack stack)
+        {
+            string cluster = stack?.Collectible?.Attributes?["remedyandruinEffect"]?["cluster"]?.AsString();
+            return string.Equals(cluster, "ANTIDOTE", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public void OnMealConsumed(IWorldAccessor world, ItemStack containerStack, ItemStack[] contentStacks, BlockMeal block)
+        {
+            if (drankAntidote)
+            {
+                drankAntidote = false;
+                timeAntidoteConsumed = DateTime.MinValue;
+            }
+            // A later task in this plan extends this method with a restricted-diet safety check.
+        }
+
+        private void ApplyAntidoteAftermathEffect()
+        {
+            /* implemented in a later task of this plan */
         }
 
         private void VoidStomachContents(double chance)

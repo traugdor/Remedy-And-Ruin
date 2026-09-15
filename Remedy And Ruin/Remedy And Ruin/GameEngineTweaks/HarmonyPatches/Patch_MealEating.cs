@@ -15,7 +15,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
     [HarmonyPatch(typeof(BlockMeal), "Consume")]
     public static class Patch_MealEating
     {
-        public static void Prefix(IWorldAccessor world, IPlayer eatingPlayer, ItemSlot inSlot, ItemStack[] contentStacks, float remainingServings, bool mulwithStackSize)
+        public static void Prefix(BlockMeal __instance, IWorldAccessor world, IPlayer eatingPlayer, ItemSlot inSlot, ItemStack[] contentStacks, float remainingServings, bool mulwithStackSize)
         {
             if (contentStacks == null || eatingPlayer?.Entity == null)
             {
@@ -27,6 +27,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
             {
                 return;
             }
+
+            behavior.OnMealConsumed(world, inSlot?.Itemstack, contentStacks, __instance);
 
             foreach (ItemStack stack in contentStacks)
             {

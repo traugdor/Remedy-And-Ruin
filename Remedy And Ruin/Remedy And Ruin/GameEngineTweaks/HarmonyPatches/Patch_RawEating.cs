@@ -17,6 +17,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
         public static void Prefix(float secondsUsed, ItemSlot slot, EntityAgent byEntity)
         {
             ItemStack stack = slot?.Itemstack;
+
+            EntityBehaviorRemedyEffects remedyBehavior = byEntity.GetBehavior<EntityBehaviorRemedyEffects>();
+            remedyBehavior?.OnAnyItemConsumed(stack, byEntity.World);
+
             JsonObject effectData = stack?.Collectible?.Attributes?["remedyandruinEffect"];
             if (effectData == null || !effectData.Exists)
             {
@@ -27,7 +31,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
                 return;
             }
 
-            byEntity.GetBehavior<EntityBehaviorRemedyEffects>()?.OnItemConsumed(stack, effectData);
+            remedyBehavior?.OnItemConsumed(stack, effectData);
         }
     }
 }
