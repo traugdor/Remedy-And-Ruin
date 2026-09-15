@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 
@@ -9,10 +12,62 @@ namespace Remedy_And_Ruin.GameEngineTweaks
     /// ItemFishingPole special-cases bait being applied to itself - here, a Vial (source) carrying
     /// poison being merged onto an arrow stack (sink) dips exactly one arrow, consuming exactly
     /// one of the Vial's charges, rather than a literal stack-size merge.
+    ///
+    /// Also tints a poisoned arrow's mesh (OnBeforeRender) by multiplying its own normal, already
+    /// per-material mesh's vertex colors by the poison cluster's tint - the same vertex-multiply
+    /// technique BlockLiquidContainerTopOpened.GenMesh uses for climate color maps, chosen instead
+    /// of generating a tinted texture file per material-times-cluster combination (arrows vary by
+    /// material via item code, not attributes, so there's no single texture per cluster to swap
+    /// the way potions have). Covers held, dropped, and inventory-icon rendering in one pass.
     /// </summary>
     public class CollectibleBehaviorArrowPoisoning : CollectibleBehavior
     {
+        private const string MeshCacheKey = "remedyandruinPoisonedArrowMeshes";
+
         public CollectibleBehaviorArrowPoisoning(CollectibleObject collObj) : base(collObj) { }
+
+        public override void OnBeforeRender(ICoreClientAPI capi, ItemStack itemstack, EnumItemRenderTarget target, ref ItemRenderInfo renderinfo)
+        {
+            string clusterName = itemstack.Attributes.GetString("remedyandruinArrowPoisonCluster");
+            if (clusterName == null || !Enum.TryParse(clusterName, true, out RemedyPoisonCluster cluster))
+            {
+                return;
+            }
+
+            if (!capi.ObjectCache.TryGetValue(MeshCacheKey, out object obj))
+            {
+                obj = capi.ObjectCache[MeshCacheKey] = new Dictionary<string, MultiTextureMeshRef>();
+            }
+            Dictionary<string, MultiTextureMeshRef> meshRefs = (Dictionary<string, MultiTextureMeshRef>)obj;
+
+            string cacheKey = itemstack.Collectible.Code.ToShortString() + "-" + cluster;
+            if (!meshRefs.TryGetValue(cacheKey, out MultiTextureMeshRef meshRef))
+            {
+                capi.Tesselator.TesselateItem(itemstack.Item, out MeshData mesh);
+                (byte r, byte g, byte b) = RemedyPoisonClusterTextures.GetClusterTint(cluster);
+                for (int i = 0; i + 3 < mesh.Rgba.Length; i += 4)
+                {
+                    mesh.Rgba[i] = (byte)(mesh.Rgba[i] * r / 255);
+                    mesh.Rgba[i + 1] = (byte)(mesh.Rgba[i + 1] * g / 255);
+                    mesh.Rgba[i + 2] = (byte)(mesh.Rgba[i + 2] * b / 255);
+                }
+                meshRef = meshRefs[cacheKey] = capi.Render.UploadMultiTextureMesh(mesh);
+            }
+            renderinfo.ModelRef = meshRef;
+        }
+
+        public override void OnUnloaded(ICoreAPI api)
+        {
+            if (!(api is ICoreClientAPI capi) || !capi.ObjectCache.TryGetValue(MeshCacheKey, out object obj))
+            {
+                return;
+            }
+            foreach (MultiTextureMeshRef meshRef in ((Dictionary<string, MultiTextureMeshRef>)obj).Values)
+            {
+                meshRef.Dispose();
+            }
+            capi.ObjectCache.Remove(MeshCacheKey);
+        }
 
         public override int GetMergableQuantity(ItemStack sinkStack, ItemStack sourceStack, EnumMergePriority priority, ref EnumHandling handling)
         {
