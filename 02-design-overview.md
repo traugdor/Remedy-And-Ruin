@@ -585,18 +585,24 @@ effects and escalation ladders (Part 3), this table is specific to the 8 remedy 
 Both application methods are supported, mirroring the dual interaction pattern already used by
 fishing rods/bait in the base game:
 
-- **Dip**: right-click a stack of arrows against a poison-filled container to coat them directly,
-  producing a poisoned-arrow item variant.
-- **Craft**: a conventional grid recipe consuming arrows + a portioned poison (e.g. a vial of
-  poison) to output poisoned arrows.
+- **Dip**: right-click one arrow against a poison-filled Vial (§4's 9-charge Vial specifically,
+  not a generic container) to coat it directly, producing a poisoned arrow. Dipping only ever
+  treats a single arrow per interaction, regardless of how large the held stack is — poisoning a
+  whole stack means repeating the interaction once per arrow.
+- **Craft**: a conventional grid recipe consuming 1 arrow + 1 Vial of poison to output 1 poisoned
+  arrow, leaving the same Vial behind with one less charge (it isn't consumed outright — see §4).
 
 **Dose and coating rules:**
 
-- Each arrow consumes **0.01L** of poison when dipped.
+- Both dipping and crafting consume exactly **1 of the Vial's 9 charges** per arrow — never a
+  flat liquid volume, and never from any container other than a Vial (§4). A poisoned arrow's own
+  potency is always fixed at full strength regardless of how many charges the Vial had remaining
+  at the moment of dipping/crafting; only the Vial's own remaining liquid (and what it delivers if
+  later drunk) is affected by charge depletion.
 - **Picking up a poisoned arrow strips it** — it's no longer poisoned once retrieved, and must
   be re-treated before it counts as poisoned again.
 - **Re-dipping an already-poisoned arrow in the same poison wastes the poison** — no stacking,
-  no refresh benefit, just burns 0.01L for nothing.
+  no refresh benefit, just burns a charge for nothing.
 - **Dipping an already-poisoned arrow in a different poison replaces the effect, doesn't combine
   it** — an arrow carries one poison type at a time; switching overwrites, never stacks two
   effects at once.
