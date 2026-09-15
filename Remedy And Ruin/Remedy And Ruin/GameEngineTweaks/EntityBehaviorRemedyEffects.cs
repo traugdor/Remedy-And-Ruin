@@ -664,6 +664,16 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 drankAntidote = false;
                 timeAntidoteConsumed = DateTime.MinValue;
             }
+
+            if (IsPostAntidoteWindowActive() && !AntidoteWindowFoodRules.IsSafeRawItem(stack, world))
+            {
+                TriggerAntidoteWindowVomit();
+            }
+        }
+
+        public void TriggerAntidoteWindowVomit()
+        {
+            VoidStomachContents(1.0);
         }
 
         private static bool IsAntidoteItem(ItemStack stack)
@@ -679,7 +689,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 drankAntidote = false;
                 timeAntidoteConsumed = DateTime.MinValue;
             }
-            // A later task in this plan extends this method with a restricted-diet safety check.
+
+            if (IsPostAntidoteWindowActive() && !AntidoteWindowFoodRules.IsSafeMeal(world, containerStack, contentStacks, block))
+            {
+                TriggerAntidoteWindowVomit();
+            }
         }
 
         private void ApplyAntidoteAftermathEffect()
