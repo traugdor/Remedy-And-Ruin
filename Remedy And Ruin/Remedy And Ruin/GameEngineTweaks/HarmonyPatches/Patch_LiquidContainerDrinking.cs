@@ -37,6 +37,15 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
                 return; // nothing was actually drunk
             }
 
+            float potencyScale = 1.0f;
+            if (__instance is BlockVial && slot?.Itemstack != null)
+            {
+                int chargesBeforeDrink = slot.Itemstack.Attributes.GetInt("poisonCharges", 9);
+                potencyScale = chargesBeforeDrink / 9f;
+                slot.Itemstack.Attributes.SetInt("poisonCharges", 0); // drinking always fully depletes it
+                slot.MarkDirty();
+            }
+
             EntityBehaviorRemedyEffects remedyBehavior = byEntity.GetBehavior<EntityBehaviorRemedyEffects>();
             remedyBehavior?.OnAnyItemConsumed(__state, byEntity.World);
 
@@ -50,7 +59,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
                 return;
             }
 
-            remedyBehavior?.OnItemConsumed(__state, effectData);
+            remedyBehavior?.OnItemConsumed(__state, effectData, potencyScale);
         }
     }
 }

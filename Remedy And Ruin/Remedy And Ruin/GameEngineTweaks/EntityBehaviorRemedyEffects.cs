@@ -413,7 +413,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         //============== EVENT HANDLERS ==============//
 
-        public void OnItemConsumed(ItemStack consumedStack, JsonObject effectData)
+        public void OnItemConsumed(ItemStack consumedStack, JsonObject effectData, float potencyScale = 1.0f)
         {
             // Convert effectData.cluster to uppercase for consistency and fill in defaults/parse data
             EffectStruct effect = new EffectStruct(effectData["cluster"].AsString().ToUpper().ToEnum<EffectCluster>());
@@ -422,7 +422,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             if (effectData.KeyExists("isPoison")) { effect.isPoison = effectData["isPoison"].AsBool(); }
             if (effectData.KeyExists("effectMultiplier"))
             {
-                effect.effectMultiplier = effectData["effectMultiplier"].AsFloat();
+                effect.effectMultiplier = effectData["effectMultiplier"].AsFloat() * potencyScale;
             }
             if (effectData.KeyExists("onsetMultiplier"))
             {
@@ -430,7 +430,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             }
             if (effectData.KeyExists("toxicEffectMultiplier"))
             {
-                effect.toxicEffectMultiplier = effectData["toxicEffectMultiplier"].AsFloat();
+                effect.toxicEffectMultiplier = effectData["toxicEffectMultiplier"].AsFloat() * potencyScale;
             }
             if (effectData.KeyExists("toxicOnsetMultiplier"))
             {
