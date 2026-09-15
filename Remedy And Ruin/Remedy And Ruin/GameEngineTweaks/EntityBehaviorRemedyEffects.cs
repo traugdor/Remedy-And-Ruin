@@ -625,10 +625,20 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             }
             else if (!antidote)
             {
-                List<TreeAttribute> rrpotions = RRPotionEffects.value.ToList<TreeAttribute>();
-                neweffect.SetBool("isPoison", false);
-                rrpotions.Add(neweffect);
-                RRPotionEffects = new TreeArrayAttribute(rrpotions.ToArray());
+                if (IsPostAntidoteWindowActive() && new Random().NextDouble() < 0.5)
+                {
+                    // 50% chance: the potion is voided entirely and vomiting triggers, per the
+                    // restricted-diet window's potion-risk rule - the potion is never added to
+                    // RRPotionEffects at all, so its effect never applies.
+                    TriggerAntidoteWindowVomit();
+                }
+                else
+                {
+                    List<TreeAttribute> rrpotions = RRPotionEffects.value.ToList<TreeAttribute>();
+                    neweffect.SetBool("isPoison", false);
+                    rrpotions.Add(neweffect);
+                    RRPotionEffects = new TreeArrayAttribute(rrpotions.ToArray());
+                }
             }
             if (antidote)
             {
