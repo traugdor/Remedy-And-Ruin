@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 
 namespace Remedy_And_Ruin.GameEngineTweaks
@@ -54,6 +56,18 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 meshRef = meshRefs[cacheKey] = capi.Render.UploadMultiTextureMesh(mesh);
             }
             renderinfo.ModelRef = meshRef;
+        }
+
+        public override void GetHeldItemInfo(ItemSlot inSlot, StringBuilder dsc, IWorldAccessor world, bool withDebugInfo)
+        {
+            string clusterName = inSlot.Itemstack.Attributes.GetString("remedyandruinArrowPoisonCluster");
+            if (clusterName == null || !Enum.TryParse(clusterName, true, out RemedyPoisonCluster cluster))
+            {
+                return;
+            }
+
+            string clusterDisplayName = Lang.Get("item-potion-" + cluster.ToString().ToLowerInvariant());
+            dsc.AppendLine(Lang.Get("arrow-poisoned", clusterDisplayName));
         }
 
         public override void OnUnloaded(ICoreAPI api)
