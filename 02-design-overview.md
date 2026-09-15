@@ -515,6 +515,21 @@ liquid. This mod adds one new container to exploit that:
   potion. Unlike the balance values elsewhere, the Vial isn't JSON-only — it's a genuinely new
   block with no vanilla shape to reuse, so it needs its own model authored in VSMC (Vintage Story
   Model Creator) and referenced from its shape JSON.
+- **Vial charges (9 per fill), only relevant once §8 Arrow poisoning exists.** A freshly-filled
+  Vial starts at a full 9/9. Dipping an arrow or crafting a poisoned arrow from a Vial (§8) each
+  consume exactly 1 charge, regardless of which of the two methods was used — a poisoned arrow's
+  own potency is always fixed at full strength and is never affected by how many charges the Vial
+  had remaining at the moment of dipping/crafting; only the Vial's own *remaining liquid* is
+  affected. Drinking a Vial always consumes everything still in it in one dose, whatever fraction
+  of the 9 charges that happens to be — an untouched 9/9 Vial drunk directly is a full-strength
+  dose, but a Vial already drawn down to, say, 3/9 by prior dipping/crafting delivers only 3/9 of
+  that dose's normal potency when drunk. This is a deliberate, safer tolerance-building path,
+  alongside deliberately eating/drinking small enough discounted doses (Tolerance below) — drawing
+  a Vial most of the way down via arrows first, then drinking the diminished remainder, is a way to
+  intentionally take a much weaker dose than a fresh Vial would deliver. A Vial cannot be refilled
+  until fully emptied (0/9, reached either by using the last charge or by drinking whatever
+  remained) — refilling then costs 0.25L from a source container and resets the Vial back to a
+  full 9/9.
 - **Generic containers** (bowl, jug, bucket, other mods' containers): use their own existing
   `drinkPortionSize`, vanilla default 1L. Drinking a potion straight from one of these consumes a
   full 1L per gulp — **4 doses at once** — spiking the toxicity counter accordingly.
