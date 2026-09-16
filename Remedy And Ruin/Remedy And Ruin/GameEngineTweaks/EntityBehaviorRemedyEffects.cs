@@ -122,6 +122,39 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             }
         }
 
+        // Toxic Poison's thread lifetime once its full phase starts (after the onset window):
+        // if the tolerance-discounted effect crosses 15% of this exposure's own undiscounted
+        // magnitude (02-design-overview.md ~752-761), the DoT itself never ends on its own, so
+        // the owning EffectTimerThread's own EndTotalHours has to outlive it too, or the thread's
+        // normal end-of-duration poll would tear the "permanent" DoT down almost immediately.
+        // 1000 in-game days matches Task 1's own "effectively forever" reasoning for the DoT's
+        // real-world TimeSpan, just expressed in the calendar hours this field is measured in.
+        // Below the threshold, the exposure has no DoT at all and genuinely fades on its own -
+        // 24h is this plan's own baseline for a poison with no stated fade-out duration.
+        private const double ToxicInfiniteThreadLifetimeHours = 1000.0 * 24.0;
+        private const double ToxicBelowThresholdFadeHours = 24.0;
+
+        // Mirrors EffectThreadManager's own threshold check (DetermineFullDoTEffect) so this
+        // exposure's thread lifetime can be decided at the moment it's created, before dispatch
+        // ever runs - both sides read the same toxicTolerance value and apply the same formula,
+        // so they can never disagree about whether this exposure crosses.
+        private bool ToxicCrossesDoTThreshold(float effectMultiplier)
+        {
+            float discount = (float)(toxicTolerance / 3) / 9.0f;
+            float discounted = Math.Max(0f, effectMultiplier - discount);
+            return discounted >= 0.15f * effectMultiplier;
+        }
+
+        // Noxious Poison's baseline full-phase duration at effectMultiplier 1.0 and 0 tolerance
+        // (02-design-overview.md ~1406) - a flat 24h window, no DoT, ends via Antidote or death.
+        private const double NoxiousBaselineDurationHours = 24.0;
+
+        private double NoxiousDurationToleranceMultiplier()
+        {
+            int tier = noxiousTolerance / 3;
+            return Math.Max(0.0, 1.0 - tier / 9.0);
+        }
+
         // Cardiac Poison's baseline full-phase duration at effectMultiplier 1.0 and 0 tolerance
         // (02-design-overview.md ~1418-1429), before the tolerance-discounted duration factor
         // below scales it down.
@@ -705,6 +738,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                      *     - surviving this awards 1/27 of progression towards toxicTolerance.
                      */
                     poison = true;
+                    effect.timeleft = ToxicCrossesDoTThreshold(effect.effectMultiplier)
+                        ? ToxicInfiniteThreadLifetimeHours
+                        : ToxicBelowThresholdFadeHours;
                     break;
                 case EffectCluster.NOXIOUSPOISON:
                     /*
@@ -716,6 +752,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                      *     - surviving this awards 1/27 of progression towards noxiousTolerance
                      */
                     poison = true;
+                    effect.timeleft = NoxiousBaselineDurationHours * effect.effectMultiplier * NoxiousDurationToleranceMultiplier();
                     break;
                 case EffectCluster.CARDIACPOISON:
                     /*
