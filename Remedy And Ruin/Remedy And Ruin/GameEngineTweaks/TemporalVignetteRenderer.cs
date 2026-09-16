@@ -1,5 +1,7 @@
 using System;
+using Remedy_And_Ruin.GameEngineTweaks;
 using Vintagestory.API.Client;
+using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
 namespace Remedy_And_Ruin
@@ -62,6 +64,18 @@ namespace Remedy_And_Ruin
         private readonly EffectState mindPoisonFog = new EffectState();
         private readonly EffectState concussion = new EffectState();
         private readonly EffectState drunkWobble = new EffectState();
+
+        /// <summary>
+        /// Neurotoxic Poison's own dizziness sway, read directly off the local player's
+        /// WatchedAttributes every frame (EntityBehaviorRemedyEffects.NeurotoxicDrunkWobbleAttributeKey,
+        /// kept in sync server-side by StartDrunkWobbleContribution) rather than driven through
+        /// DrunkWobbleStrength's public setter - mirrors vanilla's own DrunkPerceptionEffect,
+        /// which reads its "intoxication" WatchedAttributes float the same way. Kept as its own
+        /// EffectState (combined with drunkWobble only via both independently calling ApplyWobble,
+        /// same as concussion/drunkWobble already coexist) so a debug .rrbrainrot call and a real
+        /// Neurotoxic exposure can't stomp each other's value.
+        /// </summary>
+        private readonly EffectState neurotoxicWobble = new EffectState();
 
         /// <summary>The real Temporal Fog condition's own strength (low Temporal Stability, Mind Tonic overdose), 0-1. 0 disables it entirely. See MindPoisonFogStrength for why Mind Poison uses a separate field for the same visual.</summary>
         public float TempFogStrength
@@ -250,10 +264,17 @@ namespace Remedy_And_Ruin
             // camera motion at all (just the color grade), so only Concussion and Mind
             // Poison's drunkWobble sway - drunkWobble shares ApplyWobble's curve but has no
             // draw pass of its own, so it never picks up Concussion's shear/contrast-boost look.
+            EntityPlayer localPlayer = capi.World?.Player?.Entity;
+            if (localPlayer != null)
+            {
+                neurotoxicWobble.Strength = localPlayer.WatchedAttributes.GetFloat(EntityBehaviorRemedyEffects.NeurotoxicDrunkWobbleAttributeKey);
+            }
+
             if (!capi.IsGamePaused)
             {
                 ApplyWobble(concussion, deltaTime);
                 ApplyWobble(drunkWobble, deltaTime);
+                ApplyWobble(neurotoxicWobble, deltaTime);
             }
 
             // TempFogStrength and MindPoisonFogStrength share the same mode-0 visual but are

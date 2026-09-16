@@ -77,6 +77,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         public float? SecondaryEffectMult;
         public float? SecondaryEffectOnsetMult;
         public bool EligibleForTolerance;
+        public int DoseNumber;
+        public float LadderWeight;
     }
 
     /// <summary>
@@ -114,6 +116,12 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         public float? SecondaryEffectMult { get; }
         public float? SecondaryEffectOnsetMult { get; }
 
+        // Neurotoxic Poison's own ladder bookkeeping (unused by every other cluster) - resolved
+        // once by EntityBehaviorRemedyEffects.ApplyNeurotoxicLadder at exposure time and threaded
+        // through unchanged for this thread's whole lifetime, the same way EffectMult is.
+        public int DoseNumber { get; }
+        public float LadderWeight { get; }
+
         // The effect's currently-active package - onset-phase values until the onset transition
         // fires (or full-phase values from the start, for a thread constructed already past its
         // own onset window). TransitionToFullPhase is the only thing that ever changes these.
@@ -145,6 +153,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             IReadOnlyList<StatModifier> onsetStatModifiers, DoTSpec? onsetDoT,
             IReadOnlyList<StatModifier> fullStatModifiers, DoTSpec? fullDoT, MaxHealthModifier? fullMaxHealthModifier,
             bool eligibleForTolerance,
+            int doseNumber, float ladderWeight,
             Action<EffectTimerThread> onSaveReport,
             Action<EffectTimerThread> onNaturalEnd,
             Action<EffectTimerThread> onForcedEnd,
@@ -166,6 +175,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             FullDoT = fullDoT;
             FullMaxHealthModifier = fullMaxHealthModifier;
             EligibleForTolerance = eligibleForTolerance;
+            DoseNumber = doseNumber;
+            LadderWeight = ladderWeight;
             this.getTotalHours = getTotalHours;
 
             // A thread resumed (save/reload, reconnect) past its own onset window already starts
@@ -348,6 +359,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             float toxicOnsetMultiplier = entry.GetFloat("toxicOnsetMultiplier");
             double timeleft = entry.GetDouble("timeleft");
             bool eligibleForTolerance = entry.GetBool("toleranceEligible");
+            int doseNumber = entry.GetInt("doseNumber", 1);
+            float ladderWeight = entry.GetFloat("ladderWeight", 1f);
             bool calendarAnchored = Remedy_And_RuinModSystem.Config.allowEffectsToExpireWhenOffline;
 
             // "now" is correct as this effect's start point the one time this method runs for a
@@ -368,11 +381,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             }
             double onsetCompleteTotalHours = ComputeOnsetCompleteTotalHours(entry, cluster, effectOnset, startTotalHours, totalHoursNow, calendarAnchored);
 
-            IReadOnlyList<StatModifier> onsetStatModifiers = DetermineOnsetStatModifiers(cluster, effectMult, effectOnset, toxicEffectMultiplier, toxicOnsetMultiplier);
-            DoTSpec? onsetDot = DetermineOnsetDoTEffect(cluster, effectMult, effectOnset, toxicEffectMultiplier, toxicOnsetMultiplier);
-            IReadOnlyList<StatModifier> fullStatModifiers = DetermineFullStatModifiers(cluster, effectMult, effectOnset, toxicEffectMultiplier, toxicOnsetMultiplier);
-            DoTSpec? fullDot = DetermineFullDoTEffect(cluster, effectMult, effectOnset, toxicEffectMultiplier, toxicOnsetMultiplier);
-            MaxHealthModifier? fullMaxHealthModifier = DetermineFullMaxHealthModifier(cluster, effectMult, effectOnset, toxicEffectMultiplier, toxicOnsetMultiplier);
+            IReadOnlyList<StatModifier> onsetStatModifiers = DetermineOnsetStatModifiers(cluster, effectMult, effectOnset, toxicEffectMultiplier, toxicOnsetMultiplier, doseNumber, ladderWeight);
+            DoTSpec? onsetDot = DetermineOnsetDoTEffect(cluster, effectMult, effectOnset, toxicEffectMultiplier, toxicOnsetMultiplier, doseNumber, ladderWeight);
+            IReadOnlyList<StatModifier> fullStatModifiers = DetermineFullStatModifiers(cluster, effectMult, effectOnset, toxicEffectMultiplier, toxicOnsetMultiplier, doseNumber, ladderWeight);
+            DoTSpec? fullDot = DetermineFullDoTEffect(cluster, effectMult, effectOnset, toxicEffectMultiplier, toxicOnsetMultiplier, doseNumber, ladderWeight);
+            MaxHealthModifier? fullMaxHealthModifier = DetermineFullMaxHealthModifier(cluster, effectMult, effectOnset, toxicEffectMultiplier, toxicOnsetMultiplier, doseNumber, ladderWeight);
 
             var thread = new EffectTimerThread(
                 Guid.Parse(guid), bucket, cluster, effectMult, effectOnset,
@@ -381,6 +394,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 onsetStatModifiers, onsetDot,
                 fullStatModifiers, fullDot, fullMaxHealthModifier,
                 eligibleForTolerance,
+                doseNumber, ladderWeight,
                 onSaveReport: OnSaveReport,
                 onNaturalEnd: OnNaturalEnd,
                 onForcedEnd: OnForcedEnd,
@@ -433,6 +447,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     // same fallback the design calls for absent real ingredient data.
                     return 1.5;
                 case "NEUROTOXICPOISON":
+                    // No flower ingredient JSON sets its own onset data for this cluster either
+                    // (confirmed by checking assets/remedyandruin/recipes/barrel/poison-neurotoxicpoison.json,
+                    // which only carries brewing data, not effect timing) - 1.5h for consistency
+                    // with Noxious/Cardiac's own fallback.
+                    return 1.5;
                 case "MINDPOISON":
                     return 0.0;
                 default:
@@ -476,13 +495,22 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return Math.Max(0f, effectMult - discount);
         }
 
+        // Same tiered discount as ToxicToleranceDiscountedEffect, read against
+        // neurotoxicTolerance - drives the dizziness sway's own intensity.
+        private float NeurotoxicToleranceDiscountedEffect(float effectMult)
+        {
+            int tolerance = entity.GetBehavior<EntityBehaviorRemedyEffects>()?.neurotoxicTolerance ?? 0;
+            float discount = (float)(tolerance / 3) / 9.0f;
+            return Math.Max(0f, effectMult - discount);
+        }
+
         private static readonly StatModifier[] ToxicHealingDip = { new StatModifier("healingeffectivness", -0.15f) };
 
         // PLACEHOLDER dispatch point - each poison cluster decides its own onset-phase (early
         // warning) entity.Stats effect here, using the multipliers already read off the
         // WatchedAttributes entry in ApplyEffect. A cluster with no distinct onset symptom
         // returns Array.Empty<StatModifier>().
-        private IReadOnlyList<StatModifier> DetermineOnsetStatModifiers(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
+        private IReadOnlyList<StatModifier> DetermineOnsetStatModifiers(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier, int doseNumber, float ladderWeight)
         {
             switch (cluster)
             {
@@ -493,7 +521,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     // window only, the full GI-irritation package below applies with no ramp-up.
                     break;
                 case "CARDIACPOISON":
-                case "NEUROTOXICPOISON":
+                case "NEUROTOXICPOISON": // no distinct early-warning symptom, same as Noxious/Cardiac
                 case "MINDPOISON":
                     break;
                 default:
@@ -504,14 +532,14 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         // PLACEHOLDER dispatch point - each poison cluster decides its own onset-phase DoT here,
         // if it has one. No cluster currently needs a DoT before its full effect kicks in.
-        private DoTSpec? DetermineOnsetDoTEffect(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
+        private DoTSpec? DetermineOnsetDoTEffect(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier, int doseNumber, float ladderWeight)
         {
             switch (cluster)
             {
                 case "TOXICPOISON":
                 case "NOXIOUSPOISON": // no DoT at any phase - deliberately non-lethal
                 case "CARDIACPOISON":
-                case "NEUROTOXICPOISON":
+                case "NEUROTOXICPOISON": // no DoT at any phase - the ladder is stat modifiers/max-health only
                 case "MINDPOISON":
                     break;
                 default:
@@ -524,7 +552,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // decide each cluster's real full-phase entity.Stats effect here, using the multipliers
         // already read off the WatchedAttributes entry in ApplyEffect. Applied once onset
         // completes (or immediately, for an effect constructed already past its onset window).
-        private IReadOnlyList<StatModifier> DetermineFullStatModifiers(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
+        private IReadOnlyList<StatModifier> DetermineFullStatModifiers(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier, int doseNumber, float ladderWeight)
         {
             switch (cluster)
             {
@@ -541,6 +569,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 case "CARDIACPOISON":
                     return CardiacFullStatModifiers;
                 case "NEUROTOXICPOISON":
+                    return DetermineNeurotoxicFullStatModifiers(doseNumber, ladderWeight);
                 case "MINDPOISON":
                     break;
                 case "ANTIDOTEAFTERMATH":
@@ -557,7 +586,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         // PLACEHOLDER dispatch point - Plan 12 decides each cluster's real full-phase DoT effect
         // here, using the multipliers already read off the WatchedAttributes entry in ApplyEffect.
-        private DoTSpec? DetermineFullDoTEffect(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
+        private DoTSpec? DetermineFullDoTEffect(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier, int doseNumber, float ladderWeight)
         {
             switch (cluster)
             {
@@ -573,7 +602,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     break;
                 case "NOXIOUSPOISON": // deliberately non-lethal - no DoT at any point
                 case "CARDIACPOISON":
-                case "NEUROTOXICPOISON":
+                case "NEUROTOXICPOISON": // the ladder is stat modifiers/max-health only, no DoT
                 case "MINDPOISON":
                     /* PLACEHOLDER - Plan 12 decides whether this cluster needs a DoT at all. */
                     break;
@@ -588,7 +617,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // cluster's own max-health mechanic) is decided here, via
         // EntityBehaviorHealth.SetMaxHealthModifiers rather than entity.Stats (which cannot touch
         // max health at all). A cluster with no max-health mechanic returns null.
-        private MaxHealthModifier? DetermineFullMaxHealthModifier(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
+        private MaxHealthModifier? DetermineFullMaxHealthModifier(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier, int doseNumber, float ladderWeight)
         {
             switch (cluster)
             {
@@ -598,6 +627,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 case "CARDIACPOISON":
                     return DetermineCardiacMaxHealthModifier();
                 case "NEUROTOXICPOISON":
+                    // Only a real dose 3 (a drunk dose, never an arrow's half-weight instance)
+                    // carries Cardiac Poison's flat HP hit - see DetermineNeurotoxicFullStatModifiers's
+                    // own doc comment for why ladderWeight gates this the same way.
+                    if (doseNumber >= 3 && ladderWeight >= 1f) return new MaxHealthModifier(-CardiacFlatHealthHit);
+                    break;
                 case "MINDPOISON":
                     break;
                 default:
@@ -735,6 +769,43 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             new StatModifier("miningSpeedMul", -0.40f)
         };
 
+        // Neurotoxic's Weakness/Paralysis stages use this bare walkspeed value alone, without
+        // Cardiac's additional miningSpeedMul component - that only enters at dose 3, which reuses
+        // CardiacFullStatModifiers in full instead of adding this on top of it.
+        private static readonly StatModifier NeurotoxicWeaknessWalkspeed = new StatModifier("walkspeed", -0.40f);
+
+        // Stand-in for Neurotoxic's "headache" symptom: neither vanilla nor this mod has an
+        // existing headache stat to hook into (confirmed by searching both the decompiled source
+        // and this mod's own code - Skull-Strain's "Concussion" is an unrelated head-injury
+        // mechanic, not this). rangedWeaponsAcc is a real, engine-read stat
+        // (BaseAimingAccuracy.Update, confirmed against VSDecompile) - a mild aim/concentration
+        // penalty stands in for head pain with no dedicated stat of its own.
+        private static readonly StatModifier NeurotoxicHeadacheAccuracy = new StatModifier("rangedWeaponsAcc", -0.15f);
+
+        /// <summary>
+        /// Neurotoxic's ladder: dose 1 is Weakness alone; dose 2 is a second, independent
+        /// Weakness instance (Paralysis - the two overlapping -40% walkspeed modifiers sum via
+        /// entity.Stats' own additive blending, no separate stat category needed); dose 3 swaps
+        /// in Cardiac Poison's own full package instead of Weakness (reused verbatim, per Task
+        /// 4's own instruction - it already carries its own walkspeed hit). Headache applies
+        /// unconditionally at every stage. An arrow-hit's half-weight instance (ladderWeight < 1)
+        /// always gets bare Weakness regardless of the dose number its cumulative ladder
+        /// progress nominally reaches - only a drunk dose can trigger dose 3's Cardiac package.
+        /// </summary>
+        private IReadOnlyList<StatModifier> DetermineNeurotoxicFullStatModifiers(int doseNumber, float ladderWeight)
+        {
+            var modifiers = new List<StatModifier> { NeurotoxicHeadacheAccuracy };
+            if (ladderWeight >= 1f && doseNumber >= 3)
+            {
+                modifiers.AddRange(CardiacFullStatModifiers);
+            }
+            else
+            {
+                modifiers.Add(NeurotoxicWeaknessWalkspeed);
+            }
+            return modifiers;
+        }
+
         // Cardiac Poison's exertion-stacking cadence and per-stack cost (02-design-overview.md
         // ~1418-1429): roughly one stack per 10 continuous seconds of sprinting or tool use,
         // +1h duration and -5 current/max HP each, uncapped.
@@ -764,6 +835,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     break;
                 case "CARDIACPOISON":
                     listeners = StartCardiacFullPhaseSideEffects(t);
+                    break;
+                case "NEUROTOXICPOISON":
+                    listeners = StartNeurotoxicFullPhaseSideEffects(t);
                     break;
                 default:
                     return;
@@ -857,6 +931,33 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             }
         }
 
+        /// <summary>
+        /// Neurotoxic Poison's own full-phase side effects: dizziness (a
+        /// TemporalVignetteRenderer.DrunkWobbleStrength contribution, bridged to the client via
+        /// EntityBehaviorRemedyEffects.StartDrunkWobbleContribution's synced WatchedAttributes
+        /// float) at every stage, plus Cardiac Poison's exertion-stacking watcher once dose 3's
+        /// real Cardiac package is active (not for an arrow-hit's half-weight instance, which
+        /// never carries that package - see DetermineNeurotoxicFullStatModifiers).
+        /// </summary>
+        private List<long> StartNeurotoxicFullPhaseSideEffects(EffectTimerThread t)
+        {
+            var listeners = new List<long>();
+            var remedyEffects = entity.GetBehavior<EntityBehaviorRemedyEffects>();
+            if (remedyEffects != null)
+            {
+                long wobbleListener = remedyEffects.StartDrunkWobbleContribution(t.Guid, NeurotoxicToleranceDiscountedEffect(t.EffectMult));
+                if (wobbleListener != 0L) listeners.Add(wobbleListener);
+            }
+
+            if (t.DoseNumber >= 3 && t.LadderWeight >= 1f)
+            {
+                long exertionListener = StartCardiacExertionStacking(t);
+                if (exertionListener != 0L) listeners.Add(exertionListener);
+            }
+
+            return listeners;
+        }
+
         private List<long> StartNoxiousFullPhaseSideEffects(float effectMult)
         {
             var listeners = new List<long>();
@@ -888,6 +989,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             }
 
             RemoveCardiacExertionStacks(effectGuid);
+            entity.GetBehavior<EntityBehaviorRemedyEffects>()?.StopDrunkWobbleContribution(effectGuid);
         }
 
         // The engine's own ApplyDoTEffect (EntityBehaviorHealth.cs ~line 451) has no infinite
@@ -1134,7 +1236,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             SecondaryEffectType = t.SecondaryEffectType,
             SecondaryEffectMult = t.SecondaryEffectMult,
             SecondaryEffectOnsetMult = t.SecondaryEffectOnsetMult,
-            EligibleForTolerance = t.EligibleForTolerance
+            EligibleForTolerance = t.EligibleForTolerance,
+            DoseNumber = t.DoseNumber,
+            LadderWeight = t.LadderWeight
         };
 
         //============== WATCHEDATTRIBUTES I/O (single writer) ==============//
@@ -1233,6 +1337,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             t.SetFloat("onsetMultiplier", report.EffectOnset);
             t.SetFloat("toxicEffectMultiplier", report.SecondaryEffectMult ?? 0f);
             t.SetFloat("toxicOnsetMultiplier", report.SecondaryEffectOnsetMult ?? 0f);
+            t.SetInt("doseNumber", report.DoseNumber);
+            t.SetFloat("ladderWeight", report.LadderWeight);
             return t;
         }
     }
