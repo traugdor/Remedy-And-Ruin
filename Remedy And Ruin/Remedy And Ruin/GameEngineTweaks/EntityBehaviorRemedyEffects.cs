@@ -149,6 +149,18 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             }
         }
 
+        // Mind Poison's own baseline lifespan at effectMultiplier 1.0 and 0 tolerance
+        // (02-design-overview.md ~1445-1456) - like Cardiac Poison's own baseline, this is the
+        // exposure's whole lifespan from the moment it's eaten (onset window included), not just
+        // the full-phase symptom window measured from onset completion.
+        private const double MindPoisonBaselineDurationHours = 24.0;
+
+        private double MindPoisonDurationToleranceMultiplier()
+        {
+            int tier = brainrotTolerance / 3;
+            return Math.Max(0.0, 1.0 - tier / 9.0);
+        }
+
         // Baseline full-phase durations for Neurotoxic Poison's 3-stage ladder
         // (02-design-overview.md ~1431-1443; ladder semantics confirmed in Plan 12's
         // decisions-locked-in section): dose 2 is double dose 1's baseline, dose 3 is quadruple
@@ -215,47 +227,65 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             neweffect.SetDouble("timeleft", baselineHours * NeurotoxicToleranceDiscountedEffect(effect.effectMultiplier));
         }
 
-        // Neurotoxic Poison's dizziness bridge - keyed by the owning EffectTimerThread's own
-        // Guid, one entry per currently-active dose, so dose 2/3 stacking on top of a
-        // still-running dose 1 combines correctly instead of one dose's own repeating write
-        // overwriting another's value out of tick order. The strongest currently-active
-        // contribution is what reaches this synced attribute - the same Max-combination
+        // Server -> client severity bridge shared by every poison cluster that needs a client-
+        // rendered visual driven off a value only this behavior (server-side) knows: keyed by the
+        // owning EffectTimerThread's own Guid, one entry per currently-active instance of that
+        // cluster's severity, so several overlapping instances (e.g. Neurotoxic's dose 2/3 stacked
+        // on top of dose 1) combine correctly instead of one instance's own repeating write
+        // overwriting another's out of tick order. The strongest currently-active contribution is
+        // what reaches the synced attribute - the same Max-combination
         // TemporalVignetteRenderer's own TempFogStrength/MindPoisonFogStrength already use for
-        // their shared visual, applied here since multiple real Neurotoxic instances can be
-        // active at once (dose 2 and 3 stack rather than replace).
+        // their shared visual.
         //
-        // TemporalVignetteRenderer reads this same key directly off the local player's
-        // WatchedAttributes every frame (mirroring vanilla's own DrunkPerceptionEffect, which
-        // reads its "intoxication" WatchedAttributes float the same way - confirmed against
-        // VSDecompile) rather than through any dedicated networked message.
+        // The renderer reads each attribute key directly off the local player's WatchedAttributes
+        // every frame (mirroring vanilla's own DrunkPerceptionEffect, which reads its
+        // "intoxication" WatchedAttributes float the same way - confirmed against VSDecompile)
+        // rather than through any dedicated networked message.
         public const string NeurotoxicDrunkWobbleAttributeKey = "remedyandruinNeurotoxicWobble";
+        public const string MindPoisonSeverityAttributeKey = "remedyandruinMindPoisonSeverity";
 
         private readonly ConcurrentDictionary<Guid, float> drunkWobbleContributions = new ConcurrentDictionary<Guid, float>();
+        private readonly ConcurrentDictionary<Guid, float> mindPoisonSeverityContributions = new ConcurrentDictionary<Guid, float>();
 
-        public long StartDrunkWobbleContribution(Guid effectGuid, float intensity)
+        public long StartDrunkWobbleContribution(Guid effectGuid, float intensity) =>
+            StartSeverityContribution(drunkWobbleContributions, NeurotoxicDrunkWobbleAttributeKey, effectGuid, intensity);
+
+        public void StopDrunkWobbleContribution(Guid effectGuid) =>
+            StopSeverityContribution(drunkWobbleContributions, NeurotoxicDrunkWobbleAttributeKey, effectGuid);
+
+        // Mind Poison's one severity value driving both Temporal Fog's screen effect and the
+        // drunken camera sway together (02-design-overview.md ~1445-1456) - the renderer reads
+        // this single attribute into both.
+        public long StartMindPoisonSeverityContribution(Guid effectGuid, float intensity) =>
+            StartSeverityContribution(mindPoisonSeverityContributions, MindPoisonSeverityAttributeKey, effectGuid, intensity);
+
+        public void StopMindPoisonSeverityContribution(Guid effectGuid) =>
+            StopSeverityContribution(mindPoisonSeverityContributions, MindPoisonSeverityAttributeKey, effectGuid);
+
+        private long StartSeverityContribution(ConcurrentDictionary<Guid, float> contributions, string attributeKey, Guid effectGuid, float intensity)
         {
             float clamped = GameMath.Clamp(intensity, 0f, 1f);
             return entity.World.RegisterGameTickListener(dt =>
             {
-                drunkWobbleContributions[effectGuid] = clamped;
-                WriteStrongestDrunkWobbleContribution();
+                contributions[effectGuid] = clamped;
+                WriteStrongestContribution(contributions, attributeKey);
             }, 1000);
         }
 
-        public void StopDrunkWobbleContribution(Guid effectGuid)
+        private void StopSeverityContribution(ConcurrentDictionary<Guid, float> contributions, string attributeKey, Guid effectGuid)
         {
-            drunkWobbleContributions.TryRemove(effectGuid, out _);
-            WriteStrongestDrunkWobbleContribution();
+            contributions.TryRemove(effectGuid, out _);
+            WriteStrongestContribution(contributions, attributeKey);
         }
 
-        private void WriteStrongestDrunkWobbleContribution()
+        private void WriteStrongestContribution(ConcurrentDictionary<Guid, float> contributions, string attributeKey)
         {
             float strongest = 0f;
-            foreach (float value in drunkWobbleContributions.Values)
+            foreach (float value in contributions.Values)
             {
                 if (value > strongest) strongest = value;
             }
-            entity.WatchedAttributes.SetFloat(NeurotoxicDrunkWobbleAttributeKey, strongest);
+            entity.WatchedAttributes.SetFloat(attributeKey, strongest);
         }
 
         public int brainrotTolerance
@@ -733,16 +763,22 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     /*
                      * MIND POISON :
                      *     - used to indicate Brain Rot aka mind damage
-                     *     - calculate effect by subtracting from effect multiplier the tolerance value calculated by (float)(brainrotTolerance / 3) / 9.0f
-                     *     - apply temporal fog effect. strength and duration determined by effect multiplier; baseline full effect for 24h
-                     *     - apply psychedelic trip effect. strength and duration determined by effect multiplier; baseline full effect for 24h
-                     *     - apply drunken wobble effect. strength and duration determined by effect multiplier; baseline full effect for 24h
-                     *     - watch player activity for movement and roll the dice on vomiting if player doesn't hold crouch/block key while moving
+                     *     - one tolerance-discounted severity value (see
+                     *       EffectThreadManager.MindPoisonToleranceDiscountedEffect) drives
+                     *       Temporal Fog's screen effect, the drunken camera sway, and
+                     *       Hallucination's apparition-spawn scaling together
+                     *     - genuine psychedelic tripping (vanilla's own psychedelic-attribute
+                     *       mushroom effect, reused via StartPsychedelicHold)
+                     *     - each genuine movement attempt during the effect rolls a chance of
+                     *       vomiting (see EffectThreadManager's move-vomit watcher)
                      *     - double hunger rate
-                     *     - double thirst rate if HoD is installed.
+                     *     - no DoT, no max-health modifier - deliberately non-lethal
+                     *     - 24h baseline lifespan, scaled by effectMultiplier and discounted by
+                     *       tolerance the same way Cardiac Poison's own duration is
                      *     - surviving this awards 1/27 of progression towards brainrotTolerance
                      */
                     poison = true;
+                    effect.timeleft = MindPoisonBaselineDurationHours * effect.effectMultiplier * MindPoisonDurationToleranceMultiplier();
                     break;
                 case EffectCluster.TOPICALOINTMENT:
                     break;
@@ -859,6 +895,15 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         }
 
         public void TriggerAntidoteWindowVomit()
+        {
+            TriggerVomit();
+        }
+
+        // A guaranteed vomit event - the same VoidStomachContents(1.0) call the Antidote window,
+        // the repeating vomit-roll, and Mind Poison's move-triggered vomiting all use, exposed
+        // publicly since callers outside this class (EffectThreadManager's per-cluster tick
+        // listeners) have no access to the private VoidStomachContents itself.
+        public void TriggerVomit()
         {
             VoidStomachContents(1.0);
         }

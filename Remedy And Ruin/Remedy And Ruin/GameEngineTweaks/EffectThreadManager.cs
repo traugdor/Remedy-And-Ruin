@@ -453,7 +453,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     // with Noxious/Cardiac's own fallback.
                     return 1.5;
                 case "MINDPOISON":
-                    return 0.0;
+                    // The ingredient table's own onset range (0.7-1.1) suggests a baseline around
+                    // 1.5-2h - 2h is used for consistency with Toxic's own baseline.
+                    return 2.0;
                 default:
                     return 0.0;
             }
@@ -500,6 +502,16 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         private float NeurotoxicToleranceDiscountedEffect(float effectMult)
         {
             int tolerance = entity.GetBehavior<EntityBehaviorRemedyEffects>()?.neurotoxicTolerance ?? 0;
+            float discount = (float)(tolerance / 3) / 9.0f;
+            return Math.Max(0f, effectMult - discount);
+        }
+
+        // Same tiered discount as ToxicToleranceDiscountedEffect, read against brainrotTolerance -
+        // the one severity value that drives Temporal Fog, the drunken sway, Hallucination's
+        // spawn-family scaling, the psychedelic-trip intensity, and the doubled hunger rate.
+        private float MindPoisonToleranceDiscountedEffect(float effectMult)
+        {
+            int tolerance = entity.GetBehavior<EntityBehaviorRemedyEffects>()?.brainrotTolerance ?? 0;
             float discount = (float)(tolerance / 3) / 9.0f;
             return Math.Max(0f, effectMult - discount);
         }
@@ -571,7 +583,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 case "NEUROTOXICPOISON":
                     return DetermineNeurotoxicFullStatModifiers(doseNumber, ladderWeight);
                 case "MINDPOISON":
-                    break;
+                    return MindPoisonFullStatModifiers;
                 case "ANTIDOTEAFTERMATH":
                     return new StatModifier[]
                     {
@@ -603,8 +615,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 case "NOXIOUSPOISON": // deliberately non-lethal - no DoT at any point
                 case "CARDIACPOISON":
                 case "NEUROTOXICPOISON": // the ladder is stat modifiers/max-health only, no DoT
-                case "MINDPOISON":
-                    /* PLACEHOLDER - Plan 12 decides whether this cluster needs a DoT at all. */
+                case "MINDPOISON": // deliberately non-lethal - no DoT at any point
                     break;
                 default:
                     /* Remedy potions don't use DoT. */
@@ -632,7 +643,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     // own doc comment for why ladderWeight gates this the same way.
                     if (doseNumber >= 3 && ladderWeight >= 1f) return new MaxHealthModifier(-CardiacFlatHealthHit);
                     break;
-                case "MINDPOISON":
+                case "MINDPOISON": // deliberately non-lethal - no max-health component
                     break;
                 default:
                     break;
@@ -769,6 +780,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             new StatModifier("miningSpeedMul", -0.40f)
         };
 
+        // Doubled hunger rate (02-design-overview.md ~1445-1456) - hungerrate blends additively
+        // onto the engine's own base 1.0 rate, so +1.0 here reads as exactly double.
+        private static readonly StatModifier[] MindPoisonFullStatModifiers = { new StatModifier("hungerrate", 1.0f) };
+
         // Neurotoxic's Weakness/Paralysis stages use this bare walkspeed value alone, without
         // Cardiac's additional miningSpeedMul component - that only enters at dose 3, which reuses
         // CardiacFullStatModifiers in full instead of adding this on top of it.
@@ -838,6 +853,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     break;
                 case "NEUROTOXICPOISON":
                     listeners = StartNeurotoxicFullPhaseSideEffects(t);
+                    break;
+                case "MINDPOISON":
+                    listeners = StartMindPoisonFullPhaseSideEffects(t);
                     break;
                 default:
                     return;
@@ -978,6 +996,74 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return listeners;
         }
 
+        // Matches vanilla's own Blue Meanie (psychedelic 2, the Mind Poison table's own strongest
+        // single-dose mushroom) at full strength, scaling down with tolerance discount the same
+        // way Noxious's own psychedelic hold does.
+        private const float MindPoisonPsychedelicIntensityAtFullStrength = 2.0f;
+
+        // Within the design doc's own stated 15-25% range for this cluster's move-triggered
+        // vomiting (02-design-overview.md ~1445-1456).
+        private const float MindPoisonMoveVomitChance = 0.20f;
+
+        // How often the move-vomit watcher polls EntityControls.TriesToMove for a fresh
+        // rising edge - fast enough that a brief tap of a movement key is never missed between
+        // polls, without polling every single engine tick.
+        private const int MindPoisonMoveVomitPollMs = 200;
+
+        /// <summary>
+        /// Mind Poison's full-phase side effects (02-design-overview.md ~1445-1456): the
+        /// tolerance-discounted effect multiplier is this cluster's one severity value, driving
+        /// Temporal Fog's screen effect and the drunken camera sway together via
+        /// EntityBehaviorRemedyEffects.StartMindPoisonSeverityContribution's synced
+        /// WatchedAttributes bridge (the same mechanism Neurotoxic's own dizziness bridge uses),
+        /// plus genuine psychedelic tripping (StartPsychedelicHold, reused verbatim from Noxious)
+        /// and the move-triggered vomit watcher.
+        /// </summary>
+        private List<long> StartMindPoisonFullPhaseSideEffects(EffectTimerThread t)
+        {
+            var listeners = new List<long>();
+            var remedyEffects = entity.GetBehavior<EntityBehaviorRemedyEffects>();
+            if (remedyEffects == null) return listeners;
+
+            float discounted = MindPoisonToleranceDiscountedEffect(t.EffectMult);
+
+            long severityListener = remedyEffects.StartMindPoisonSeverityContribution(t.Guid, discounted);
+            if (severityListener != 0L) listeners.Add(severityListener);
+
+            long psychedelicListener = remedyEffects.StartPsychedelicHold(MindPoisonPsychedelicIntensityAtFullStrength * discounted);
+            if (psychedelicListener != 0L) listeners.Add(psychedelicListener);
+
+            long vomitListener = StartMindPoisonMoveVomitWatcher(remedyEffects);
+            if (vomitListener != 0L) listeners.Add(vomitListener);
+
+            return listeners;
+        }
+
+        /// <summary>
+        /// Rolls MindPoisonMoveVomitChance once per genuine movement attempt rather than
+        /// continuously while a movement key is held - EntityControls.TriesToMove (confirmed real
+        /// against VSDecompile: true whenever Forward/Backward/Left/Right is held, deliberately
+        /// excluding Jump) is polled for a false-to-true rising edge, so holding a key down for
+        /// several seconds counts as one attempt, not dozens.
+        /// </summary>
+        private long StartMindPoisonMoveVomitWatcher(EntityBehaviorRemedyEffects remedyEffects)
+        {
+            if (!(entity is EntityAgent agent)) return 0L;
+
+            bool wasMoving = false;
+            var rand = new Random();
+
+            return entity.World.RegisterGameTickListener(dt =>
+            {
+                bool triesToMove = agent.Controls.TriesToMove;
+                if (triesToMove && !wasMoving && rand.NextDouble() < MindPoisonMoveVomitChance)
+                {
+                    remedyEffects.TriggerVomit();
+                }
+                wasMoving = triesToMove;
+            }, MindPoisonMoveVomitPollMs);
+        }
+
         private void RemoveClusterFullPhaseSideEffects(Guid effectGuid)
         {
             if (clusterSideEffectListeners.TryRemove(effectGuid, out List<long> listeners))
@@ -989,7 +1075,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             }
 
             RemoveCardiacExertionStacks(effectGuid);
-            entity.GetBehavior<EntityBehaviorRemedyEffects>()?.StopDrunkWobbleContribution(effectGuid);
+            var remedyEffects = entity.GetBehavior<EntityBehaviorRemedyEffects>();
+            remedyEffects?.StopDrunkWobbleContribution(effectGuid);
+            remedyEffects?.StopMindPoisonSeverityContribution(effectGuid);
         }
 
         // The engine's own ApplyDoTEffect (EntityBehaviorHealth.cs ~line 451) has no infinite

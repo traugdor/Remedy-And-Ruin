@@ -77,6 +77,22 @@ namespace Remedy_And_Ruin
         /// </summary>
         private readonly EffectState neurotoxicWobble = new EffectState();
 
+        /// <summary>
+        /// Mind Poison's one real severity value, read directly off the local player's
+        /// WatchedAttributes every frame (EntityBehaviorRemedyEffects.MindPoisonSeverityAttributeKey,
+        /// kept in sync server-side by StartMindPoisonSeverityContribution) - drives both the
+        /// Temporal Fog screen effect and the drunken camera sway from a single number, per the
+        /// design's "one severity value drives both" requirement. Kept separate from
+        /// MindPoisonFogStrength/DrunkWobbleStrength (the .rrbrainrot debug command's own fields,
+        /// combined with this one via Max wherever each is read) for the same reason
+        /// neurotoxicWobble is kept separate from drunkWobble - a manual debug sample and a real,
+        /// currently-active Mind Poison exposure can't stomp each other's value.
+        /// </summary>
+        private readonly EffectState mindPoisonSeverity = new EffectState();
+
+        /// <summary>Mind Poison's real, server-driven severity (0-1) - see mindPoisonSeverity's own doc comment. Combined with MindPoisonFogStrength via Max by HallucinationManager's severity source, so a manual .rrbrainrot sample can still trigger apparition spawns for testing even with no live Mind Poison exposure active.</summary>
+        public float MindPoisonServerSeverity => mindPoisonSeverity.Strength;
+
         /// <summary>The real Temporal Fog condition's own strength (low Temporal Stability, Mind Tonic overdose), 0-1. 0 disables it entirely. See MindPoisonFogStrength for why Mind Poison uses a separate field for the same visual.</summary>
         public float TempFogStrength
         {
@@ -125,6 +141,7 @@ namespace Remedy_And_Ruin
             LoadShader();
             tempFog.SecondsToNextPulseRoll = NextGlitchRollDelay();
             mindPoisonFog.SecondsToNextPulseRoll = NextGlitchRollDelay();
+            mindPoisonSeverity.SecondsToNextPulseRoll = NextGlitchRollDelay();
             concussion.SecondsToNextPulseRoll = NextGlitchRollDelay();
         }
 
@@ -257,6 +274,7 @@ namespace Remedy_And_Ruin
             timeCounter += deltaTime;
             UpdatePulse(tempFog, deltaTime);
             UpdatePulse(mindPoisonFog, deltaTime);
+            UpdatePulse(mindPoisonSeverity, deltaTime);
             UpdatePulse(concussion, deltaTime);
 
             // Wobble is a camera-input effect, not a draw call - keep it working even if
@@ -268,6 +286,7 @@ namespace Remedy_And_Ruin
             if (localPlayer != null)
             {
                 neurotoxicWobble.Strength = localPlayer.WatchedAttributes.GetFloat(EntityBehaviorRemedyEffects.NeurotoxicDrunkWobbleAttributeKey);
+                mindPoisonSeverity.Strength = localPlayer.WatchedAttributes.GetFloat(EntityBehaviorRemedyEffects.MindPoisonSeverityAttributeKey);
             }
 
             if (!capi.IsGamePaused)
@@ -275,14 +294,18 @@ namespace Remedy_And_Ruin
                 ApplyWobble(concussion, deltaTime);
                 ApplyWobble(drunkWobble, deltaTime);
                 ApplyWobble(neurotoxicWobble, deltaTime);
+                ApplyWobble(mindPoisonSeverity, deltaTime);
             }
 
-            // TempFogStrength and MindPoisonFogStrength share the same mode-0 visual but are
-            // independent fields (see MindPoisonFogStrength's doc comment) - whichever is
-            // currently stronger drives both the strength and the glitch-pulse progress passed
+            // TempFogStrength, MindPoisonFogStrength, and Mind Poison's real server-driven
+            // severity all share the same mode-0 visual but are independent fields (see
+            // MindPoisonFogStrength's and mindPoisonSeverity's own doc comments) - whichever is
+            // currently strongest drives both the strength and the glitch-pulse progress passed
             // to that one draw call.
-            EffectState dominantFog = tempFog.Strength >= mindPoisonFog.Strength ? tempFog : mindPoisonFog;
-            float fogStrength = Math.Max(tempFog.Strength, mindPoisonFog.Strength);
+            float mindPoisonCombined = Math.Max(mindPoisonFog.Strength, mindPoisonSeverity.Strength);
+            EffectState dominantMindPoison = mindPoisonFog.Strength >= mindPoisonSeverity.Strength ? mindPoisonFog : mindPoisonSeverity;
+            EffectState dominantFog = tempFog.Strength >= mindPoisonCombined ? tempFog : dominantMindPoison;
+            float fogStrength = Math.Max(tempFog.Strength, mindPoisonCombined);
 
             bool tempFogActive = fogStrength > 0.0001f;
             bool concussionActive = concussion.Strength > 0.0001f;

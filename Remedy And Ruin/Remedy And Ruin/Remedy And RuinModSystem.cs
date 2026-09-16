@@ -102,7 +102,9 @@ namespace Remedy_And_Ruin
             Mod.Logger.Notification("Hello from template mod client side: " + Lang.Get("remedyandruin:hello"));
 
             temporalVignetteRenderer = new TemporalVignetteRenderer(api);
-            hallucinationManager = new HallucinationManager(api, () => temporalVignetteRenderer.MindPoisonFogStrength);
+            // Combines the .rrbrainrot debug command's manual sample with Mind Poison's real,
+            // server-driven severity so either can independently trigger Hallucination spawns.
+            hallucinationManager = new HallucinationManager(api, () => Math.Max(temporalVignetteRenderer.MindPoisonFogStrength, temporalVignetteRenderer.MindPoisonServerSeverity));
 
             api.ChatCommands.Create("rrTempFog")
                 .WithDescription("Debug: set Temporal Fog's sepia/desaturation strength (0-1) for visual tuning.")
