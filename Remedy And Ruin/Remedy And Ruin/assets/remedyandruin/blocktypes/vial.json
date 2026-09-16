@@ -32,7 +32,7 @@
 	"materialDensity": 400,
 	"lightAbsorption": 0,
 	"sounds": {
-		"walk": "walk/stone"
+		"walk": "game:walk/stone"
 	},
 	"sideopaque": { "all": false },
 	"sidesolid": { "all": false },
