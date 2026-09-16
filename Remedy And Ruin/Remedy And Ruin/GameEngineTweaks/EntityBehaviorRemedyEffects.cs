@@ -121,6 +121,22 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             }
         }
 
+        // Cardiac Poison's baseline full-phase duration at effectMultiplier 1.0 and 0 tolerance
+        // (02-design-overview.md ~1418-1429), before the tolerance-discounted duration factor
+        // below scales it down.
+        private const double CardiacBaselineDurationHours = 6.0;
+
+        // Same tiered 1/9-per-reached-tolerance-tier discount every cluster uses, applied to
+        // Cardiac Poison's duration only - the flat HP hit and movement/tool debuffs stay at full
+        // strength below full crossing (02-design-overview.md ~845-852); only recovery time
+        // shortens as tolerance rises. Reaches exactly 0 at cardiacTolerance == 27, though
+        // ApplyEffect's own early-return above already keeps that case from reaching this method.
+        private double CardiacDurationToleranceMultiplier()
+        {
+            int tier = cardiacTolerance / 3;
+            return Math.Max(0.0, 1.0 - tier / 9.0);
+        }
+
         public int neurotoxicTolerance
         {
             get => RREffects.GetInt("neurotoxicTolerance");
@@ -564,12 +580,23 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     /*
                      * CARDIAC POISON :
                      *     - used to indicate heartbane aka heart failure
-                     *     - calculate effect by subtracting from effect multiplier the tolerance value calculated by (float)(cardiacTolerance / 3) / 9.0f
-                     *     - apply cardiac event (reduce current and max health by 5hp) for a certain amount of time determined by effect multiplier
-                     *     - watch player activity and roll the dice on another cardiac event if player uses tools or sprints
+                     *     - flat -5 current/max HP hit at full strength regardless of tolerance
+                     *       below full (9/9) crossing - only duration scales down with tolerance
+                     *     - movement-speed and tool-use debuffs, 6h baseline duration scaled by
+                     *       effectMultiplier and the same tolerance-discounted duration factor
+                     *     - exertion (sprinting or tool use) during the active episode adds
+                     *       uncapped stacks: +1h duration and another -5 HP each
+                     *     - at full (9/9) tolerance the entire exposure is voided outright - see
+                     *       the early return below, mirroring the post-Antidote immunity window's
+                     *       own "this exposure never happened" no-op further down this method
                      *     - surviving this awards 1/27 of progression towards cardiacTolerance
                      */
+                    if (cardiacTolerance >= 27)
+                    {
+                        return;
+                    }
                     poison = true;
+                    effect.timeleft = CardiacBaselineDurationHours * effect.effectMultiplier * CardiacDurationToleranceMultiplier();
                     break;
                 case EffectCluster.NEUROTOXICPOISON:
                     /*

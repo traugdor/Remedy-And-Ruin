@@ -101,7 +101,14 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         public float EffectMult { get; }
         public float EffectOnset { get; }
         public double StartTotalHours { get; }
-        public double EndTotalHours { get; }
+        // Mutable, not just for the onset/full-phase transition's own bookkeeping: Cardiac
+        // Poison's exertion-stacking (and anything reusing it, e.g. Neurotoxic's dose-3) extends
+        // a live effect's own end time from a game-tick listener outside this class entirely -
+        // see ExtendEndTotalHours. Read every poll iteration by Run() on this thread's own
+        // background thread while written from the main thread; a torn read costs at most one
+        // CalendarPollInterval cycle of staleness before the loop re-checks, which this poll
+        // design already tolerates for its own 10-second granularity.
+        public double EndTotalHours { get; private set; }
         public double OnsetCompleteTotalHours { get; }
         public string SecondaryEffectType { get; }
         public float? SecondaryEffectMult { get; }
@@ -193,6 +200,15 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             StatModifiers = FullStatModifiers;
             DoT = FullDoT;
             MaxHealthMod = FullMaxHealthModifier;
+        }
+
+        // Extends this effect's own end time - Cardiac Poison's exertion-stacking watcher calls
+        // this once per stack (see EffectThreadManager.StartCardiacExertionStacking) instead of
+        // this class exposing a public setter, so a stack's duration extension and its paired
+        // MaxHealthModifier application always land together at the call site.
+        internal void ExtendEndTotalHours(double additionalHours)
+        {
+            EndTotalHours += additionalHours;
         }
 
         private void Run(Action<EffectTimerThread> onSaveReport, Action<EffectTimerThread> onNaturalEnd, Action<EffectTimerThread> onForcedEnd, Action<EffectTimerThread> onDisconnect, Action<EffectTimerThread> onOnsetComplete)
@@ -411,6 +427,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     // baseline is given, so 1.5h is used for consistency with Toxic's 2h baseline.
                     return 1.5;
                 case "CARDIACPOISON":
+                    // No flower ingredient JSON yet sets remedyandruinEffect.cluster to
+                    // CardiacPoison with its own onset data (confirmed by searching the shipped
+                    // assets) - 1.5h is used for consistency with Noxious's own baseline, the
+                    // same fallback the design calls for absent real ingredient data.
+                    return 1.5;
                 case "NEUROTOXICPOISON":
                 case "MINDPOISON":
                     return 0.0;
@@ -518,6 +539,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     // cluster has no entity.Stats-based component of its own.
                     break;
                 case "CARDIACPOISON":
+                    return CardiacFullStatModifiers;
                 case "NEUROTOXICPOISON":
                 case "MINDPOISON":
                     break;
@@ -572,7 +594,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             {
                 case "TOXICPOISON": // liver failure has no max-health component
                 case "NOXIOUSPOISON": // fever/tripping/vomiting has no max-health component
+                    break;
                 case "CARDIACPOISON":
+                    return DetermineCardiacMaxHealthModifier();
                 case "NEUROTOXICPOISON":
                 case "MINDPOISON":
                     break;
@@ -580,6 +604,18 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     break;
             }
             return null;
+        }
+
+        // Full (9/9) Cardiac tolerance waives the flat HP hit entirely - the one place tolerance
+        // discounts this cluster's magnitude rather than just duration (02-design-overview.md
+        // ~845-852). EntityBehaviorRemedyEffects.ApplyEffect already skips creating a Cardiac
+        // exposure at all once cardiacTolerance reaches 27, so this branch is normally
+        // unreachable; kept as a defensive second check rather than relying on that alone.
+        private MaxHealthModifier? DetermineCardiacMaxHealthModifier()
+        {
+            int cardiacTolerance = entity.GetBehavior<EntityBehaviorRemedyEffects>()?.cardiacTolerance ?? 0;
+            if (cardiacTolerance >= 27) return null;
+            return new MaxHealthModifier(-CardiacFlatHealthHit);
         }
 
         private void ApplyStatModifiers(EffectTimerThread t)
@@ -669,6 +705,40 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // multiplier itself.
         private const double NoxiousVomitRollBaseIntervalSeconds = 45.0;
 
+        // Cardiac Poison's flat current/max HP hit - full strength regardless of tolerance below
+        // full (9/9) crossing (02-design-overview.md ~845-852, ~1407). Also the per-stack hit
+        // exertion-stacking applies, and the package Task 5's Neurotoxic dose-3 layers on top of
+        // its own ladder reuses this same value and mechanism unmodified.
+        private const float CardiacFlatHealthHit = 5f;
+
+        // -40% walkspeed, the same value Neurotoxic's own Weakness stage uses (Decisions locked
+        // in, plan 12) - chosen for consistency across the two clusters' movement debuffs rather
+        // than a separately-tuned number.
+        //
+        // miningSpeedMul is the only stat category the engine actually reads for tool-use speed
+        // (CollectibleObject.GetMiningSpeed, confirmed against VSDecompile) - it only factors in
+        // against Ore/Stone-material blocks in the engine's own default mining-speed calculation,
+        // not universally against every tool interaction, since no broader "tool speed" stat
+        // exists to register against. Matches the walkspeed debuff's own magnitude.
+        private static readonly StatModifier[] CardiacFullStatModifiers =
+        {
+            new StatModifier("walkspeed", -0.40f),
+            new StatModifier("miningSpeedMul", -0.40f)
+        };
+
+        // Cardiac Poison's exertion-stacking cadence and per-stack cost (02-design-overview.md
+        // ~1418-1429): roughly one stack per 10 continuous seconds of sprinting or tool use,
+        // +1h duration and -5 current/max HP each, uncapped.
+        private const double CardiacExertionStackIntervalSeconds = 10.0;
+        private const double CardiacExertionStackDurationHours = 1.0;
+
+        // Tracks each Cardiac-style effect's current exertion-stack count, keyed by the owning
+        // effect's Guid - StartCardiacExertionStacking appends a "{guid}-stackN" MaxHealthModifier
+        // per stack (distinct from the base "{guid}" key RemoveMaxHealthModifier already handles),
+        // and RemoveCardiacExertionStacks reads this to know how many of those keys to zero out
+        // when the effect ends.
+        private readonly ConcurrentDictionary<Guid, int> cardiacExertionStackCounts = new ConcurrentDictionary<Guid, int>();
+
         // Full-phase side effects that live outside the StatModifier/DoT/MaxHealthModifier
         // pipeline - dispatches per cluster and records whatever listener ids it starts so
         // RemoveClusterFullPhaseSideEffects can tear them down symmetrically. A cluster with none
@@ -683,6 +753,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 case "NOXIOUSPOISON":
                     listeners = StartNoxiousFullPhaseSideEffects(t.EffectMult);
                     break;
+                case "CARDIACPOISON":
+                    listeners = StartCardiacFullPhaseSideEffects(t);
+                    break;
                 default:
                     return;
             }
@@ -690,6 +763,88 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             if (listeners.Count > 0)
             {
                 clusterSideEffectListeners[t.Guid] = listeners;
+            }
+        }
+
+        // Cardiac Poison's only full-phase side effect outside the StatModifier/MaxHealthModifier
+        // pipeline: the exertion-stacking watcher. Kept as its own method (rather than inlined
+        // into the switch above) so Task 5's Neurotoxic dose-3 - which layers Cardiac Poison's
+        // whole package, this watcher included, on top of its own ladder - can call
+        // StartCardiacExertionStacking(t) directly against its own EffectTimerThread instead of
+        // duplicating the watcher.
+        private List<long> StartCardiacFullPhaseSideEffects(EffectTimerThread t)
+        {
+            var listeners = new List<long>();
+            long exertionListener = StartCardiacExertionStacking(t);
+            if (exertionListener != 0L) listeners.Add(exertionListener);
+            return listeners;
+        }
+
+        /// <summary>
+        /// Cardiac Poison's exertion-stacking watcher (02-design-overview.md ~1418-1429): while
+        /// the owning effect is active, continuous sprinting (Controls.Sprint) or active tool use
+        /// (Controls.HandUse != EnumHandInteract.None - confirmed real against VSDecompile's
+        /// EntityAgent.TryStopHandAction, which reads this same field to detect an in-progress
+        /// hand action) adds one stack roughly every
+        /// CardiacExertionStackIntervalSeconds - a per-stack cooldown that resets the instant
+        /// exertion stops, not a free-running tick. Each stack extends the owning effect's own
+        /// EndTotalHours by CardiacExertionStackDurationHours and applies another
+        /// CardiacFlatHealthHit MaxHealthModifier under its own "{guid}-stackN" key (via
+        /// RemoveCardiacExertionStacks at teardown), so stacks compound instead of overwriting
+        /// each other. No cap - ordinary walking with no tool in use never stacks. Reusable as-is
+        /// by any effect package that inherits Cardiac Poison's rules (Task 5's Neurotoxic
+        /// dose-3): call this with that effect's own EffectTimerThread; it has no opinion on
+        /// which cluster t.Cluster reports.
+        /// </summary>
+        internal long StartCardiacExertionStacking(EffectTimerThread t)
+        {
+            if (!(entity is EntityAgent agent)) return 0L;
+
+            double exertingSeconds = 0.0;
+
+            return entity.World.RegisterGameTickListener(dt =>
+            {
+                bool exerting = agent.Controls.Sprint || agent.Controls.HandUse != EnumHandInteract.None;
+                if (!exerting)
+                {
+                    exertingSeconds = 0.0;
+                    return;
+                }
+
+                exertingSeconds += dt;
+                if (exertingSeconds < CardiacExertionStackIntervalSeconds) return;
+                exertingSeconds = 0.0;
+
+                int stackCount = cardiacExertionStackCounts.AddOrUpdate(t.Guid, 1, (_, c) => c + 1);
+                t.ExtendEndTotalHours(CardiacExertionStackDurationHours);
+
+                var health = entity.GetBehavior<EntityBehaviorHealth>();
+                if (health == null) return;
+
+                health.SetMaxHealthModifiers(t.Guid + "-stack" + stackCount, -CardiacFlatHealthHit);
+                entity.ReceiveDamage(new DamageSource
+                {
+                    Source = EnumDamageSource.Internal,
+                    Type = EnumDamageType.Poison,
+                    IgnoreInvFrames = true
+                }, CardiacFlatHealthHit);
+            }, 1000);
+        }
+
+        // Zeroes every per-stack MaxHealthModifier key StartCardiacExertionStacking applied for
+        // this effect ("{guid}-stackN") - the base "{guid}" key from the initial flat hit is
+        // handled separately by RemoveMaxHealthModifier. A no-op for any effect that never
+        // started exertion-stacking.
+        private void RemoveCardiacExertionStacks(Guid effectGuid)
+        {
+            if (!cardiacExertionStackCounts.TryRemove(effectGuid, out int stackCount) || stackCount == 0) return;
+
+            var health = entity.GetBehavior<EntityBehaviorHealth>();
+            if (health == null) return;
+
+            for (int i = 1; i <= stackCount; i++)
+            {
+                health.SetMaxHealthModifiers(effectGuid + "-stack" + i, 0f);
             }
         }
 
@@ -715,12 +870,15 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         private void RemoveClusterFullPhaseSideEffects(Guid effectGuid)
         {
-            if (!clusterSideEffectListeners.TryRemove(effectGuid, out List<long> listeners)) return;
-
-            foreach (long id in listeners)
+            if (clusterSideEffectListeners.TryRemove(effectGuid, out List<long> listeners))
             {
-                entity.World.UnregisterGameTickListener(id);
+                foreach (long id in listeners)
+                {
+                    entity.World.UnregisterGameTickListener(id);
+                }
             }
+
+            RemoveCardiacExertionStacks(effectGuid);
         }
 
         // The engine's own ApplyDoTEffect (EntityBehaviorHealth.cs ~line 451) has no infinite
