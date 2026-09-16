@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using Vintagestory.API.Common;
@@ -146,6 +147,115 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 RREffects.SetInt("neurotoxicTolerance", value);
                 MarkDirty();
             }
+        }
+
+        // Baseline full-phase durations for Neurotoxic Poison's 3-stage ladder
+        // (02-design-overview.md ~1431-1443; ladder semantics confirmed in Plan 12's
+        // decisions-locked-in section): dose 2 is double dose 1's baseline, dose 3 is quadruple
+        // Cardiac Poison's own normal 6h baseline. An arrow-hit's half-weight instance always
+        // uses half of dose 1's baseline (3h) regardless of the cumulative dose number it
+        // nominally completes - see ApplyNeurotoxicLadder.
+        private const double NeurotoxicWeaknessBaselineDurationHours = 6.0;
+        private const double NeurotoxicParalysisBaselineDurationHours = 12.0;
+        private const double NeurotoxicCardiacArrestBaselineDurationHours = 24.0;
+        private const double NeurotoxicArrowHalfDoseBaselineDurationHours = 3.0;
+
+        // Same tiered 1/9-per-reached-tolerance-tier discount every cluster's own effect
+        // strength uses (see EffectThreadManager's own Toxic/NoxiousToleranceDiscountedEffect),
+        // applied here so Neurotoxic's duration computation doesn't need to reach into
+        // EffectThreadManager just to read this entity's own tolerance value.
+        private float NeurotoxicToleranceDiscountedEffect(float effectMultiplier)
+        {
+            float discount = (float)(neurotoxicTolerance / 3) / 9.0f;
+            return Math.Max(0f, effectMultiplier - discount);
+        }
+
+        /// <summary>
+        /// Resolves a Neurotoxic exposure's dose number on the 3-stage ladder and its own
+        /// baseline duration, writing both into neweffect. Dose number counts
+        /// currently-overlapping Neurotoxic instances only (existingPoisons, the same filtered
+        /// list toleranceEligible already built in the caller) - a fully-resolved prior exposure
+        /// never contributes, matching the confirmed "currently-overlapping, not lifetime" ladder
+        /// semantics.
+        ///
+        /// Each instance carries its own ladderWeight (1.0 for a drunk dose, 0.5 for an
+        /// arrow-hit's half-strength contribution - see Patch_ArrowPoisonDelivery). Dose number
+        /// is the ceiling of the summed weight of every currently-active instance including this
+        /// new one, clamped to the ladder's 3 real stages. An arrow-hit's own instance always
+        /// gets Weakness's bare package at half duration regardless of the dose number it lands
+        /// on - only a drunk dose (ladderWeight 1.0) can trigger Paralysis's second-instance
+        /// stacking or Cardiac Arrest's package, matching "drinking always advances by exactly
+        /// one full stage per dose."
+        /// </summary>
+        private void ApplyNeurotoxicLadder(TreeAttribute neweffect, EffectStruct effect, List<TreeAttribute> existingPoisons)
+        {
+            float existingWeight = existingPoisons
+                .Where(existing => existing.GetString("cluster") == effect.cluster.ToString())
+                .Sum(existing => existing.GetFloat("ladderWeight", 1f));
+            float cumulativeWeight = existingWeight + effect.ladderWeight;
+            int doseNumber = Math.Min(3, (int)Math.Ceiling(cumulativeWeight));
+
+            double baselineHours;
+            if (effect.ladderWeight < 1f)
+            {
+                baselineHours = NeurotoxicArrowHalfDoseBaselineDurationHours;
+            }
+            else
+            {
+                baselineHours = doseNumber switch
+                {
+                    1 => NeurotoxicWeaknessBaselineDurationHours,
+                    2 => NeurotoxicParalysisBaselineDurationHours,
+                    _ => NeurotoxicCardiacArrestBaselineDurationHours
+                };
+            }
+
+            neweffect.SetInt("doseNumber", doseNumber);
+            neweffect.SetFloat("ladderWeight", effect.ladderWeight);
+            neweffect.SetDouble("timeleft", baselineHours * NeurotoxicToleranceDiscountedEffect(effect.effectMultiplier));
+        }
+
+        // Neurotoxic Poison's dizziness bridge - keyed by the owning EffectTimerThread's own
+        // Guid, one entry per currently-active dose, so dose 2/3 stacking on top of a
+        // still-running dose 1 combines correctly instead of one dose's own repeating write
+        // overwriting another's value out of tick order. The strongest currently-active
+        // contribution is what reaches this synced attribute - the same Max-combination
+        // TemporalVignetteRenderer's own TempFogStrength/MindPoisonFogStrength already use for
+        // their shared visual, applied here since multiple real Neurotoxic instances can be
+        // active at once (dose 2 and 3 stack rather than replace).
+        //
+        // TemporalVignetteRenderer reads this same key directly off the local player's
+        // WatchedAttributes every frame (mirroring vanilla's own DrunkPerceptionEffect, which
+        // reads its "intoxication" WatchedAttributes float the same way - confirmed against
+        // VSDecompile) rather than through any dedicated networked message.
+        public const string NeurotoxicDrunkWobbleAttributeKey = "remedyandruinNeurotoxicWobble";
+
+        private readonly ConcurrentDictionary<Guid, float> drunkWobbleContributions = new ConcurrentDictionary<Guid, float>();
+
+        public long StartDrunkWobbleContribution(Guid effectGuid, float intensity)
+        {
+            float clamped = GameMath.Clamp(intensity, 0f, 1f);
+            return entity.World.RegisterGameTickListener(dt =>
+            {
+                drunkWobbleContributions[effectGuid] = clamped;
+                WriteStrongestDrunkWobbleContribution();
+            }, 1000);
+        }
+
+        public void StopDrunkWobbleContribution(Guid effectGuid)
+        {
+            drunkWobbleContributions.TryRemove(effectGuid, out _);
+            WriteStrongestDrunkWobbleContribution();
+        }
+
+        private void WriteStrongestDrunkWobbleContribution()
+        {
+            float strongest = 0f;
+            foreach (float value in drunkWobbleContributions.Values)
+            {
+                if (value > strongest) strongest = value;
+            }
+            entity.WatchedAttributes.SetFloat(NeurotoxicDrunkWobbleAttributeKey, strongest);
         }
 
         public int brainrotTolerance
@@ -425,6 +535,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             public float  onsetMultiplier       = 0.0f;  //used by some poisons
             public float  toxicEffectMultiplier = 0.0f;  //used by dual-effect mushrooms
             public float  toxicOnsetMultiplier  = 0.0f;  //used by dual-effect mushrooms
+            public float  ladderWeight          = 1.0f;  //Neurotoxic-only: how much this exposure counts toward its dose number - 1.0 for a drunk dose, 0.5 for an arrow hit
         }
 
         //============== EVENT HANDLERS ==============//
@@ -602,10 +713,18 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     /*
                      * NEUROTOXIC POISON :
                      *     - used to indicate nervebane aka nerve damage
-                     *     - calculate effect by subtracting from effect multiplier the tolerance value calculated by (float)(neurotoxicTolerance / 3) / 9.0f
-                     *     - apply nerve damage for 6h * effect multiplier
-                     *     - additional nerve damage applications will apply the same effect again for max(0, effect multiplier - tolerance value) * (2 ^ n-1 duration) * 6h
-                     *     - the 3rd nerve damage application will also apply a cardiac event for 24h * effect multiplier
+                     *     - dose number = how many Neurotoxic instances are currently
+                     *       overlapping (including this one), weighted by ladderWeight - see
+                     *       ApplyNeurotoxicLadder, called below once the currently-active list
+                     *       is available
+                     *     - dose 1: Weakness (-40% walkspeed), 6h baseline
+                     *     - dose 2: a second, independent Weakness instance (Paralysis), 12h
+                     *       baseline - the two overlapping walkspeed modifiers sum via
+                     *       entity.Stats' own additive blending
+                     *     - dose 3: Cardiac Poison's own full package (flat HP hit, movement/tool
+                     *       debuffs, exertion-stacking), 24h baseline
+                     *     - headache (rangedWeaponsAcc penalty) and dizziness (DrunkWobbleStrength)
+                     *       apply at every stage
                      *     - surviving this awards 1/27 of progression towards neurotoxicTolerance
                      */
                     poison = true;
@@ -648,6 +767,12 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     neweffect.SetBool("toleranceEligible", toleranceEligible);
                     neweffect.SetBool("isPoison", true);
                     neweffect.SetFloat("onsetMultiplier", effect.onsetMultiplier); //only used for poisons
+
+                    if (effect.cluster == EffectCluster.NEUROTOXICPOISON)
+                    {
+                        ApplyNeurotoxicLadder(neweffect, effect, rrpoisons);
+                    }
+
                     rrpoisons.Add(neweffect);
                     RRPoisonEffects = new TreeArrayAttribute(rrpoisons.ToArray());
                 }

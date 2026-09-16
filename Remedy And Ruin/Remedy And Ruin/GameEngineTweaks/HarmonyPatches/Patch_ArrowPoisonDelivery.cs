@@ -18,7 +18,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
     /// chance of a smaller bonus DoT) rather than the same delayed onset/liver-failure package
     /// drinking uses - see ApplyToxicArrowHit. Noxious Poison's and Cardiac Poison's arrow-hits
     /// are each a chance gate around the same drinking-equivalent package - see
-    /// ApplyNoxiousArrowHit/ApplyCardiacArrowHit. Every other cluster still routes through
+    /// ApplyNoxiousArrowHit/ApplyCardiacArrowHit. Neurotoxic Poison's arrow-hit is a chance gate
+    /// around a half-weight ladder contribution rather than a full dose - see
+    /// ApplyNeurotoxicArrowHit. Every other cluster still routes through
     /// EntityBehaviorRemedyEffects.ApplyEffect unconditionally, the same path drinking uses,
     /// until its own task replaces this with its real per-cluster chance.
     /// </summary>
@@ -43,6 +45,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
         // Within the design doc's own stated 25-35% range for this cluster's coated-arrow chance
         // (02-design-overview.md ~1407).
         private const double CardiacArrowHitChance = 0.30;
+
+        // Within the design doc's own stated 25-35% range, matching Cardiac's own 30% for
+        // consistency (02-design-overview.md ~1407, 1431-1443).
+        private const double NeurotoxicArrowHitChance = 0.30;
 
         public static void Postfix(EntityProjectileBase __instance, Entity target, bool __result)
         {
@@ -70,6 +76,12 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
             if (cluster == "CARDIACPOISON")
             {
                 ApplyCardiacArrowHit(remedyBehavior, arrowStack);
+                return;
+            }
+
+            if (cluster == "NEUROTOXICPOISON")
+            {
+                ApplyNeurotoxicArrowHit(remedyBehavior, arrowStack);
                 return;
             }
 
@@ -136,6 +148,26 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
             {
                 isPoison = true,
                 effectMultiplier = effectMultiplier
+            };
+            remedyBehavior.ApplyEffect(effect, forceIneligibleForTolerance: true);
+        }
+
+        // A missed roll applies nothing at all. A successful roll contributes half a stage's
+        // worth of ladder progress (EntityBehaviorRemedyEffects.ApplyNeurotoxicLadder treats this
+        // as 0.5 toward the next dose-number threshold, at half of Weakness's own 6h baseline
+        // duration) rather than a full dose the way Noxious/Cardiac's own arrow hits do - an
+        // arrow-hit can never directly trigger Paralysis's second-instance stacking or Cardiac
+        // Arrest's package on its own, only a drunk dose can.
+        private static void ApplyNeurotoxicArrowHit(EntityBehaviorRemedyEffects remedyBehavior, ItemStack arrowStack)
+        {
+            if (new Random().NextDouble() >= NeurotoxicArrowHitChance) return;
+
+            float effectMultiplier = arrowStack.Attributes.GetFloat("remedyandruinArrowPoisonEffectMultiplier");
+            var effect = new EntityBehaviorRemedyEffects.EffectStruct(EntityBehaviorRemedyEffects.EffectCluster.NEUROTOXICPOISON)
+            {
+                isPoison = true,
+                effectMultiplier = effectMultiplier,
+                ladderWeight = 0.5f
             };
             remedyBehavior.ApplyEffect(effect, forceIneligibleForTolerance: true);
         }
