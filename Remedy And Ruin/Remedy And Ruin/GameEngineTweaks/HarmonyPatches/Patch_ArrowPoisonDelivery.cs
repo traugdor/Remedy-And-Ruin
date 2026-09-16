@@ -20,9 +20,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
     /// are each a chance gate around the same drinking-equivalent package - see
     /// ApplyNoxiousArrowHit/ApplyCardiacArrowHit. Neurotoxic Poison's arrow-hit is a chance gate
     /// around a half-weight ladder contribution rather than a full dose - see
-    /// ApplyNeurotoxicArrowHit. Every other cluster still routes through
-    /// EntityBehaviorRemedyEffects.ApplyEffect unconditionally, the same path drinking uses,
-    /// until its own task replaces this with its real per-cluster chance.
+    /// ApplyNeurotoxicArrowHit. Mind Poison's arrow-hit is a chance gate around the same
+    /// drinking-equivalent package as Noxious/Cardiac's - see ApplyMindPoisonArrowHit. Every
+    /// other cluster still routes through EntityBehaviorRemedyEffects.ApplyEffect
+    /// unconditionally, the same path drinking uses, until its own task replaces this with its
+    /// real per-cluster chance.
     /// </summary>
     [HarmonyPatch(typeof(EntityProjectileBase), "DealDamage")]
     public static class Patch_ArrowPoisonDelivery
@@ -49,6 +51,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
         // Within the design doc's own stated 25-35% range, matching Cardiac's own 30% for
         // consistency (02-design-overview.md ~1407, 1431-1443).
         private const double NeurotoxicArrowHitChance = 0.30;
+
+        // Within the design doc's own stated 40-55% range for this cluster - higher than
+        // Cardiac/Neurotoxic's 25-35% since Mind Poison is non-lethal by design, less reason to
+        // gate it as tightly (02-design-overview.md ~1409).
+        private const double MindPoisonArrowHitChance = 0.45;
 
         public static void Postfix(EntityProjectileBase __instance, Entity target, bool __result)
         {
@@ -82,6 +89,12 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
             if (cluster == "NEUROTOXICPOISON")
             {
                 ApplyNeurotoxicArrowHit(remedyBehavior, arrowStack);
+                return;
+            }
+
+            if (cluster == "MINDPOISON")
+            {
+                ApplyMindPoisonArrowHit(remedyBehavior, arrowStack);
                 return;
             }
 
@@ -168,6 +181,23 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
                 isPoison = true,
                 effectMultiplier = effectMultiplier,
                 ladderWeight = 0.5f
+            };
+            remedyBehavior.ApplyEffect(effect, forceIneligibleForTolerance: true);
+        }
+
+        // A missed roll applies nothing at all. A successful roll routes through the normal
+        // ApplyEffect path (onset delay included) - the same full drinking-equivalent package
+        // (Temporal Fog/drunken sway severity, psychedelic tripping, doubled hunger rate,
+        // move-triggered vomiting), just gated behind this chance roll first.
+        private static void ApplyMindPoisonArrowHit(EntityBehaviorRemedyEffects remedyBehavior, ItemStack arrowStack)
+        {
+            if (new Random().NextDouble() >= MindPoisonArrowHitChance) return;
+
+            float effectMultiplier = arrowStack.Attributes.GetFloat("remedyandruinArrowPoisonEffectMultiplier");
+            var effect = new EntityBehaviorRemedyEffects.EffectStruct(EntityBehaviorRemedyEffects.EffectCluster.MINDPOISON)
+            {
+                isPoison = true,
+                effectMultiplier = effectMultiplier
             };
             remedyBehavior.ApplyEffect(effect, forceIneligibleForTolerance: true);
         }

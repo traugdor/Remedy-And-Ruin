@@ -13,11 +13,13 @@ namespace Remedy_And_Ruin.GameEngineTweaks.Hallucination
     /// pipeline, driven through ClientEntityAILib - see DrifterBehavior/ShiverBehavior for how.
     ///
     /// Rolling is gated by getSeverity() - the current Mind Poison ("Brain Rot") strength, 0-1,
-    /// supplied by the caller (currently TemporalVignetteRenderer.TempFogStrength, driven by the
-    /// .rrbrainrot debug command until the real MINDPOISON effect logic in
-    /// EntityBehaviorRemedyEffects.ApplyEffect sets that same property for real). No rolling at
-    /// all while severity is 0; which families are eligible scales with severity per the design
-    /// doc's three windows (see PickFamilyForSeverity).
+    /// supplied by the caller as the stronger of TemporalVignetteRenderer.MindPoisonFogStrength
+    /// (the .rrbrainrot debug command's manual sample) and MindPoisonServerSeverity (the real,
+    /// tolerance-discounted severity a live MINDPOISON exposure drives via
+    /// EntityBehaviorRemedyEffects.StartMindPoisonSeverityContribution's synced bridge) - either
+    /// source can trigger spawns independently. No rolling at all while severity is 0; which
+    /// families are eligible scales with severity per the design doc's three windows (see
+    /// PickFamilyForSeverity).
     ///
     /// Bowtorn spawns invisibly (ClientEntityAILib's startHidden - see BowtornBehavior) roughly 20
     /// blocks behind the player rather than in view like Drifter/Shiver, plays its own real windup
