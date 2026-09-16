@@ -23,7 +23,7 @@
 				"action": "PlaceBlock",
 				"stack": {
 					"type": "block",
-					"code": "water-still-3"
+					"code": "game:water-still-3"
 				}
 			}
 		},
