@@ -662,6 +662,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     rrpoisons.Clear();
                     RRPoisonEffects = new TreeArrayAttribute(rrpoisons.ToArray());
                     threadManager.HandleForcefulEnd();
+                    // The arrow-delivered Toxic bonus DoT isn't a tracked EffectTimerThread (it's
+                    // injected directly by Patch_ArrowPoisonDelivery), so HandleForcefulEnd above
+                    // never sees it - stop it separately by its own fixed effect-type id. A no-op
+                    // if none is currently active.
+                    entity.GetBehavior<EntityBehaviorHealth>()?.StopDoTEffect(EffectThreadManager.ArrowBonusToxicDoTEffectType);
                     drankAntidote = false;
                     timeAntidoteConsumed = DateTime.MinValue;
                     ApplyAntidoteAftermathEffect();

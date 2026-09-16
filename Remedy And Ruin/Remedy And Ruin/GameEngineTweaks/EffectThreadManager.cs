@@ -297,8 +297,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // Reads the matching WatchedAttributes entry for guid, decides what entity.Stats/DoT/
         // max-health modifiers it applies for the onset and full phases (via the Determine*
         // dispatch methods below), and spawns its timer thread. effectMultiplier/onsetMultiplier
-        // are read as already-final, tolerance-discounted values - this method never applies
-        // additional tolerance math to them.
+        // are the exposure's own raw, undiscounted values - each cluster's Determine* case reads
+        // its own tolerance counter off entity's EntityBehaviorRemedyEffects and applies the
+        // (tolerance / 3) / 9.0f discount itself, since the discount math (and, for Toxic Poison,
+        // the 15%-of-undiscounted-magnitude threshold) needs both figures at once.
         private void ApplyEffect(EffectBucket bucket, string guid)
         {
             var remedyEffects = entity.GetBehavior<EntityBehaviorRemedyEffects>();
@@ -385,6 +387,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             switch (cluster)
             {
                 case "TOXICPOISON":
+                    // 2h at onsetMultiplier 1.0 - the ingredient table's 0.8-1.0 onset range for
+                    // Death Cap/Funeral Bell/Fool's Conecap gives a 1.6-2h real reaction window.
+                    return 2.0;
                 case "NOXIOUSPOISON":
                 case "CARDIACPOISON":
                 case "NEUROTOXICPOISON":
@@ -412,15 +417,28 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return startTotalHours + BaselineOnsetHours(cluster) * effectOnset;
         }
 
+        // Toxic Poison's tolerance-discounted magnitude: (tolerance / 3) is the tier reached
+        // (0-9, integer division), each tier worth 1/9 of effectMult. Floored at 0 - full 9/9
+        // tolerance discounts the whole exposure away regardless of its own magnitude.
+        private float ToxicToleranceDiscountedEffect(float effectMult)
+        {
+            int tolerance = entity.GetBehavior<EntityBehaviorRemedyEffects>()?.toxicTolerance ?? 0;
+            float discount = (float)(tolerance / 3) / 9.0f;
+            return Math.Max(0f, effectMult - discount);
+        }
+
+        private static readonly StatModifier[] ToxicHealingDip = { new StatModifier("healingeffectivness", -0.15f) };
+
         // PLACEHOLDER dispatch point - each poison cluster decides its own onset-phase (early
         // warning) entity.Stats effect here, using the multipliers already read off the
         // WatchedAttributes entry in ApplyEffect. A cluster with no distinct onset symptom
         // returns Array.Empty<StatModifier>().
-        private static IReadOnlyList<StatModifier> DetermineOnsetStatModifiers(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
+        private IReadOnlyList<StatModifier> DetermineOnsetStatModifiers(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
         {
             switch (cluster)
             {
                 case "TOXICPOISON":
+                    return ToxicHealingDip;
                 case "NOXIOUSPOISON":
                 case "CARDIACPOISON":
                 case "NEUROTOXICPOISON":
@@ -434,7 +452,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         // PLACEHOLDER dispatch point - each poison cluster decides its own onset-phase DoT here,
         // if it has one. No cluster currently needs a DoT before its full effect kicks in.
-        private static DoTSpec? DetermineOnsetDoTEffect(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
+        private DoTSpec? DetermineOnsetDoTEffect(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
         {
             switch (cluster)
             {
@@ -454,11 +472,15 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // decide each cluster's real full-phase entity.Stats effect here, using the multipliers
         // already read off the WatchedAttributes entry in ApplyEffect. Applied once onset
         // completes (or immediately, for an effect constructed already past its onset window).
-        private static IReadOnlyList<StatModifier> DetermineFullStatModifiers(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
+        private IReadOnlyList<StatModifier> DetermineFullStatModifiers(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
         {
             switch (cluster)
             {
                 case "TOXICPOISON":
+                    // The healing dip carries over unchanged from the onset phase whether or not
+                    // the liver-failure DoT below ends up starting - below the 15% threshold this
+                    // dip is the exposure's entire effect, fading only when its own timer ends.
+                    return ToxicHealingDip;
                 case "NOXIOUSPOISON":
                 case "CARDIACPOISON":
                 case "NEUROTOXICPOISON":
@@ -478,14 +500,19 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         // PLACEHOLDER dispatch point - Plan 12 decides each cluster's real full-phase DoT effect
         // here, using the multipliers already read off the WatchedAttributes entry in ApplyEffect.
-        private static DoTSpec? DetermineFullDoTEffect(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
+        private DoTSpec? DetermineFullDoTEffect(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
         {
             switch (cluster)
             {
                 case "TOXICPOISON":
-                    /* PLACEHOLDER - Plan 12 decides Toxic Poison's real liver-failure DoT here, once
-                       the design's 15%-of-undiscounted-magnitude threshold and tolerance discount are
-                       both available to this method. */
+                    // Liver failure only actually triggers once the tolerance-discounted effect
+                    // reaches 15% of this exposure's own undiscounted magnitude - a percentage of
+                    // that exposure's own dose, not of 1.0, so a weak dose and a strong dose cross
+                    // out of DoT range at the same tolerance tier regardless of their raw strength.
+                    if (ToxicToleranceDiscountedEffect(effectMult) >= 0.15f * effectMult)
+                    {
+                        return BuildEffectivelyForeverDoT(EnumDamageSource.Internal, EnumDamageType.Poison, damageTier: 0, damagePerSecond: 1.5f);
+                    }
                     break;
                 case "NOXIOUSPOISON":
                 case "CARDIACPOISON":
@@ -504,11 +531,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // cluster's own max-health mechanic) is decided here, via
         // EntityBehaviorHealth.SetMaxHealthModifiers rather than entity.Stats (which cannot touch
         // max health at all). A cluster with no max-health mechanic returns null.
-        private static MaxHealthModifier? DetermineFullMaxHealthModifier(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
+        private MaxHealthModifier? DetermineFullMaxHealthModifier(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
         {
             switch (cluster)
             {
-                case "TOXICPOISON":
+                case "TOXICPOISON": // liver failure has no max-health component
                 case "NOXIOUSPOISON":
                 case "CARDIACPOISON":
                 case "NEUROTOXICPOISON":
@@ -604,14 +631,26 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         // Builds a DoTSpec for a poison whose damage never tapers off or ends naturally, at an
         // exact damagePerSecond rate (TotalDamage/TicksNumber is chosen so ApplyDoTEffect's own
-        // per-tick math reproduces that rate).
-        private static DoTSpec BuildEffectivelyForeverDoT(EnumDamageSource damageSource, EnumDamageType damageType, int damageTier, float damagePerSecond)
+        // per-tick math reproduces that rate). Internal rather than private: Toxic Poison's
+        // arrow-hit bonus DoT (Patch_ArrowPoisonDelivery) builds its own reduced-rate instance
+        // from this same helper instead of duplicating the tick-math.
+        internal static DoTSpec BuildEffectivelyForeverDoT(EnumDamageSource damageSource, EnumDamageType damageType, int damageTier, float damagePerSecond)
         {
             int ticksNumber = (int)(EffectivelyForeverDoTDuration.TotalSeconds / EffectivelyForeverTickSeconds);
             float damagePerTick = damagePerSecond * EffectivelyForeverTickSeconds;
             float totalDamage = damagePerTick * ticksNumber;
             return new DoTSpec(damageSource, damageType, damageTier, totalDamage, EffectivelyForeverDoTDuration, ticksNumber);
         }
+
+        // Identifies the arrow-delivered secondary Toxic DoT (Patch_ArrowPoisonDelivery) to
+        // EntityBehaviorHealth's ActiveDoTEffects list and to a poison-caused death's own
+        // DamageSource, since ProcessDoTEffects rebuilds a bare DamageSource per tick carrying
+        // only Source/Type/DamageTier - DamageTier is the only field that survives into
+        // OnEntityDeath's damageSourceForDeath, so it doubles as this DoT's own identity there.
+        // Kept separate from every other Toxic-caused damage (tier 0) so an animal's meat is only
+        // suppressed when this specific bonus DoT lands the killing blow, not any other Toxic hit.
+        internal const int ArrowBonusToxicDoTEffectType = -19342;
+        internal const int ArrowBonusToxicDoTDamageTier = 1;
 
         //============== WORLD SAVE ==============//
 
