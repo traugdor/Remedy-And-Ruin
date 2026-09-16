@@ -270,6 +270,13 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         private readonly Entity entity;
         private readonly ConcurrentDictionary<Guid, EffectTimerThread> threads = new ConcurrentDictionary<Guid, EffectTimerThread>();
 
+        // Full-phase side effects that live outside the StatModifier/DoT/MaxHealthModifier
+        // pipeline (Noxious Poison's fever hold, psychedelic hold, and vomit-roll; Mind Poison's
+        // eventual equivalent) - each is a bare game tick listener id, keyed by the owning
+        // effect's Guid so ApplyClusterFullPhaseSideEffects/RemoveClusterFullPhaseSideEffects can
+        // start and tear them down without the StatModifiers/DoT machinery knowing about them.
+        private readonly ConcurrentDictionary<Guid, List<long>> clusterSideEffectListeners = new ConcurrentDictionary<Guid, List<long>>();
+
         private readonly object saveLock = new object();
         private ConcurrentBag<ActiveEffectReport> pendingSaveReports;
         private CountdownEvent pendingSaveCountdown;
@@ -375,6 +382,14 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     ApplyMaxHealthModifier(thread);
                 }, "rrEffectApply");
             }
+
+            // A thread constructed already past its own onset window starts directly in the full
+            // phase (see EffectTimerThread's constructor) - its full-phase side effects need to
+            // start immediately too, not wait for an OnOnsetComplete that will never fire.
+            if (onsetCompleteTotalHours <= totalHoursNow)
+            {
+                entity.Api.Event.EnqueueMainThreadTask(() => ApplyClusterFullPhaseSideEffects(thread), "rrEffectApplySideEffects");
+            }
         }
 
         // Baseline onset-delay hours for this cluster at onsetMultiplier 1.0 - the design doc's
@@ -391,6 +406,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     // Death Cap/Funeral Bell/Fool's Conecap gives a 1.6-2h real reaction window.
                     return 2.0;
                 case "NOXIOUSPOISON":
+                    // The ingredient table's own onset column (0.2-0.5) belongs to the secondary
+                    // Toxic sliver, not Noxious's own primary onset - no dedicated primary-onset
+                    // baseline is given, so 1.5h is used for consistency with Toxic's 2h baseline.
+                    return 1.5;
                 case "CARDIACPOISON":
                 case "NEUROTOXICPOISON":
                 case "MINDPOISON":
@@ -427,6 +446,15 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return Math.Max(0f, effectMult - discount);
         }
 
+        // Same tiered discount as ToxicToleranceDiscountedEffect, read against noxiousTolerance -
+        // drives Noxious Poison's fever/tripping/vomit-roll intensity uniformly.
+        private float NoxiousToleranceDiscountedEffect(float effectMult)
+        {
+            int tolerance = entity.GetBehavior<EntityBehaviorRemedyEffects>()?.noxiousTolerance ?? 0;
+            float discount = (float)(tolerance / 3) / 9.0f;
+            return Math.Max(0f, effectMult - discount);
+        }
+
         private static readonly StatModifier[] ToxicHealingDip = { new StatModifier("healingeffectivness", -0.15f) };
 
         // PLACEHOLDER dispatch point - each poison cluster decides its own onset-phase (early
@@ -440,6 +468,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 case "TOXICPOISON":
                     return ToxicHealingDip;
                 case "NOXIOUSPOISON":
+                    // No distinct early-warning symptom - the onset delay is a silent reaction
+                    // window only, the full GI-irritation package below applies with no ramp-up.
+                    break;
                 case "CARDIACPOISON":
                 case "NEUROTOXICPOISON":
                 case "MINDPOISON":
@@ -457,7 +488,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             switch (cluster)
             {
                 case "TOXICPOISON":
-                case "NOXIOUSPOISON":
+                case "NOXIOUSPOISON": // no DoT at any phase - deliberately non-lethal
                 case "CARDIACPOISON":
                 case "NEUROTOXICPOISON":
                 case "MINDPOISON":
@@ -482,6 +513,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     // dip is the exposure's entire effect, fading only when its own timer ends.
                     return ToxicHealingDip;
                 case "NOXIOUSPOISON":
+                    // Fever, psychedelic tripping, and the vomit-roll all apply outside the
+                    // entity.Stats pipeline (see ApplyClusterFullPhaseSideEffects below) - this
+                    // cluster has no entity.Stats-based component of its own.
+                    break;
                 case "CARDIACPOISON":
                 case "NEUROTOXICPOISON":
                 case "MINDPOISON":
@@ -514,7 +549,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                         return BuildEffectivelyForeverDoT(EnumDamageSource.Internal, EnumDamageType.Poison, damageTier: 0, damagePerSecond: 1.5f);
                     }
                     break;
-                case "NOXIOUSPOISON":
+                case "NOXIOUSPOISON": // deliberately non-lethal - no DoT at any point
                 case "CARDIACPOISON":
                 case "NEUROTOXICPOISON":
                 case "MINDPOISON":
@@ -536,7 +571,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             switch (cluster)
             {
                 case "TOXICPOISON": // liver failure has no max-health component
-                case "NOXIOUSPOISON":
+                case "NOXIOUSPOISON": // fever/tripping/vomiting has no max-health component
                 case "CARDIACPOISON":
                 case "NEUROTOXICPOISON":
                 case "MINDPOISON":
@@ -617,6 +652,75 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             // contributing to MaxHealth. This restores headroom only; it does not itself heal the
             // entity back up.
             health.SetMaxHealthModifiers(t.Guid.ToString(), 0f);
+        }
+
+        // Noxious Poison's fever hold reaches ~2C above normal body temperature at full
+        // (tolerance-discounted) strength - within the real fever range, well short of vanilla's
+        // own 31-45C hard clamp in EntityBehaviorBodyTemperature.
+        private const float NoxiousFeverDegreesAtFullStrength = 2.0f;
+
+        // Matches vanilla's own strongest single-dose mushroom (Blue Meanie, psychedelic 2 -
+        // see 02-design-overview.md's Mind Poison ingredient table) at full strength, scaling
+        // down with tolerance discount the same way the fever and vomit-roll do.
+        private const float NoxiousPsychedelicIntensityAtFullStrength = 2.0f;
+
+        // Midpoint of the 30-60s full-strength vomit interval range (Decisions locked in, plan
+        // 12) - StartRepeatingVomitRoll jitters around this and divides by the discounted
+        // multiplier itself.
+        private const double NoxiousVomitRollBaseIntervalSeconds = 45.0;
+
+        // Full-phase side effects that live outside the StatModifier/DoT/MaxHealthModifier
+        // pipeline - dispatches per cluster and records whatever listener ids it starts so
+        // RemoveClusterFullPhaseSideEffects can tear them down symmetrically. A cluster with none
+        // of these (every cluster but Noxious, for now) is a no-op.
+        private void ApplyClusterFullPhaseSideEffects(EffectTimerThread t)
+        {
+            if (t.Bucket != EffectBucket.Poison) return;
+
+            List<long> listeners;
+            switch (t.Cluster)
+            {
+                case "NOXIOUSPOISON":
+                    listeners = StartNoxiousFullPhaseSideEffects(t.EffectMult);
+                    break;
+                default:
+                    return;
+            }
+
+            if (listeners.Count > 0)
+            {
+                clusterSideEffectListeners[t.Guid] = listeners;
+            }
+        }
+
+        private List<long> StartNoxiousFullPhaseSideEffects(float effectMult)
+        {
+            var listeners = new List<long>();
+            var remedyEffects = entity.GetBehavior<EntityBehaviorRemedyEffects>();
+            if (remedyEffects == null) return listeners;
+
+            float discounted = NoxiousToleranceDiscountedEffect(effectMult);
+
+            long feverListener = remedyEffects.StartFeverHold(NoxiousFeverDegreesAtFullStrength * discounted);
+            if (feverListener != 0L) listeners.Add(feverListener);
+
+            long psychedelicListener = remedyEffects.StartPsychedelicHold(NoxiousPsychedelicIntensityAtFullStrength * discounted);
+            if (psychedelicListener != 0L) listeners.Add(psychedelicListener);
+
+            long vomitListener = remedyEffects.StartRepeatingVomitRoll(NoxiousVomitRollBaseIntervalSeconds, discounted);
+            if (vomitListener != 0L) listeners.Add(vomitListener);
+
+            return listeners;
+        }
+
+        private void RemoveClusterFullPhaseSideEffects(Guid effectGuid)
+        {
+            if (!clusterSideEffectListeners.TryRemove(effectGuid, out List<long> listeners)) return;
+
+            foreach (long id in listeners)
+            {
+                entity.World.UnregisterGameTickListener(id);
+            }
         }
 
         // The engine's own ApplyDoTEffect (EntityBehaviorHealth.cs ~line 451) has no infinite
@@ -758,6 +862,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 RemoveStatModifiers(t);
                 RemoveDoT(t);
                 RemoveMaxHealthModifier(t);
+                RemoveClusterFullPhaseSideEffects(t.Guid);
 
                 if (t.Bucket == EffectBucket.Poison)
                 {
@@ -787,6 +892,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 RemoveStatModifiers(t);
                 RemoveDoT(t);
                 RemoveMaxHealthModifier(t);
+                RemoveClusterFullPhaseSideEffects(t.Guid);
                 RemoveGuidsFromWatchedAttributes(new[] { t.Guid });
 
                 if (t.Bucket == EffectBucket.Poison)
@@ -810,6 +916,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 ApplyStatModifiers(t);
                 ApplyDoT(t);
                 ApplyMaxHealthModifier(t);
+                ApplyClusterFullPhaseSideEffects(t);
             }, "rrEffectOnsetComplete");
         }
 

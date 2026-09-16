@@ -672,6 +672,22 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     ApplyAntidoteAftermathEffect();
                 }
             }
+
+            // A mushroom carrying a secondary Toxic sliver (toxicEffectMultiplier > 0 - Noxious
+            // Poison's non-Witch's-Hat entries, Mind Poison's Laughing Jim/Fly Agaric) spawns a
+            // fully independent Toxic Poison exposure alongside its primary effect: its own timer,
+            // its own tolerance track, going through this exact same ApplyEffect path a primary
+            // Toxic exposure would use - not a modifier layered onto the primary instance.
+            if (poison && effect.cluster != EffectCluster.TOXICPOISON && effect.toxicEffectMultiplier > 0f)
+            {
+                EffectStruct secondary = new EffectStruct(EffectCluster.TOXICPOISON)
+                {
+                    isPoison = true,
+                    effectMultiplier = effect.toxicEffectMultiplier,
+                    onsetMultiplier = effect.toxicOnsetMultiplier
+                };
+                ApplyEffect(secondary, forceIneligibleForTolerance);
+            }
         }
 
         public void OnAnyItemConsumed(ItemStack stack, IWorldAccessor world)
@@ -795,6 +811,42 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             double jitteredSeconds = baseIntervalSeconds * (2.0 / 3.0 + new Random().NextDouble() * (2.0 / 3.0));
             double scaledSeconds = jitteredSeconds / Math.Max(effectiveMultiplier, minMultiplierFloor);
             return Math.Min(scaledSeconds, MaxVomitRollIntervalSeconds);
+        }
+
+        /// <summary>
+        /// Holds body temperature at NormalBodyTemperature + temperatureDelta for as long as the
+        /// returned listener runs. EntityBehaviorBodyTemperature recomputes CurBodyTemperature
+        /// from ambient conditions every second on its own tick, with no external "fever" input -
+        /// this has to keep re-asserting the target against that recomputation rather than set it
+        /// once. Returns 0 (no listener registered) if the entity has no body-temperature
+        /// behavior.
+        /// </summary>
+        public long StartFeverHold(float temperatureDelta)
+        {
+            var bodyTemp = entity.GetBehavior<EntityBehaviorBodyTemperature>();
+            if (bodyTemp == null) return 0L;
+
+            return entity.World.RegisterGameTickListener(dt =>
+            {
+                bodyTemp.CurBodyTemperature = bodyTemp.NormalBodyTemperature + temperatureDelta;
+            }, 1000);
+        }
+
+        /// <summary>
+        /// Holds vanilla's own "psychedelic" watched-attribute float (the same one eating a
+        /// psychedelic mushroom raises - FoodNutritionProperties.Psychedelic, read by
+        /// PsychedelicPerceptionEffect) at intensity, clamped to vanilla's own 0-2 range.
+        /// EntityBehaviorHunger's detox tick continuously drains this attribute, so holding it for
+        /// a multi-hour effect needs the same repeated-set approach as StartFeverHold rather than
+        /// a single write.
+        /// </summary>
+        public long StartPsychedelicHold(float intensity)
+        {
+            float clamped = GameMath.Clamp(intensity, 0f, 2f);
+            return entity.World.RegisterGameTickListener(dt =>
+            {
+                entity.WatchedAttributes.SetFloat("psychedelic", clamped);
+            }, 1000);
         }
     }
 
