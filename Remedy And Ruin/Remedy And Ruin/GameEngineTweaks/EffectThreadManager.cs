@@ -660,19 +660,28 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             if (health == null) return;
 
             float value = t.MaxHealthMod.Value.Value;
+            float healthBeforeClamp = health.Health;
             health.SetMaxHealthModifiers(t.Guid.ToString(), value);
 
-            // SetMaxHealthModifiers only ever changes MaxHealth (EntityBehaviorHealth.cs
-            // ~line 359-380) - the matching hit to current health has to land as its own damage
-            // event, since the engine never lets current health silently follow a max-health drop.
+            // SetMaxHealthModifiers's own UpdateMaxHealth (EntityBehaviorHealth.cs ~line 388-406)
+            // clamps current Health down to the new, lower MaxHealth whenever the entity was
+            // already at or above it - a player at full health has already absorbed some or all
+            // of a negative modifier's hit through that clamp alone before any damage event fires.
+            // Only apply the remaining, not-yet-clamped portion as explicit damage, or a full-HP
+            // player takes the flat hit twice (once via the clamp, once via ReceiveDamage).
             if (value < 0f)
             {
-                entity.ReceiveDamage(new DamageSource
+                float clampedAlready = healthBeforeClamp - health.Health;
+                float remainingDamage = -value - clampedAlready;
+                if (remainingDamage > 0f)
                 {
-                    Source = EnumDamageSource.Internal,
-                    Type = EnumDamageType.Poison,
-                    IgnoreInvFrames = true
-                }, -value);
+                    entity.ReceiveDamage(new DamageSource
+                    {
+                        Source = EnumDamageSource.Internal,
+                        Type = EnumDamageType.Poison,
+                        IgnoreInvFrames = true
+                    }, remainingDamage);
+                }
             }
         }
 
