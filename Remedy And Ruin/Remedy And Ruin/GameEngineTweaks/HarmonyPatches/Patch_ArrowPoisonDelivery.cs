@@ -16,11 +16,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
     ///
     /// Toxic Poison's coated-arrow effect is its own bespoke mechanic (flat bonus damage plus a
     /// chance of a smaller bonus DoT) rather than the same delayed onset/liver-failure package
-    /// drinking uses - see ApplyToxicArrowHit. Noxious Poison's arrow-hit is a chance gate around
-    /// the same drinking-equivalent package (fever/tripping/vomit-roll) - see ApplyNoxiousArrowHit.
-    /// Every other cluster still routes through EntityBehaviorRemedyEffects.ApplyEffect
-    /// unconditionally, the same path drinking uses, until its own task replaces this with its
-    /// real per-cluster chance.
+    /// drinking uses - see ApplyToxicArrowHit. Noxious Poison's and Cardiac Poison's arrow-hits
+    /// are each a chance gate around the same drinking-equivalent package - see
+    /// ApplyNoxiousArrowHit/ApplyCardiacArrowHit. Every other cluster still routes through
+    /// EntityBehaviorRemedyEffects.ApplyEffect unconditionally, the same path drinking uses,
+    /// until its own task replaces this with its real per-cluster chance.
     /// </summary>
     [HarmonyPatch(typeof(EntityProjectileBase), "DealDamage")]
     public static class Patch_ArrowPoisonDelivery
@@ -39,6 +39,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
         // Within the design doc's "High chance" / 70-80% range - distinctly higher than
         // Mind Poison's 40-55% and Cardiac/Neurotoxic's 25-35%.
         private const double NoxiousArrowHitChance = 0.75;
+
+        // Within the design doc's own stated 25-35% range for this cluster's coated-arrow chance
+        // (02-design-overview.md ~1407).
+        private const double CardiacArrowHitChance = 0.30;
 
         public static void Postfix(EntityProjectileBase __instance, Entity target, bool __result)
         {
@@ -60,6 +64,12 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
             if (cluster == "NOXIOUSPOISON")
             {
                 ApplyNoxiousArrowHit(remedyBehavior, arrowStack);
+                return;
+            }
+
+            if (cluster == "CARDIACPOISON")
+            {
+                ApplyCardiacArrowHit(remedyBehavior, arrowStack);
                 return;
             }
 
@@ -105,6 +115,24 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
 
             float effectMultiplier = arrowStack.Attributes.GetFloat("remedyandruinArrowPoisonEffectMultiplier");
             var effect = new EntityBehaviorRemedyEffects.EffectStruct(EntityBehaviorRemedyEffects.EffectCluster.NOXIOUSPOISON)
+            {
+                isPoison = true,
+                effectMultiplier = effectMultiplier
+            };
+            remedyBehavior.ApplyEffect(effect, forceIneligibleForTolerance: true);
+        }
+
+        // A missed roll applies nothing at all - not even a partial effect. A successful roll
+        // routes through the normal ApplyEffect path: the same full-phase package (flat HP hit,
+        // movement/tool debuffs, exertion-stacking watcher) and onset delay drinking triggers,
+        // just gated behind this chance roll first - drinking itself stays ungated (100%,
+        // unchanged by this patch).
+        private static void ApplyCardiacArrowHit(EntityBehaviorRemedyEffects remedyBehavior, ItemStack arrowStack)
+        {
+            if (new Random().NextDouble() >= CardiacArrowHitChance) return;
+
+            float effectMultiplier = arrowStack.Attributes.GetFloat("remedyandruinArrowPoisonEffectMultiplier");
+            var effect = new EntityBehaviorRemedyEffects.EffectStruct(EntityBehaviorRemedyEffects.EffectCluster.CARDIACPOISON)
             {
                 isPoison = true,
                 effectMultiplier = effectMultiplier
