@@ -518,10 +518,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         private static readonly StatModifier[] ToxicHealingDip = { new StatModifier("healingeffectivness", -0.15f) };
 
-        // PLACEHOLDER dispatch point - each poison cluster decides its own onset-phase (early
-        // warning) entity.Stats effect here, using the multipliers already read off the
-        // WatchedAttributes entry in ApplyEffect. A cluster with no distinct onset symptom
-        // returns Array.Empty<StatModifier>().
+        // Dispatch point for each poison cluster's onset-phase (early warning) entity.Stats
+        // effect, using the multipliers already read off the WatchedAttributes entry in
+        // ApplyEffect. A cluster with no distinct onset symptom returns Array.Empty<StatModifier>().
+        // Remedy-potion clusters (Plan 13) still fall through to that empty default.
         private IReadOnlyList<StatModifier> DetermineOnsetStatModifiers(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier, int doseNumber, float ladderWeight)
         {
             switch (cluster)
@@ -542,8 +542,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return Array.Empty<StatModifier>();
         }
 
-        // PLACEHOLDER dispatch point - each poison cluster decides its own onset-phase DoT here,
-        // if it has one. No cluster currently needs a DoT before its full effect kicks in.
+        // Dispatch point for each poison cluster's onset-phase DoT, if it has one. No cluster
+        // currently needs a DoT before its full effect kicks in.
         private DoTSpec? DetermineOnsetDoTEffect(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier, int doseNumber, float ladderWeight)
         {
             switch (cluster)
@@ -560,10 +560,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return null;
         }
 
-        // PLACEHOLDER dispatch point - Plan 12 (poison clusters) and Plan 13 (remedy potions)
-        // decide each cluster's real full-phase entity.Stats effect here, using the multipliers
-        // already read off the WatchedAttributes entry in ApplyEffect. Applied once onset
-        // completes (or immediately, for an effect constructed already past its onset window).
+        // Dispatch point for each cluster's real full-phase entity.Stats effect, using the
+        // multipliers already read off the WatchedAttributes entry in ApplyEffect. Applied once
+        // onset completes (or immediately, for an effect constructed already past its onset
+        // window). All five poison clusters are filled in; the eight remedy-potion clusters
+        // (Plan 13) still fall through to the empty default below.
         private IReadOnlyList<StatModifier> DetermineFullStatModifiers(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier, int doseNumber, float ladderWeight)
         {
             switch (cluster)
@@ -596,8 +597,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return Array.Empty<StatModifier>();
         }
 
-        // PLACEHOLDER dispatch point - Plan 12 decides each cluster's real full-phase DoT effect
-        // here, using the multipliers already read off the WatchedAttributes entry in ApplyEffect.
+        // Dispatch point for each cluster's real full-phase DoT effect, using the multipliers
+        // already read off the WatchedAttributes entry in ApplyEffect.
         private DoTSpec? DetermineFullDoTEffect(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier, int doseNumber, float ladderWeight)
         {
             switch (cluster)
@@ -624,10 +625,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return null;
         }
 
-        // PLACEHOLDER dispatch point - Cardiac Poison's flat max-health hit (and any other
-        // cluster's own max-health mechanic) is decided here, via
-        // EntityBehaviorHealth.SetMaxHealthModifiers rather than entity.Stats (which cannot touch
-        // max health at all). A cluster with no max-health mechanic returns null.
+        // Dispatch point for each cluster's own max-health mechanic (Cardiac Poison's flat hit,
+        // Neurotoxic's dose-3 inheritance of it), via EntityBehaviorHealth.SetMaxHealthModifiers
+        // rather than entity.Stats (which cannot touch max health at all). A cluster with no
+        // max-health mechanic returns null.
         private MaxHealthModifier? DetermineFullMaxHealthModifier(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier, int doseNumber, float ladderWeight)
         {
             switch (cluster)
