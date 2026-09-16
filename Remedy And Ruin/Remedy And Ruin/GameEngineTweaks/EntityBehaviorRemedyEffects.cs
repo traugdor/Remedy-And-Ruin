@@ -750,9 +750,46 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                         stomach.GetType().GetProperty("ExpandedStomachMeter")?.SetValue(stomach, 0f); //drain stomach first so it doesn't intercept the next call
                     }
                 }
-                hunger.Saturation -= amountToDrain; //ExpandedStomach will intercept this if it's not empty... 
+                hunger.Saturation -= amountToDrain; //ExpandedStomach will intercept this if it's not empty...
             }
             //TODO: wire in chance for additional void events if not triggered by antidote
+        }
+
+        private const double MaxVomitRollIntervalSeconds = 600.0;
+
+        /// <summary>
+        /// Registers a repeating, randomized vomit roll: once each interval elapses it always
+        /// vomits (VoidStomachContents(1.0), not a probability check - the interval itself is the
+        /// randomization). Each cycle's interval is baseIntervalSeconds jittered by +/-1/3 (pass
+        /// the midpoint of the desired spread, e.g. 45 for a 30-60s range at full strength),
+        /// divided by effectiveMultiplier (floored at minMultiplierFloor so a heavily
+        /// tolerance-discounted dose still eventually rolls) and capped at
+        /// MaxVomitRollIntervalSeconds. Returns the game tick listener id so the caller can
+        /// unregister it once its own effect ends - this method has no opinion on that lifetime.
+        /// Not for Mind Poison's move-triggered vomiting, which is event-driven rather than
+        /// interval-driven and needs its own mechanism.
+        /// </summary>
+        public long StartRepeatingVomitRoll(double baseIntervalSeconds, float effectiveMultiplier, float minMultiplierFloor = 0.05f)
+        {
+            double elapsedSeconds = 0.0;
+            double targetSeconds = NextVomitRollIntervalSeconds(baseIntervalSeconds, effectiveMultiplier, minMultiplierFloor);
+
+            return entity.World.RegisterGameTickListener(dt =>
+            {
+                elapsedSeconds += dt;
+                if (elapsedSeconds < targetSeconds) return;
+
+                elapsedSeconds = 0.0;
+                targetSeconds = NextVomitRollIntervalSeconds(baseIntervalSeconds, effectiveMultiplier, minMultiplierFloor);
+                VoidStomachContents(1.0);
+            }, 1000);
+        }
+
+        private static double NextVomitRollIntervalSeconds(double baseIntervalSeconds, float effectiveMultiplier, float minMultiplierFloor)
+        {
+            double jitteredSeconds = baseIntervalSeconds * (2.0 / 3.0 + new Random().NextDouble() * (2.0 / 3.0));
+            double scaledSeconds = jitteredSeconds / Math.Max(effectiveMultiplier, minMultiplierFloor);
+            return Math.Min(scaledSeconds, MaxVomitRollIntervalSeconds);
         }
     }
 

@@ -51,6 +51,18 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         }
     }
 
+    /// <summary>
+    /// A flat, persistent adjustment to an entity's max health via
+    /// EntityBehaviorHealth.SetMaxHealthModifiers - additively summed with every other keyed
+    /// modifier into MaxHealth. No Category/key field: EffectThreadManager always keys this by
+    /// the owning effect's own Guid, exactly like StatModifier's entity.Stats key.
+    /// </summary>
+    public readonly struct MaxHealthModifier
+    {
+        public readonly float Value;
+        public MaxHealthModifier(float value) { Value = value; }
+    }
+
     internal sealed class ActiveEffectReport
     {
         public Guid Guid;
@@ -60,8 +72,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         public float EffectOnset;
         public double StartTotalHours;
         public double EndTotalHours;
+        public double OnsetCompleteTotalHours;
         public string SecondaryEffectType;
         public float? SecondaryEffectMult;
+        public float? SecondaryEffectOnsetMult;
         public bool EligibleForTolerance;
     }
 
@@ -88,30 +102,47 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         public float EffectOnset { get; }
         public double StartTotalHours { get; }
         public double EndTotalHours { get; }
+        public double OnsetCompleteTotalHours { get; }
         public string SecondaryEffectType { get; }
         public float? SecondaryEffectMult { get; }
-        public IReadOnlyList<StatModifier> StatModifiers { get; }
-        public DoTSpec? DoT { get; }
+        public float? SecondaryEffectOnsetMult { get; }
+
+        // The effect's currently-active package - onset-phase values until the onset transition
+        // fires (or full-phase values from the start, for a thread constructed already past its
+        // own onset window). TransitionToFullPhase is the only thing that ever changes these.
+        public IReadOnlyList<StatModifier> StatModifiers { get; private set; }
+        public DoTSpec? DoT { get; private set; }
+        public MaxHealthModifier? MaxHealthMod { get; private set; }
+
+        // The full-phase package, held alongside the active one above so the onset-transition
+        // callback knows what to switch to without having to re-derive it.
+        public IReadOnlyList<StatModifier> FullStatModifiers { get; }
+        public DoTSpec? FullDoT { get; }
+        public MaxHealthModifier? FullMaxHealthModifier { get; }
+
         public bool EligibleForTolerance { get; }
 
         private static readonly TimeSpan CalendarPollInterval = TimeSpan.FromSeconds(10);
 
         private readonly Func<double> getTotalHours;
+        private bool onsetTransitioned;
         private readonly ManualResetEventSlim saveRequested = new ManualResetEventSlim(false);
         private readonly ManualResetEventSlim forceStopRequested = new ManualResetEventSlim(false);
         private readonly ManualResetEventSlim disconnectRequested = new ManualResetEventSlim(false);
 
         public EffectTimerThread(
             Guid guid, EffectBucket bucket, string cluster, float effectMult, float effectOnset,
-            double startTotalHours, double endTotalHours, Func<double> getTotalHours,
-            string secondaryEffectType, float? secondaryEffectMult,
-            IReadOnlyList<StatModifier> statModifiers,
-            DoTSpec? dot,
+            double startTotalHours, double endTotalHours, double onsetCompleteTotalHours,
+            Func<double> getTotalHours,
+            string secondaryEffectType, float? secondaryEffectMult, float? secondaryEffectOnsetMult,
+            IReadOnlyList<StatModifier> onsetStatModifiers, DoTSpec? onsetDoT,
+            IReadOnlyList<StatModifier> fullStatModifiers, DoTSpec? fullDoT, MaxHealthModifier? fullMaxHealthModifier,
             bool eligibleForTolerance,
             Action<EffectTimerThread> onSaveReport,
             Action<EffectTimerThread> onNaturalEnd,
             Action<EffectTimerThread> onForcedEnd,
-            Action<EffectTimerThread> onDisconnect)
+            Action<EffectTimerThread> onDisconnect,
+            Action<EffectTimerThread> onOnsetComplete)
         {
             Guid = guid;
             Bucket = bucket;
@@ -120,21 +151,51 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             EffectOnset = effectOnset;
             StartTotalHours = startTotalHours;
             EndTotalHours = endTotalHours;
+            OnsetCompleteTotalHours = onsetCompleteTotalHours;
             SecondaryEffectType = secondaryEffectType;
             SecondaryEffectMult = secondaryEffectMult;
-            StatModifiers = statModifiers;
-            DoT = dot;
+            SecondaryEffectOnsetMult = secondaryEffectOnsetMult;
+            FullStatModifiers = fullStatModifiers ?? Array.Empty<StatModifier>();
+            FullDoT = fullDoT;
+            FullMaxHealthModifier = fullMaxHealthModifier;
             EligibleForTolerance = eligibleForTolerance;
             this.getTotalHours = getTotalHours;
 
-            System.Threading.Tasks.Task.Run(() => Run(onSaveReport, onNaturalEnd, onForcedEnd, onDisconnect));
+            // A thread resumed (save/reload, reconnect) past its own onset window already starts
+            // directly in the full phase - the onset-phase symptom, if any, never re-applies.
+            if (getTotalHours() >= OnsetCompleteTotalHours)
+            {
+                onsetTransitioned = true;
+                StatModifiers = FullStatModifiers;
+                DoT = FullDoT;
+                MaxHealthMod = FullMaxHealthModifier;
+            }
+            else
+            {
+                StatModifiers = onsetStatModifiers ?? Array.Empty<StatModifier>();
+                DoT = onsetDoT;
+                MaxHealthMod = null; // max-health modifiers only ever apply once the full phase begins
+            }
+
+            System.Threading.Tasks.Task.Run(() => Run(onSaveReport, onNaturalEnd, onForcedEnd, onDisconnect, onOnsetComplete));
         }
 
         public void RequestSaveReport() => saveRequested.Set();
         public void RequestForcedEnd() => forceStopRequested.Set();
         public void RequestDisconnect() => disconnectRequested.Set();
 
-        private void Run(Action<EffectTimerThread> onSaveReport, Action<EffectTimerThread> onNaturalEnd, Action<EffectTimerThread> onForcedEnd, Action<EffectTimerThread> onDisconnect)
+        // Swaps the active StatModifiers/DoT/MaxHealthMod over to the full-phase package. The
+        // caller is responsible for removing whatever the onset-phase package applied first -
+        // this only updates which package RemoveStatModifiers/RemoveDoT/RemoveMaxHealthModifier
+        // and their Apply* counterparts will see on their next call.
+        internal void TransitionToFullPhase()
+        {
+            StatModifiers = FullStatModifiers;
+            DoT = FullDoT;
+            MaxHealthMod = FullMaxHealthModifier;
+        }
+
+        private void Run(Action<EffectTimerThread> onSaveReport, Action<EffectTimerThread> onNaturalEnd, Action<EffectTimerThread> onForcedEnd, Action<EffectTimerThread> onDisconnect, Action<EffectTimerThread> onOnsetComplete)
         {
             WaitHandle[] handles = { saveRequested.WaitHandle, forceStopRequested.WaitHandle, disconnectRequested.WaitHandle };
             try
@@ -145,6 +206,16 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     {
                         onNaturalEnd(this);
                         return;
+                    }
+
+                    if (!onsetTransitioned && getTotalHours() >= OnsetCompleteTotalHours)
+                    {
+                        // Set before invoking the callback, not after - onOnsetComplete enqueues
+                        // its own work onto the main thread and returns immediately, so the next
+                        // loop iteration (possibly before that enqueued work has even run) must
+                        // already see this as transitioned to avoid firing it twice.
+                        onsetTransitioned = true;
+                        onOnsetComplete(this);
                     }
 
                     int signalled = WaitHandle.WaitAny(handles, CalendarPollInterval);
@@ -188,8 +259,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
     /// already read and wrote before any effect passed through here (effectname as
     /// "cluster|guid", cluster, isPoison, timestarted, timeleft, effectMultiplier,
     /// onsetMultiplier, toxicEffectMultiplier, toxicOnsetMultiplier) so a save/reload round-trip
-    /// stays readable by that code. isConcentrated and toxicOnsetMultiplier have no source data
-    /// in ApplyEffect's current parameters and are always written as false/0.
+    /// stays readable by that code. isConcentrated has no source data in ApplyEffect's current
+    /// parameters and is always written as false.
     /// </summary>
     public sealed class EffectThreadManager
     {
@@ -223,10 +294,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         public void ApplyIllnessEffect(string guid) => ApplyEffect(EffectBucket.Illness, guid);
         public void ApplyPotionEffect(string guid) => ApplyEffect(EffectBucket.Potion, guid);
 
-        // Reads the matching WatchedAttributes entry for guid, decides what entity.Stats
-        // modifiers it applies (via DetermineStatModifiers), and spawns its timer thread.
-        // effectMultiplier/onsetMultiplier are read as already-final, tolerance-discounted
-        // values - this method never applies additional tolerance math to them.
+        // Reads the matching WatchedAttributes entry for guid, decides what entity.Stats/DoT/
+        // max-health modifiers it applies for the onset and full phases (via the Determine*
+        // dispatch methods below), and spawns its timer thread. effectMultiplier/onsetMultiplier
+        // are read as already-final, tolerance-discounted values - this method never applies
+        // additional tolerance math to them.
         private void ApplyEffect(EffectBucket bucket, string guid)
         {
             var remedyEffects = entity.GetBehavior<EntityBehaviorRemedyEffects>();
@@ -248,8 +320,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             float effectMult = entry.GetFloat("effectMultiplier");
             float effectOnset = entry.GetFloat("onsetMultiplier");
             float toxicEffectMultiplier = entry.GetFloat("toxicEffectMultiplier");
+            float toxicOnsetMultiplier = entry.GetFloat("toxicOnsetMultiplier");
             double timeleft = entry.GetDouble("timeleft");
             bool eligibleForTolerance = entry.GetBool("toleranceEligible");
+            bool calendarAnchored = Remedy_And_RuinModSystem.Config.allowEffectsToExpireWhenOffline;
 
             // "now" is correct as this effect's start point the one time this method runs for a
             // given guid (parseEffectsAndApply's effectsApplied guard ensures that) - for a
@@ -259,7 +333,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             double totalHoursNow = entity.World.Calendar.TotalHours;
             double startTotalHours = totalHoursNow;
             double endTotalHours;
-            if (Remedy_And_RuinModSystem.Config.allowEffectsToExpireWhenOffline && entry.HasAttribute("absoluteEndTotalHours"))
+            if (calendarAnchored && entry.HasAttribute("absoluteEndTotalHours"))
             {
                 endTotalHours = entry.GetDouble("absoluteEndTotalHours");
             }
@@ -267,36 +341,120 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             {
                 endTotalHours = totalHoursNow + timeleft;
             }
+            double onsetCompleteTotalHours = ComputeOnsetCompleteTotalHours(entry, cluster, effectOnset, startTotalHours, totalHoursNow, calendarAnchored);
 
-            IReadOnlyList<StatModifier> statModifiers = DetermineStatModifiers(cluster, effectMult, effectOnset, toxicEffectMultiplier);
-            DoTSpec? dotSpec = DetermineDoTEffect(cluster, effectMult, effectOnset, toxicEffectMultiplier);
+            IReadOnlyList<StatModifier> onsetStatModifiers = DetermineOnsetStatModifiers(cluster, effectMult, effectOnset, toxicEffectMultiplier, toxicOnsetMultiplier);
+            DoTSpec? onsetDot = DetermineOnsetDoTEffect(cluster, effectMult, effectOnset, toxicEffectMultiplier, toxicOnsetMultiplier);
+            IReadOnlyList<StatModifier> fullStatModifiers = DetermineFullStatModifiers(cluster, effectMult, effectOnset, toxicEffectMultiplier, toxicOnsetMultiplier);
+            DoTSpec? fullDot = DetermineFullDoTEffect(cluster, effectMult, effectOnset, toxicEffectMultiplier, toxicOnsetMultiplier);
+            MaxHealthModifier? fullMaxHealthModifier = DetermineFullMaxHealthModifier(cluster, effectMult, effectOnset, toxicEffectMultiplier, toxicOnsetMultiplier);
 
             var thread = new EffectTimerThread(
                 Guid.Parse(guid), bucket, cluster, effectMult, effectOnset,
-                startTotalHours, endTotalHours, () => entity.World.Calendar.TotalHours,
-                null, null, statModifiers, dotSpec,
+                startTotalHours, endTotalHours, onsetCompleteTotalHours, () => entity.World.Calendar.TotalHours,
+                null, toxicEffectMultiplier, toxicOnsetMultiplier,
+                onsetStatModifiers, onsetDot,
+                fullStatModifiers, fullDot, fullMaxHealthModifier,
                 eligibleForTolerance,
                 onSaveReport: OnSaveReport,
                 onNaturalEnd: OnNaturalEnd,
                 onForcedEnd: OnForcedEnd,
-                onDisconnect: OnDisconnect);
+                onDisconnect: OnDisconnect,
+                onOnsetComplete: OnOnsetComplete);
 
             threads[thread.Guid] = thread;
 
-            if (statModifiers.Count > 0 || dotSpec != null)
+            if (thread.StatModifiers.Count > 0 || thread.DoT != null || thread.MaxHealthMod != null)
             {
                 entity.Api.Event.EnqueueMainThreadTask(() =>
                 {
                     ApplyStatModifiers(thread);
                     ApplyDoT(thread);
+                    ApplyMaxHealthModifier(thread);
                 }, "rrEffectApply");
             }
         }
 
+        // Baseline onset-delay hours for this cluster at onsetMultiplier 1.0 - the design doc's
+        // ingredient tables give onset as a multiplier, not raw hours, so each cluster supplies
+        // its own baseline here once its effect logic exists. 0 means "no onset delay yet" (the
+        // full-phase package applies immediately), the correct placeholder until a cluster's own
+        // task fills in its real value.
+        private static double BaselineOnsetHours(string cluster)
+        {
+            switch (cluster)
+            {
+                case "TOXICPOISON":
+                case "NOXIOUSPOISON":
+                case "CARDIACPOISON":
+                case "NEUROTOXICPOISON":
+                case "MINDPOISON":
+                    return 0.0;
+                default:
+                    return 0.0;
+            }
+        }
+
+        // Mirrors how endTotalHours is derived from timeleft/absoluteEndTotalHours just above:
+        // a brand-new entry (no persisted onset progress yet) derives its onset window fresh from
+        // this cluster's baseline; a reloaded/reconnected one resumes the same window it already
+        // had, which is what lets an effect already past onset skip straight to the full phase.
+        private static double ComputeOnsetCompleteTotalHours(TreeAttribute entry, string cluster, float effectOnset, double startTotalHours, double totalHoursNow, bool calendarAnchored)
+        {
+            if (calendarAnchored && entry.HasAttribute("absoluteOnsetCompleteTotalHours"))
+            {
+                return entry.GetDouble("absoluteOnsetCompleteTotalHours");
+            }
+            if (entry.HasAttribute("onsetTimeLeft"))
+            {
+                return totalHoursNow + entry.GetDouble("onsetTimeLeft");
+            }
+            return startTotalHours + BaselineOnsetHours(cluster) * effectOnset;
+        }
+
+        // PLACEHOLDER dispatch point - each poison cluster decides its own onset-phase (early
+        // warning) entity.Stats effect here, using the multipliers already read off the
+        // WatchedAttributes entry in ApplyEffect. A cluster with no distinct onset symptom
+        // returns Array.Empty<StatModifier>().
+        private static IReadOnlyList<StatModifier> DetermineOnsetStatModifiers(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
+        {
+            switch (cluster)
+            {
+                case "TOXICPOISON":
+                case "NOXIOUSPOISON":
+                case "CARDIACPOISON":
+                case "NEUROTOXICPOISON":
+                case "MINDPOISON":
+                    break;
+                default:
+                    break;
+            }
+            return Array.Empty<StatModifier>();
+        }
+
+        // PLACEHOLDER dispatch point - each poison cluster decides its own onset-phase DoT here,
+        // if it has one. No cluster currently needs a DoT before its full effect kicks in.
+        private static DoTSpec? DetermineOnsetDoTEffect(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
+        {
+            switch (cluster)
+            {
+                case "TOXICPOISON":
+                case "NOXIOUSPOISON":
+                case "CARDIACPOISON":
+                case "NEUROTOXICPOISON":
+                case "MINDPOISON":
+                    break;
+                default:
+                    break;
+            }
+            return null;
+        }
+
         // PLACEHOLDER dispatch point - Plan 12 (poison clusters) and Plan 13 (remedy potions)
-        // decide each cluster's real entity.Stats/DoT effect here, using the multipliers already
-        // read off the WatchedAttributes entry in ApplyEffect.
-        private static IReadOnlyList<StatModifier> DetermineStatModifiers(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier)
+        // decide each cluster's real full-phase entity.Stats effect here, using the multipliers
+        // already read off the WatchedAttributes entry in ApplyEffect. Applied once onset
+        // completes (or immediately, for an effect constructed already past its onset window).
+        private static IReadOnlyList<StatModifier> DetermineFullStatModifiers(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
         {
             switch (cluster)
             {
@@ -318,9 +476,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return Array.Empty<StatModifier>();
         }
 
-        // PLACEHOLDER dispatch point - Plan 12 decides each cluster's real DoT effect here, using
-        // the multipliers already read off the WatchedAttributes entry in ApplyEffect.
-        private static DoTSpec? DetermineDoTEffect(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier)
+        // PLACEHOLDER dispatch point - Plan 12 decides each cluster's real full-phase DoT effect
+        // here, using the multipliers already read off the WatchedAttributes entry in ApplyEffect.
+        private static DoTSpec? DetermineFullDoTEffect(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
         {
             switch (cluster)
             {
@@ -337,6 +495,26 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     break;
                 default:
                     /* Remedy potions don't use DoT. */
+                    break;
+            }
+            return null;
+        }
+
+        // PLACEHOLDER dispatch point - Cardiac Poison's flat max-health hit (and any other
+        // cluster's own max-health mechanic) is decided here, via
+        // EntityBehaviorHealth.SetMaxHealthModifiers rather than entity.Stats (which cannot touch
+        // max health at all). A cluster with no max-health mechanic returns null.
+        private static MaxHealthModifier? DetermineFullMaxHealthModifier(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier)
+        {
+            switch (cluster)
+            {
+                case "TOXICPOISON":
+                case "NOXIOUSPOISON":
+                case "CARDIACPOISON":
+                case "NEUROTOXICPOISON":
+                case "MINDPOISON":
+                    break;
+                default:
                     break;
             }
             return null;
@@ -375,6 +553,64 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             if (health == null) return;
 
             health.StopDoTEffect(t.Guid.GetHashCode());
+        }
+
+        private void ApplyMaxHealthModifier(EffectTimerThread t)
+        {
+            if (t.MaxHealthMod == null) return;
+            var health = entity.GetBehavior<EntityBehaviorHealth>();
+            if (health == null) return;
+
+            float value = t.MaxHealthMod.Value.Value;
+            health.SetMaxHealthModifiers(t.Guid.ToString(), value);
+
+            // SetMaxHealthModifiers only ever changes MaxHealth (EntityBehaviorHealth.cs
+            // ~line 359-380) - the matching hit to current health has to land as its own damage
+            // event, since the engine never lets current health silently follow a max-health drop.
+            if (value < 0f)
+            {
+                entity.ReceiveDamage(new DamageSource
+                {
+                    Source = EnumDamageSource.Internal,
+                    Type = EnumDamageType.Poison,
+                    IgnoreInvFrames = true
+                }, -value);
+            }
+        }
+
+        private void RemoveMaxHealthModifier(EffectTimerThread t)
+        {
+            if (t.MaxHealthMod == null) return;
+            var health = entity.GetBehavior<EntityBehaviorHealth>();
+            if (health == null) return;
+
+            // SetMaxHealthModifiers has no dedicated removal call and the underlying dictionary
+            // never drops a key once set (EntityBehaviorHealth.cs ~line 359-380, confirmed against
+            // VSDecompile) - overwriting this key's value with 0 is the only way to stop it
+            // contributing to MaxHealth. This restores headroom only; it does not itself heal the
+            // entity back up.
+            health.SetMaxHealthModifiers(t.Guid.ToString(), 0f);
+        }
+
+        // The engine's own ApplyDoTEffect (EntityBehaviorHealth.cs ~line 451) has no infinite
+        // mode - TickDuration/PreviousTickTime are compared against entity.World.ElapsedMilliseconds
+        // (real elapsed time, not the game calendar), so a "never ends on its own" DoT has to be a
+        // large but finite real-time span instead. 1000 real days is far beyond any realistic play
+        // session; ending it early is fully supported by RequestForcedEnd()/RemoveDoT's existing
+        // StopDoTEffect call, which the Antidote's full-cure path already uses for every active
+        // poison instance.
+        private static readonly TimeSpan EffectivelyForeverDoTDuration = TimeSpan.FromDays(1000);
+        private const float EffectivelyForeverTickSeconds = 6f;
+
+        // Builds a DoTSpec for a poison whose damage never tapers off or ends naturally, at an
+        // exact damagePerSecond rate (TotalDamage/TicksNumber is chosen so ApplyDoTEffect's own
+        // per-tick math reproduces that rate).
+        private static DoTSpec BuildEffectivelyForeverDoT(EnumDamageSource damageSource, EnumDamageType damageType, int damageTier, float damagePerSecond)
+        {
+            int ticksNumber = (int)(EffectivelyForeverDoTDuration.TotalSeconds / EffectivelyForeverTickSeconds);
+            float damagePerTick = damagePerSecond * EffectivelyForeverTickSeconds;
+            float totalDamage = damagePerTick * ticksNumber;
+            return new DoTSpec(damageSource, damageType, damageTier, totalDamage, EffectivelyForeverDoTDuration, ticksNumber);
         }
 
         //============== WORLD SAVE ==============//
@@ -482,6 +718,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             {
                 RemoveStatModifiers(t);
                 RemoveDoT(t);
+                RemoveMaxHealthModifier(t);
 
                 if (t.Bucket == EffectBucket.Poison)
                 {
@@ -510,6 +747,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             {
                 RemoveStatModifiers(t);
                 RemoveDoT(t);
+                RemoveMaxHealthModifier(t);
                 RemoveGuidsFromWatchedAttributes(new[] { t.Guid });
 
                 if (t.Bucket == EffectBucket.Poison)
@@ -517,6 +755,23 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     ResolveToleranceForCluster(t.Cluster, becameEligibleNow: t.EligibleForTolerance);
                 }
             }, "rrEffectNaturalEnd");
+        }
+
+        // Fires once EffectTimerThread's own onset window has elapsed - swaps the onset-phase
+        // package out for the full-phase one it was constructed with. This is a phase change, not
+        // an end: the thread keeps running its normal poll loop afterward and this callback never
+        // touches WatchedAttributes or tolerance.
+        private void OnOnsetComplete(EffectTimerThread t)
+        {
+            entity.Api.Event.EnqueueMainThreadTask(() =>
+            {
+                RemoveStatModifiers(t);
+                RemoveDoT(t);
+                t.TransitionToFullPhase();
+                ApplyStatModifiers(t);
+                ApplyDoT(t);
+                ApplyMaxHealthModifier(t);
+            }, "rrEffectOnsetComplete");
         }
 
         // Awards a held tolerance credit only once every active thread for this cluster has
@@ -562,8 +817,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             EffectOnset = t.EffectOnset,
             StartTotalHours = t.StartTotalHours,
             EndTotalHours = t.EndTotalHours,
+            OnsetCompleteTotalHours = t.OnsetCompleteTotalHours,
             SecondaryEffectType = t.SecondaryEffectType,
             SecondaryEffectMult = t.SecondaryEffectMult,
+            SecondaryEffectOnsetMult = t.SecondaryEffectOnsetMult,
             EligibleForTolerance = t.EligibleForTolerance
         };
 
@@ -647,10 +904,22 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 // EndTotalHours fresh (totalHoursNow-at-reconnect + timeleft) next time this fires.
                 t.SetDouble("timeleft", Math.Max(0.0, report.EndTotalHours - totalHoursNow));
             }
+            if (calendarAnchored)
+            {
+                // Mirrors absoluteEndTotalHours above - read back directly so an effect already
+                // past its onset window at reconstruction resumes straight into the full phase.
+                t.SetDouble("absoluteOnsetCompleteTotalHours", report.OnsetCompleteTotalHours);
+                t.SetDouble("onsetTimeLeft", 0.0); // unused in this mode; present only for schema consistency
+            }
+            else
+            {
+                // Mirrors timeleft above, for the onset window instead of the effect's own end.
+                t.SetDouble("onsetTimeLeft", Math.Max(0.0, report.OnsetCompleteTotalHours - totalHoursNow));
+            }
             t.SetFloat("effectMultiplier", report.EffectMult);
             t.SetFloat("onsetMultiplier", report.EffectOnset);
             t.SetFloat("toxicEffectMultiplier", report.SecondaryEffectMult ?? 0f);
-            t.SetFloat("toxicOnsetMultiplier", 0f); // no source data in ApplyEffect's current inputs
+            t.SetFloat("toxicOnsetMultiplier", report.SecondaryEffectOnsetMult ?? 0f);
             return t;
         }
     }
