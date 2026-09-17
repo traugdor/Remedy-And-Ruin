@@ -355,6 +355,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             string cluster = entry.GetString("cluster");
             float effectMult = entry.GetFloat("effectMultiplier");
             float effectOnset = entry.GetFloat("onsetMultiplier");
+            entity.Api.Logger.Notification($"remedyandruin DEBUG: EffectThreadManager.ApplyEffect bucket={bucket} cluster={cluster} guid={guid}");
             float toxicEffectMultiplier = entry.GetFloat("toxicEffectMultiplier");
             float toxicOnsetMultiplier = entry.GetFloat("toxicOnsetMultiplier");
             double timeleft = entry.GetDouble("timeleft");
@@ -465,6 +466,13 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // a brand-new entry (no persisted onset progress yet) derives its onset window fresh from
         // this cluster's baseline; a reloaded/reconnected one resumes the same window it already
         // had, which is what lets an effect already past onset skip straight to the full phase.
+        // Floors onsetMultiplier before it's ever used as a divisor - onset× is documented as a
+        // speed multiplier (02-design-overview.md:729, "inverse scale (higher = faster onset)"),
+        // so the real hours-to-onset is baseline / onsetMultiplier, not baseline * onsetMultiplier.
+        // A multiplier of exactly 0 would otherwise divide by zero; this floor keeps a malformed
+        // or missing value from ever producing an infinite or NaN onset time.
+        private const float MinOnsetMultiplier = 0.05f;
+
         private static double ComputeOnsetCompleteTotalHours(TreeAttribute entry, string cluster, float effectOnset, double startTotalHours, double totalHoursNow, bool calendarAnchored)
         {
             if (calendarAnchored && entry.HasAttribute("absoluteOnsetCompleteTotalHours"))
@@ -475,7 +483,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             {
                 return totalHoursNow + entry.GetDouble("onsetTimeLeft");
             }
-            return startTotalHours + BaselineOnsetHours(cluster) * effectOnset;
+            return startTotalHours + BaselineOnsetHours(cluster) / Math.Max(effectOnset, MinOnsetMultiplier);
         }
 
         // Toxic Poison's tolerance-discounted magnitude: (tolerance / 3) is the tier reached
@@ -1027,6 +1035,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             if (remedyEffects == null) return listeners;
 
             float discounted = MindPoisonToleranceDiscountedEffect(t.EffectMult);
+            entity.Api.Logger.Notification($"remedyandruin DEBUG: StartMindPoisonFullPhaseSideEffects firing, discounted={discounted} guid={t.Guid}");
 
             long severityListener = remedyEffects.StartMindPoisonSeverityContribution(t.Guid, discounted);
             if (severityListener != 0L) listeners.Add(severityListener);
@@ -1266,6 +1275,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // touches WatchedAttributes or tolerance.
         private void OnOnsetComplete(EffectTimerThread t)
         {
+            entity.Api.Logger.Notification($"remedyandruin DEBUG: OnOnsetComplete cluster={t.Cluster} guid={t.Guid}");
             entity.Api.Event.EnqueueMainThreadTask(() =>
             {
                 RemoveStatModifiers(t);
