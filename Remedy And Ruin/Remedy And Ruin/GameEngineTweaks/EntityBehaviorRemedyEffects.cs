@@ -312,6 +312,45 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         public void StopPsychedelicHold(Guid effectGuid) =>
             StopSeverityContribution(psychedelicContributions, "psychedelic", effectGuid);
 
+        // Fever's target is a live vanilla behavior field (EntityBehaviorBodyTemperature.
+        // CurBodyTemperature), not a WatchedAttributes key, so it can't reuse
+        // WriteStrongestContribution directly - same underlying bug the psychedelic hold had
+        // though: the old version just re-asserted NormalBodyTemperature + delta every second
+        // with no paired reset, so unregistering its listener on cure left the body sitting at
+        // its last forced temperature instead of returning to normal, relying entirely on
+        // vanilla's own environmental regulation to eventually correct it. Multiple overlapping
+        // Noxious instances combine via the same strongest-wins rule as severity/wobble.
+        private readonly ConcurrentDictionary<Guid, float> feverContributions = new ConcurrentDictionary<Guid, float>();
+
+        public long StartFeverHold(Guid effectGuid, float temperatureDelta)
+        {
+            var bodyTemp = entity.GetBehavior<EntityBehaviorBodyTemperature>();
+            if (bodyTemp == null) return 0L;
+
+            return entity.World.RegisterGameTickListener(dt =>
+            {
+                feverContributions[effectGuid] = temperatureDelta;
+                WriteStrongestFeverDelta(bodyTemp);
+            }, 1000);
+        }
+
+        public void StopFeverHold(Guid effectGuid)
+        {
+            feverContributions.TryRemove(effectGuid, out _);
+            var bodyTemp = entity.GetBehavior<EntityBehaviorBodyTemperature>();
+            if (bodyTemp != null) WriteStrongestFeverDelta(bodyTemp);
+        }
+
+        private void WriteStrongestFeverDelta(EntityBehaviorBodyTemperature bodyTemp)
+        {
+            float strongest = 0f;
+            foreach (float value in feverContributions.Values)
+            {
+                if (value > strongest) strongest = value;
+            }
+            bodyTemp.CurBodyTemperature = bodyTemp.NormalBodyTemperature + strongest;
+        }
+
         private long StartSeverityContribution(ConcurrentDictionary<Guid, float> contributions, string attributeKey, Guid effectGuid, float intensity, float maxClamp = 1f)
         {
             float clamped = GameMath.Clamp(intensity, 0f, maxClamp);
@@ -1077,24 +1116,6 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return Math.Min(scaledSeconds, MaxVomitRollIntervalSeconds);
         }
 
-        /// <summary>
-        /// Holds body temperature at NormalBodyTemperature + temperatureDelta for as long as the
-        /// returned listener runs. EntityBehaviorBodyTemperature recomputes CurBodyTemperature
-        /// from ambient conditions every second on its own tick, with no external "fever" input -
-        /// this has to keep re-asserting the target against that recomputation rather than set it
-        /// once. Returns 0 (no listener registered) if the entity has no body-temperature
-        /// behavior.
-        /// </summary>
-        public long StartFeverHold(float temperatureDelta)
-        {
-            var bodyTemp = entity.GetBehavior<EntityBehaviorBodyTemperature>();
-            if (bodyTemp == null) return 0L;
-
-            return entity.World.RegisterGameTickListener(dt =>
-            {
-                bodyTemp.CurBodyTemperature = bodyTemp.NormalBodyTemperature + temperatureDelta;
-            }, 1000);
-        }
     }
 
     public static class Helpers
