@@ -854,7 +854,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             switch (t.Cluster)
             {
                 case "NOXIOUSPOISON":
-                    listeners = StartNoxiousFullPhaseSideEffects(t.EffectMult);
+                    listeners = StartNoxiousFullPhaseSideEffects(t);
                     break;
                 case "CARDIACPOISON":
                     listeners = StartCardiacFullPhaseSideEffects(t);
@@ -984,18 +984,18 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return listeners;
         }
 
-        private List<long> StartNoxiousFullPhaseSideEffects(float effectMult)
+        private List<long> StartNoxiousFullPhaseSideEffects(EffectTimerThread t)
         {
             var listeners = new List<long>();
             var remedyEffects = entity.GetBehavior<EntityBehaviorRemedyEffects>();
             if (remedyEffects == null) return listeners;
 
-            float discounted = NoxiousToleranceDiscountedEffect(effectMult);
+            float discounted = NoxiousToleranceDiscountedEffect(t.EffectMult);
 
             long feverListener = remedyEffects.StartFeverHold(NoxiousFeverDegreesAtFullStrength * discounted);
             if (feverListener != 0L) listeners.Add(feverListener);
 
-            long psychedelicListener = remedyEffects.StartPsychedelicHold(NoxiousPsychedelicIntensityAtFullStrength * discounted);
+            long psychedelicListener = remedyEffects.StartPsychedelicHold(t.Guid, NoxiousPsychedelicIntensityAtFullStrength * discounted);
             if (psychedelicListener != 0L) listeners.Add(psychedelicListener);
 
             long vomitListener = remedyEffects.StartRepeatingVomitRoll(NoxiousVomitRollBaseIntervalSeconds, discounted);
@@ -1038,7 +1038,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             long severityListener = remedyEffects.StartMindPoisonSeverityContribution(t.Guid, discounted);
             if (severityListener != 0L) listeners.Add(severityListener);
 
-            long psychedelicListener = remedyEffects.StartPsychedelicHold(MindPoisonPsychedelicIntensityAtFullStrength * discounted);
+            long psychedelicListener = remedyEffects.StartPsychedelicHold(t.Guid, MindPoisonPsychedelicIntensityAtFullStrength * discounted);
             if (psychedelicListener != 0L) listeners.Add(psychedelicListener);
 
             long vomitListener = StartMindPoisonMoveVomitWatcher(remedyEffects);
@@ -1074,7 +1074,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         private void RemoveClusterFullPhaseSideEffects(Guid effectGuid)
         {
-            if (clusterSideEffectListeners.TryRemove(effectGuid, out List<long> listeners))
+            bool found = clusterSideEffectListeners.TryRemove(effectGuid, out List<long> listeners);
+            if (found)
             {
                 foreach (long id in listeners)
                 {
@@ -1085,6 +1086,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             RemoveCardiacExertionStacks(effectGuid);
             var remedyEffects = entity.GetBehavior<EntityBehaviorRemedyEffects>();
             remedyEffects?.StopDrunkWobbleContribution(effectGuid);
+            remedyEffects?.StopPsychedelicHold(effectGuid);
             remedyEffects?.StopMindPoisonSeverityContribution(effectGuid);
         }
 
