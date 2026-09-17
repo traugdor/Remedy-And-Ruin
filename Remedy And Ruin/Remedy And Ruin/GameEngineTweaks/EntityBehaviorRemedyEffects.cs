@@ -318,6 +318,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             {
                 if (value > strongest) strongest = value;
             }
+            if (attributeKey == MindPoisonSeverityAttributeKey)
+            {
+                entity.Api.Logger.Notification($"remedyandruin DEBUG: WriteStrongestContribution({attributeKey}) strongest={strongest} entries=[{string.Join(", ", contributions.Select(kv => kv.Key + "=" + kv.Value))}]");
+            }
             entity.WatchedAttributes.SetFloat(attributeKey, strongest);
         }
 
@@ -607,6 +611,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         {
             // Convert effectData.cluster to uppercase for consistency and fill in defaults/parse data
             EffectStruct effect = new EffectStruct(effectData["cluster"].AsString().ToUpper().ToEnum<EffectCluster>());
+            entity.Api.Logger.Notification($"remedyandruin DEBUG: OnItemConsumed item={consumedStack?.Collectible?.Code} cluster={effect.cluster} rawEffectMult={effectData["effectMultiplier"].AsFloat(-999f)} rawOnsetMult={effectData["onsetMultiplier"].AsFloat(-999f)} potencyScale={potencyScale}");
 
             if (effectData.KeyExists("tier")) { effect.isConcentrated = effectData["isConcentrated"].AsBool(); }
             if (effectData.KeyExists("isPoison")) { effect.isPoison = effectData["isPoison"].AsBool(); }
@@ -883,10 +888,23 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 else
                 {
                     // Second dose, landing within the window - the cure actually takes effect.
-                    List<TreeAttribute> rrpoisons = RRPoisonEffects.value.ToList<TreeAttribute>();
-                    rrpoisons.Clear();
-                    RRPoisonEffects = new TreeArrayAttribute(rrpoisons.ToArray());
+                    // HandleForcefulEnd stops every tracked poison/illness thread properly first -
+                    // its severity contributions, tick listeners, stat modifiers, DoT, and
+                    // max-health modifiers all get torn down through the same
+                    // RemoveGuidsFromWatchedAttributes path every other effect end already uses,
+                    // which only removes the WatchedAttributes entries it actually confirmed
+                    // stopped. Wiping RRPoisonEffects directly beforehand (as this used to do)
+                    // deleted the data for every poison unconditionally while leaving anything
+                    // HandleForcefulEnd didn't know about - stale contribution state, an
+                    // orphaned tick listener still writing its old value back every second -
+                    // running forever with nothing left to ever stop it. Any entry still present
+                    // after HandleForcefulEnd genuinely had no matching thread; sweeping it here
+                    // is a safety net, not the primary removal path.
                     threadManager.HandleForcefulEnd();
+                    if (RRPoisonEffects.value.Length > 0)
+                    {
+                        RRPoisonEffects = new TreeArrayAttribute(Array.Empty<TreeAttribute>());
+                    }
                     // The arrow-delivered Toxic bonus DoT isn't a tracked EffectTimerThread (it's
                     // injected directly by Patch_ArrowPoisonDelivery), so HandleForcefulEnd above
                     // never sees it - stop it separately by its own fixed effect-type id. A no-op
