@@ -37,7 +37,9 @@
 		"remedyandruinEffect": {
 			"cluster": "Analgesic",
 			"tier": "DilutedPotion",
-			"isPoison": false
+			"isPoison": false,
+			"effectMultiplier": 0.0,
+			"onsetMultiplier": 1.0
 		}
 	},
 	"shape": {

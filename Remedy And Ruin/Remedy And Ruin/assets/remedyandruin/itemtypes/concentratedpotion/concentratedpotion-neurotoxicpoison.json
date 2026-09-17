@@ -30,7 +30,9 @@
 		"remedyandruinEffect": {
 			"cluster": "NeurotoxicPoison",
 			"tier": "ConcentratedPotion",
-			"isPoison": true
+			"isPoison": true,
+			"effectMultiplier": 2.0,
+			"onsetMultiplier": 2.0
 		}
 	},
 	"shape": {

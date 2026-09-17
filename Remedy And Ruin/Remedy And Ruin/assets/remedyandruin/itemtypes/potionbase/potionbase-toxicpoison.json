@@ -41,7 +41,9 @@
 		"remedyandruinEffect": {
 			"cluster": "ToxicPoison",
 			"tier": "PotionBase",
-			"isPoison": true
+			"isPoison": true,
+			"effectMultiplier": 1.0,
+			"onsetMultiplier": 1.0
 		}
 	},
 	"maxstacksize": 64,

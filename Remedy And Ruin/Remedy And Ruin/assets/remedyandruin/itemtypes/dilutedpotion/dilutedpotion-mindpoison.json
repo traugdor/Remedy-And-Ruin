@@ -37,7 +37,9 @@
 		"remedyandruinEffect": {
 			"cluster": "MindPoison",
 			"tier": "DilutedPotion",
-			"isPoison": true
+			"isPoison": true,
+			"effectMultiplier": 0.0,
+			"onsetMultiplier": 1.0
 		}
 	},
 	"shape": {
