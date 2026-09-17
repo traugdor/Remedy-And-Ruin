@@ -30,7 +30,9 @@
 		"remedyandruinEffect": {
 			"cluster": "TopicalOintment",
 			"tier": "ConcentratedPotion",
-			"isPoison": false
+			"isPoison": false,
+			"effectMultiplier": 2.0,
+			"onsetMultiplier": 2.0
 		}
 	},
 	"shape": {

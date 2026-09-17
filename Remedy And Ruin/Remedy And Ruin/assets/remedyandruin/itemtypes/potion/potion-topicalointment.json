@@ -37,7 +37,9 @@
 		"remedyandruinEffect": {
 			"cluster": "TopicalOintment",
 			"tier": "Potion",
-			"isPoison": false
+			"isPoison": false,
+			"effectMultiplier": 1.0,
+			"onsetMultiplier": 1.0
 		}
 	},
 	"shape": {

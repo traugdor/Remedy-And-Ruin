@@ -37,7 +37,9 @@
 		"remedyandruinEffect": {
 			"cluster": "ToxicPoison",
 			"tier": "Potion",
-			"isPoison": true
+			"isPoison": true,
+			"effectMultiplier": 1.0,
+			"onsetMultiplier": 1.0
 		}
 	},
 	"shape": {

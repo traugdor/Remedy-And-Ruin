@@ -41,7 +41,9 @@
 		"remedyandruinEffect": {
 			"cluster": "Antinausea",
 			"tier": "PotionBase",
-			"isPoison": false
+			"isPoison": false,
+			"effectMultiplier": 1.0,
+			"onsetMultiplier": 1.0
 		}
 	},
 	"maxstacksize": 64,
