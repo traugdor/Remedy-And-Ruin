@@ -992,7 +992,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
             float discounted = NoxiousToleranceDiscountedEffect(t.EffectMult);
 
-            long feverListener = remedyEffects.StartFeverHold(NoxiousFeverDegreesAtFullStrength * discounted);
+            long feverListener = remedyEffects.StartFeverHold(t.Guid, NoxiousFeverDegreesAtFullStrength * discounted);
             if (feverListener != 0L) listeners.Add(feverListener);
 
             long psychedelicListener = remedyEffects.StartPsychedelicHold(t.Guid, NoxiousPsychedelicIntensityAtFullStrength * discounted);
@@ -1087,6 +1087,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             var remedyEffects = entity.GetBehavior<EntityBehaviorRemedyEffects>();
             remedyEffects?.StopDrunkWobbleContribution(effectGuid);
             remedyEffects?.StopPsychedelicHold(effectGuid);
+            remedyEffects?.StopFeverHold(effectGuid);
             remedyEffects?.StopMindPoisonSeverityContribution(effectGuid);
         }
 

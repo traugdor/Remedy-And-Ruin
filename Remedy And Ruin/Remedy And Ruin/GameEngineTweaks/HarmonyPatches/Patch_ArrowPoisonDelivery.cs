@@ -57,6 +57,13 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
         // gate it as tightly (02-design-overview.md ~1409).
         private const double MindPoisonArrowHitChance = 0.45;
 
+        // Bloodstream-direct delivery manifests far faster than digestion - 10x normal onset
+        // speed (baseline/10 hours, since onset is documented as an inverse-scale speed
+        // multiplier). Left unset, an EffectStruct's onsetMultiplier silently defaults to 0,
+        // which under EffectThreadManager's divide-by-zero floor computed as 20x SLOWER than
+        // baseline instead - every cluster below needs this set explicitly.
+        private const float ArrowHitOnsetMultiplier = 10f;
+
         public static void Postfix(EntityProjectileBase __instance, Entity target, bool __result)
         {
             if (!__result) return; // no actual hit landed
@@ -102,7 +109,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
             EntityBehaviorRemedyEffects.EffectStruct effect = new EntityBehaviorRemedyEffects.EffectStruct(cluster.ToEnum<EntityBehaviorRemedyEffects.EffectCluster>())
             {
                 isPoison = true,
-                effectMultiplier = effectMultiplier
+                effectMultiplier = effectMultiplier,
+                onsetMultiplier = ArrowHitOnsetMultiplier
             };
             remedyBehavior.ApplyEffect(effect, forceIneligibleForTolerance: true);
         }
@@ -142,7 +150,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
             var effect = new EntityBehaviorRemedyEffects.EffectStruct(EntityBehaviorRemedyEffects.EffectCluster.NOXIOUSPOISON)
             {
                 isPoison = true,
-                effectMultiplier = effectMultiplier
+                effectMultiplier = effectMultiplier,
+                onsetMultiplier = ArrowHitOnsetMultiplier
             };
             remedyBehavior.ApplyEffect(effect, forceIneligibleForTolerance: true);
         }
@@ -160,7 +169,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
             var effect = new EntityBehaviorRemedyEffects.EffectStruct(EntityBehaviorRemedyEffects.EffectCluster.CARDIACPOISON)
             {
                 isPoison = true,
-                effectMultiplier = effectMultiplier
+                effectMultiplier = effectMultiplier,
+                onsetMultiplier = ArrowHitOnsetMultiplier
             };
             remedyBehavior.ApplyEffect(effect, forceIneligibleForTolerance: true);
         }
@@ -180,6 +190,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
             {
                 isPoison = true,
                 effectMultiplier = effectMultiplier,
+                onsetMultiplier = ArrowHitOnsetMultiplier,
                 ladderWeight = 0.5f
             };
             remedyBehavior.ApplyEffect(effect, forceIneligibleForTolerance: true);
@@ -197,7 +208,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
             var effect = new EntityBehaviorRemedyEffects.EffectStruct(EntityBehaviorRemedyEffects.EffectCluster.MINDPOISON)
             {
                 isPoison = true,
-                effectMultiplier = effectMultiplier
+                effectMultiplier = effectMultiplier,
+                onsetMultiplier = ArrowHitOnsetMultiplier
             };
             remedyBehavior.ApplyEffect(effect, forceIneligibleForTolerance: true);
         }
