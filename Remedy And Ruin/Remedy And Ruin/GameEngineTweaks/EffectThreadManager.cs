@@ -355,7 +355,6 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             string cluster = entry.GetString("cluster");
             float effectMult = entry.GetFloat("effectMultiplier");
             float effectOnset = entry.GetFloat("onsetMultiplier");
-            entity.Api.Logger.Notification($"remedyandruin DEBUG: EffectThreadManager.ApplyEffect bucket={bucket} cluster={cluster} guid={guid}");
             float toxicEffectMultiplier = entry.GetFloat("toxicEffectMultiplier");
             float toxicOnsetMultiplier = entry.GetFloat("toxicOnsetMultiplier");
             double timeleft = entry.GetDouble("timeleft");
@@ -1035,7 +1034,6 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             if (remedyEffects == null) return listeners;
 
             float discounted = MindPoisonToleranceDiscountedEffect(t.EffectMult);
-            entity.Api.Logger.Notification($"remedyandruin DEBUG: StartMindPoisonFullPhaseSideEffects firing, discounted={discounted} guid={t.Guid}");
 
             long severityListener = remedyEffects.StartMindPoisonSeverityContribution(t.Guid, discounted);
             if (severityListener != 0L) listeners.Add(severityListener);
@@ -1275,7 +1273,6 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // touches WatchedAttributes or tolerance.
         private void OnOnsetComplete(EffectTimerThread t)
         {
-            entity.Api.Logger.Notification($"remedyandruin DEBUG: OnOnsetComplete cluster={t.Cluster} guid={t.Guid}");
             entity.Api.Event.EnqueueMainThreadTask(() =>
             {
                 RemoveStatModifiers(t);
