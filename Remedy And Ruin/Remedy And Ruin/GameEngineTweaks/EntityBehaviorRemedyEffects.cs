@@ -280,6 +280,17 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         private readonly ConcurrentDictionary<Guid, float> drunkWobbleContributions = new ConcurrentDictionary<Guid, float>();
         private readonly ConcurrentDictionary<Guid, float> mindPoisonSeverityContributions = new ConcurrentDictionary<Guid, float>();
 
+        // Vanilla's own "psychedelic" attribute (FoodNutritionProperties.Psychedelic, read by
+        // PsychedelicPerceptionEffect) - shared, keyed by whichever poison instance is currently
+        // holding it, the same multi-contributor pattern as severity/wobble above. This one used
+        // to be a bare repeating SetFloat with no matching "stop" logic: unregistering its tick
+        // listener only stopped it from being re-asserted, it never reset the value back down -
+        // the attribute just sat at its last-written strength until vanilla's own detox tick
+        // (EntityBehaviorHunger, -0.005/real-second) eventually drained it, which could take
+        // several minutes for a strong dose. Routing it through WriteStrongestContribution means
+        // curing the last active contributor now writes 0 immediately, same as severity/wobble.
+        private readonly ConcurrentDictionary<Guid, float> psychedelicContributions = new ConcurrentDictionary<Guid, float>();
+
         public long StartDrunkWobbleContribution(Guid effectGuid, float intensity) =>
             StartSeverityContribution(drunkWobbleContributions, NeurotoxicDrunkWobbleAttributeKey, effectGuid, intensity);
 
@@ -295,9 +306,15 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         public void StopMindPoisonSeverityContribution(Guid effectGuid) =>
             StopSeverityContribution(mindPoisonSeverityContributions, MindPoisonSeverityAttributeKey, effectGuid);
 
-        private long StartSeverityContribution(ConcurrentDictionary<Guid, float> contributions, string attributeKey, Guid effectGuid, float intensity)
+        public long StartPsychedelicHold(Guid effectGuid, float intensity) =>
+            StartSeverityContribution(psychedelicContributions, "psychedelic", effectGuid, intensity, maxClamp: 2f);
+
+        public void StopPsychedelicHold(Guid effectGuid) =>
+            StopSeverityContribution(psychedelicContributions, "psychedelic", effectGuid);
+
+        private long StartSeverityContribution(ConcurrentDictionary<Guid, float> contributions, string attributeKey, Guid effectGuid, float intensity, float maxClamp = 1f)
         {
-            float clamped = GameMath.Clamp(intensity, 0f, 1f);
+            float clamped = GameMath.Clamp(intensity, 0f, maxClamp);
             return entity.World.RegisterGameTickListener(dt =>
             {
                 contributions[effectGuid] = clamped;
@@ -317,10 +334,6 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             foreach (float value in contributions.Values)
             {
                 if (value > strongest) strongest = value;
-            }
-            if (attributeKey == MindPoisonSeverityAttributeKey)
-            {
-                entity.Api.Logger.Notification($"remedyandruin DEBUG: WriteStrongestContribution({attributeKey}) strongest={strongest} entries=[{string.Join(", ", contributions.Select(kv => kv.Key + "=" + kv.Value))}]");
             }
             entity.WatchedAttributes.SetFloat(attributeKey, strongest);
         }
@@ -611,7 +624,6 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         {
             // Convert effectData.cluster to uppercase for consistency and fill in defaults/parse data
             EffectStruct effect = new EffectStruct(effectData["cluster"].AsString().ToUpper().ToEnum<EffectCluster>());
-            entity.Api.Logger.Notification($"remedyandruin DEBUG: OnItemConsumed item={consumedStack?.Collectible?.Code} cluster={effect.cluster} rawEffectMult={effectData["effectMultiplier"].AsFloat(-999f)} rawOnsetMult={effectData["onsetMultiplier"].AsFloat(-999f)} potencyScale={potencyScale}");
 
             if (effectData.KeyExists("tier")) { effect.isConcentrated = effectData["isConcentrated"].AsBool(); }
             if (effectData.KeyExists("isPoison")) { effect.isPoison = effectData["isPoison"].AsBool(); }
@@ -1081,23 +1093,6 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return entity.World.RegisterGameTickListener(dt =>
             {
                 bodyTemp.CurBodyTemperature = bodyTemp.NormalBodyTemperature + temperatureDelta;
-            }, 1000);
-        }
-
-        /// <summary>
-        /// Holds vanilla's own "psychedelic" watched-attribute float (the same one eating a
-        /// psychedelic mushroom raises - FoodNutritionProperties.Psychedelic, read by
-        /// PsychedelicPerceptionEffect) at intensity, clamped to vanilla's own 0-2 range.
-        /// EntityBehaviorHunger's detox tick continuously drains this attribute, so holding it for
-        /// a multi-hour effect needs the same repeated-set approach as StartFeverHold rather than
-        /// a single write.
-        /// </summary>
-        public long StartPsychedelicHold(float intensity)
-        {
-            float clamped = GameMath.Clamp(intensity, 0f, 2f);
-            return entity.World.RegisterGameTickListener(dt =>
-            {
-                entity.WatchedAttributes.SetFloat("psychedelic", clamped);
             }, 1000);
         }
     }
