@@ -482,13 +482,20 @@ in scope per D1/D11, so order here is about what unblocks what, not what matters
 11. **Arrow poisoning** — dip-craft recipe + delivery, standalone.
 12. **The 5 poison-cluster effects** (Toxic/Noxious/Cardiac/Neurotoxic/Mind Poison) — one plan,
     since they share the same `ApplyEffect` switch and the same tolerance-discount formula shape.
-13. **The 8 remedy-potion effects** (Analgesic, Antinausea, Antiseptic, Antiviral, Mind Tonic,
+13. **Bleeding + Wound Infection + Skin Irritation + Tiredness/sleep-gate completion** — grouped as
+    one plan (all standalone Part 3 condition state machines of similar shape). Reordered ahead of
+    remedy-potion effects: Antiseptic (Wound Infection), Sedative (sleep gate), and Topical
+    Ointment (Skin Irritation) each need one of these as their actual cure target to hook into.
+14. **Chest Cold family (Cold/Flu/Bronchitis/Pneumonia), Liver Disease, Resurrection Sickness** —
+    grouped as one plan (all standalone condition state machines of similar shape). Reordered ahead
+    of remedy-potion effects: Antiviral needs Chest Cold family as its cure target.
+15. **Broken Bones (Part 4)** — its own large plan, buildable in isolation per your explicit note in
+    D12. Reordered ahead of remedy-potion effects: Analgesic needs Skull-Strain's pain (Part 4) as
+    part of its cure target, alongside Flu's fever from #14.
+16. **The 8 remedy-potion effects** (Analgesic, Antinausea, Antiseptic, Antiviral, Mind Tonic,
     Sedative, Tonic, Topical Ointment) — one plan per D4's "always max/immediate" simplification.
-14. **Bleeding condition** — standalone.
-15. **Chest Cold family, Liver Disease, Resurrection Sickness** — grouped as one plan (all are
-    standalone condition state machines of similar shape).
-16. **Broken Bones (Part 4)** — its own large plan, buildable in isolation per your explicit note in
-    D12.
+    Moved here (was 13) so every cure target it needs (#13-15, plus Hallucination/Temporal Fog
+    already partially built) actually exists first.
 17. **Renewable Cultivation (Part 5)** — its own large plan, fully independent of the poison/remedy
     systems.
 18. **"R&R Ongoing Effects" UI tab** — standalone once there's real effect data to display.
