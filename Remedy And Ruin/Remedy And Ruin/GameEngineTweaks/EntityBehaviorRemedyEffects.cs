@@ -282,13 +282,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         // Vanilla's own "psychedelic" attribute (FoodNutritionProperties.Psychedelic, read by
         // PsychedelicPerceptionEffect) - shared, keyed by whichever poison instance is currently
-        // holding it, the same multi-contributor pattern as severity/wobble above. This one used
-        // to be a bare repeating SetFloat with no matching "stop" logic: unregistering its tick
-        // listener only stopped it from being re-asserted, it never reset the value back down -
-        // the attribute just sat at its last-written strength until vanilla's own detox tick
-        // (EntityBehaviorHunger, -0.005/real-second) eventually drained it, which could take
-        // several minutes for a strong dose. Routing it through WriteStrongestContribution means
-        // curing the last active contributor now writes 0 immediately, same as severity/wobble.
+        // holding it, the same multi-contributor pattern as severity/wobble above. Curing the last
+        // active contributor writes 0 immediately rather than leaving the value to drain via
+        // vanilla's own detox tick.
         private readonly ConcurrentDictionary<Guid, float> psychedelicContributions = new ConcurrentDictionary<Guid, float>();
 
         public long StartDrunkWobbleContribution(Guid effectGuid, float intensity) =>
@@ -314,12 +310,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         // Fever's target is a live vanilla behavior field (EntityBehaviorBodyTemperature.
         // CurBodyTemperature), not a WatchedAttributes key, so it can't reuse
-        // WriteStrongestContribution directly - same underlying bug the psychedelic hold had
-        // though: the old version just re-asserted NormalBodyTemperature + delta every second
-        // with no paired reset, so unregistering its listener on cure left the body sitting at
-        // its last forced temperature instead of returning to normal, relying entirely on
-        // vanilla's own environmental regulation to eventually correct it. Multiple overlapping
-        // Noxious instances combine via the same strongest-wins rule as severity/wobble.
+        // WriteStrongestContribution directly. Multiple overlapping Noxious instances combine via
+        // the same strongest-wins rule as severity/wobble.
         private readonly ConcurrentDictionary<Guid, float> feverContributions = new ConcurrentDictionary<Guid, float>();
 
         public long StartFeverHold(Guid effectGuid, float temperatureDelta)
@@ -939,18 +931,17 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 else
                 {
                     // Second dose, landing within the window - the cure actually takes effect.
-                    // HandleForcefulEnd stops every tracked poison/illness thread properly first -
-                    // its severity contributions, tick listeners, stat modifiers, DoT, and
-                    // max-health modifiers all get torn down through the same
-                    // RemoveGuidsFromWatchedAttributes path every other effect end already uses,
-                    // which only removes the WatchedAttributes entries it actually confirmed
-                    // stopped. Wiping RRPoisonEffects directly beforehand (as this used to do)
-                    // deleted the data for every poison unconditionally while leaving anything
-                    // HandleForcefulEnd didn't know about - stale contribution state, an
-                    // orphaned tick listener still writing its old value back every second -
-                    // running forever with nothing left to ever stop it. Any entry still present
-                    // after HandleForcefulEnd genuinely had no matching thread; sweeping it here
-                    // is a safety net, not the primary removal path.
+                    // HandleForcefulEnd must run before RRPoisonEffects is cleared: it stops every
+                    // tracked poison/illness thread's severity contributions, tick listeners, stat
+                    // modifiers, DoT, and max-health modifiers via the same
+                    // RemoveGuidsFromWatchedAttributes path every other effect end uses, which only
+                    // removes the WatchedAttributes entries it actually confirmed stopped. Clearing
+                    // RRPoisonEffects first would delete the data for every poison unconditionally
+                    // while leaving anything HandleForcefulEnd doesn't know about - stale
+                    // contribution state, an orphaned tick listener still writing its value back
+                    // every second - running forever with nothing left to ever stop it. Any entry
+                    // still present after HandleForcefulEnd genuinely had no matching thread;
+                    // sweeping it here is a safety net, not the primary removal path.
                     threadManager.HandleForcefulEnd();
                     if (RRPoisonEffects.value.Length > 0)
                     {
