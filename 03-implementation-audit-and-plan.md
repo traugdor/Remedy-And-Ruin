@@ -499,3 +499,18 @@ Does this breakdown and ordering look right, or would you reshuffle/split/merge 
 start writing the first actual plan document?
 
 > Answer: the ordering looks right
+
+## Part F: Deferred / Post-Plan Ideas
+
+Ideas raised after this plan was locked in, not part of the numbered sequence above. Revisit once
+all 20 steps are complete.
+
+- **Vial rack block** — a shelf-like storage block whose sole purpose is holding `Vial` blocks
+  (empty or filled), each rendered in-world as if placed, retaining its liquid content and
+  `poisonCharges` attribute. Feasibility researched: `BlockVial` already implements
+  `IContainedMeshSource` (via `BlockLiquidContainerTopOpened`) and `vial.json` already sets
+  `"shelvable": true`, so vanilla's `BlockEntityDisplay` (the base class behind shelves/bookshelves/
+  tool racks) can likely be subclassed directly, inheriting mesh generation and save/load for free.
+  Main custom work: `genTransformationMatrices()` for slot layout and put/take interaction logic.
+  Verdict: easy-to-moderate. Worth double-checking whether `poisonCharges` needs to be folded into
+  the mesh cache key so two vials with different charge counts don't render identically.

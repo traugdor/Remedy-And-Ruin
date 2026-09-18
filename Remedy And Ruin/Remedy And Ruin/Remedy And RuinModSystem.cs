@@ -21,24 +21,26 @@ namespace Remedy_And_Ruin
 
         private const string HarmonyId = "remedyandruin";
 
+        // Every patch in GameEngineTweaks/HarmonyPatches targets server-authoritative logic
+        // (damage, drops, effect application) - none belong on the client. Applying them from
+        // StartServerSide (guarded here) means they only ever run in a process that's actually
+        // acting as a server (including the integrated singleplayer server), and never from a
+        // remote multiplayer client, which never runs this server logic at all.
+        private static bool serverPatched;
+
         public static ConfigServer Config;
 
-        // Runs on both server and client: registers the VialMold block entity class,
-        // loads/creates the config, applies Harmony patches (eating pipeline overrides), and
-        // (client only) generates cluster textures.
         public override void Start(ICoreAPI api)
         {
             Mod.Logger.Notification("Hello from template mod: " + api.Side);
 
             api.RegisterBlockEntityClass("VialMold", typeof(BlockEntityVialMold));
             api.RegisterEntityBehaviorClass("remedyandruinEffects", typeof(EntityBehaviorRemedyEffects));
+            api.RegisterEntityBehaviorClass("remedyandruinArrowPoisonDelivery", typeof(EntityBehaviorArrowPoisonDelivery));
             api.RegisterCollectibleBehaviorClass("RemedyArrowPoisoning", typeof(CollectibleBehaviorArrowPoisoning));
             api.RegisterBlockClass("Remedy_And_Ruin.GameEngineTweaks.BlockVial", typeof(BlockVial));
 
             SetupConfig(api);
-
-            harmony = new Harmony(HarmonyId);
-            harmony.PatchAll(Assembly.GetExecutingAssembly());
 
             if (api.Side == EnumAppSide.Client)
             {
@@ -47,9 +49,6 @@ namespace Remedy_And_Ruin
             }
         }
 
-        // Same load/regenerate pattern as ExpandedStomach's own setupConfig - reads (or
-        // creates, on first run) remedyandruinServer.json via ModConfig, then mirrors each
-        // setting onto api.World.Config so both sides can read it without re-parsing the file.
         private static void SetupConfig(ICoreAPI api)
         {
             Config = ModConfig.ReadConfig<ConfigServer>(api, ConfigServer.configName);
@@ -60,6 +59,28 @@ namespace Remedy_And_Ruin
         public override void StartServerSide(ICoreServerAPI api)
         {
             Mod.Logger.Notification("Hello from template mod server side: " + Lang.Get("remedyandruin:hello"));
+
+            if (!serverPatched)
+            {
+                harmony = new Harmony(HarmonyId);
+                // Patch each [HarmonyPatch] class individually rather than one PatchAll call, so a
+                // single patch that can't resolve its target logs an error and gets skipped
+                // instead of aborting every other patch in the mod.
+                foreach (Type patchType in AccessTools.GetTypesFromAssembly(Assembly.GetExecutingAssembly()))
+                {
+                    if (patchType.GetCustomAttributes(typeof(HarmonyPatch), inherit: false).Length == 0) continue;
+
+                    try
+                    {
+                        harmony.CreateClassProcessor(patchType).Patch();
+                    }
+                    catch (Exception ex)
+                    {
+                        Mod.Logger.Error($"remedyandruin: failed to apply Harmony patch {patchType.FullName} - {ex}");
+                    }
+                }
+                serverPatched = true;
+            }
 
             api.Event.PlayerNowPlaying += (IServerPlayer player) =>
             {
@@ -80,6 +101,14 @@ namespace Remedy_And_Ruin
                         Mod.Logger.Warning($"Config setting 'allowEffectsToExpireWhenOffline' changed. Wiping progress for player: {player.PlayerName}.");
                         RRBehavior.DestroyProgress();
                     }
+                }
+            };
+
+            api.Event.OnEntitySpawn += (Entity entity) =>
+            {
+                if (!(entity is EntityPlayer) && entity.GetBehavior<EntityBehaviorArrowPoisonDelivery>() == null)
+                {
+                    entity.AddBehavior(new EntityBehaviorArrowPoisonDelivery(entity));
                 }
             };
 
@@ -260,6 +289,7 @@ namespace Remedy_And_Ruin
             temporalVignetteRenderer?.Dispose();
             hallucinationManager?.Dispose();
             harmony?.UnpatchAll(HarmonyId);
+            serverPatched = false;
             base.Dispose();
         }
 

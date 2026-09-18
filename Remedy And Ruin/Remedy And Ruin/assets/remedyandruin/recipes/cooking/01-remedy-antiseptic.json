@@ -42,11 +42,6 @@
 				},
 				{
 					"type": "block",
-					"code": "game:lichen-oldmansbeard-north",
-					"stackSize": 6
-				},
-				{
-					"type": "block",
 					"code": "game:flower-wilddaisy-free",
 					"stackSize": 6
 				},

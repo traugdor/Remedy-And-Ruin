@@ -1099,7 +1099,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // StopDoTEffect call, which the Antidote's full-cure path already uses for every active
         // poison instance.
         private static readonly TimeSpan EffectivelyForeverDoTDuration = TimeSpan.FromDays(1000);
-        private const float EffectivelyForeverTickSeconds = 6f;
+
+        // 1-second ticks so the configured damagePerSecond reads as a smooth trickle rather than a
+        // lump-sum hit every few seconds - a larger interval multiplies the same per-tick damage
+        // into fewer, bigger chunks without changing the sustained rate.
+        private const float EffectivelyForeverTickSeconds = 1f;
 
         // Builds a DoTSpec for a poison whose damage never tapers off or ends naturally, at an
         // exact damagePerSecond rate (TotalDamage/TicksNumber is chosen so ApplyDoTEffect's own
