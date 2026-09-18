@@ -171,7 +171,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             vialStack.Attributes.SetInt("poisonCharges", chargesRemaining);
             if (chargesRemaining <= 0)
             {
-                // Same rule as dipping (Task 2): spending the last charge genuinely empties the Vial.
+                // Same rule as dipping: spending the last charge genuinely empties the Vial.
                 ((BlockVial)vialStack.Collectible).SetContent(vialStack, null);
             }
             vialSlot.MarkDirty();

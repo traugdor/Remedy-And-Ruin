@@ -365,9 +365,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
             // "now" is correct as this effect's start point the one time this method runs for a
             // given guid (parseEffectsAndApply's effectsApplied guard ensures that) - for a
-            // brand-new effect this genuinely is when it started. Preserving the true original
-            // start/end across a server restart is Plan 7's job once it adds persisted
-            // reconnection state; this does not attempt that.
+            // brand-new effect this genuinely is when it started. This does not attempt to
+            // preserve the true original start/end across a server restart.
             double totalHoursNow = entity.World.Calendar.TotalHours;
             double startTotalHours = totalHoursNow;
             double endTotalHours;
@@ -528,7 +527,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // Dispatch point for each poison cluster's onset-phase (early warning) entity.Stats
         // effect, using the multipliers already read off the WatchedAttributes entry in
         // ApplyEffect. A cluster with no distinct onset symptom returns Array.Empty<StatModifier>().
-        // Remedy-potion clusters (Plan 13) still fall through to that empty default.
+        // Remedy-potion clusters aren't implemented here yet and fall through to that empty default.
         private IReadOnlyList<StatModifier> DetermineOnsetStatModifiers(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier, int doseNumber, float ladderWeight)
         {
             switch (cluster)
@@ -571,7 +570,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // multipliers already read off the WatchedAttributes entry in ApplyEffect. Applied once
         // onset completes (or immediately, for an effect constructed already past its onset
         // window). All five poison clusters are filled in; the eight remedy-potion clusters
-        // (Plan 13) still fall through to the empty default below.
+        // aren't implemented here yet and fall through to the empty default below.
         private IReadOnlyList<StatModifier> DetermineFullStatModifiers(string cluster, float effectMult, float effectOnset, float toxicEffectMultiplier, float toxicOnsetMultiplier, int doseNumber, float ladderWeight)
         {
             switch (cluster)
@@ -762,20 +761,19 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // down with tolerance discount the same way the fever and vomit-roll do.
         private const float NoxiousPsychedelicIntensityAtFullStrength = 2.0f;
 
-        // Midpoint of the 30-60s full-strength vomit interval range (Decisions locked in, plan
-        // 12) - StartRepeatingVomitRoll jitters around this and divides by the discounted
-        // multiplier itself.
+        // Midpoint of the 30-60s full-strength vomit interval range - StartRepeatingVomitRoll
+        // jitters around this and divides by the discounted multiplier itself.
         private const double NoxiousVomitRollBaseIntervalSeconds = 45.0;
 
         // Cardiac Poison's flat current/max HP hit - full strength regardless of tolerance below
-        // full (9/9) crossing (02-design-overview.md ~845-852, ~1407). Also the per-stack hit
-        // exertion-stacking applies, and the package Task 5's Neurotoxic dose-3 layers on top of
-        // its own ladder reuses this same value and mechanism unmodified.
+        // full (9/9) crossing (02-design-overview.md ~845-852, ~1407). This is also the per-stack
+        // exertion-stacking hit, and Neurotoxic's dose-3 tier (which layers Cardiac Poison's own
+        // package on top of its ladder) reuses this same value and mechanism unmodified.
         private const float CardiacFlatHealthHit = 5f;
 
-        // -40% walkspeed, the same value Neurotoxic's own Weakness stage uses (Decisions locked
-        // in, plan 12) - chosen for consistency across the two clusters' movement debuffs rather
-        // than a separately-tuned number.
+        // -40% walkspeed, the same value Neurotoxic's own Weakness stage uses - chosen for
+        // consistency across the two clusters' movement debuffs rather than a separately-tuned
+        // number.
         //
         // miningSpeedMul is the only stat category the engine actually reads for tool-use speed
         // (CollectibleObject.GetMiningSpeed, confirmed against VSDecompile) - it only factors in
@@ -877,8 +875,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         // Cardiac Poison's only full-phase side effect outside the StatModifier/MaxHealthModifier
         // pipeline: the exertion-stacking watcher. Kept as its own method (rather than inlined
-        // into the switch above) so Task 5's Neurotoxic dose-3 - which layers Cardiac Poison's
-        // whole package, this watcher included, on top of its own ladder - can call
+        // into the switch above) so Neurotoxic's dose-3 tier - which layers Cardiac Poison's whole
+        // package, this watcher included, on top of its own ladder - can call
         // StartCardiacExertionStacking(t) directly against its own EffectTimerThread instead of
         // duplicating the watcher.
         private List<long> StartCardiacFullPhaseSideEffects(EffectTimerThread t)
@@ -901,9 +899,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         /// CardiacFlatHealthHit MaxHealthModifier under its own "{guid}-stackN" key (via
         /// RemoveCardiacExertionStacks at teardown), so stacks compound instead of overwriting
         /// each other. No cap - ordinary walking with no tool in use never stacks. Reusable as-is
-        /// by any effect package that inherits Cardiac Poison's rules (Task 5's Neurotoxic
-        /// dose-3): call this with that effect's own EffectTimerThread; it has no opinion on
-        /// which cluster t.Cluster reports.
+        /// by any effect package that inherits Cardiac Poison's rules (Neurotoxic's dose-3 tier):
+        /// call this with that effect's own EffectTimerThread; it has no opinion on which cluster
+        /// t.Cluster reports.
         /// </summary>
         internal long StartCardiacExertionStacking(EffectTimerThread t)
         {

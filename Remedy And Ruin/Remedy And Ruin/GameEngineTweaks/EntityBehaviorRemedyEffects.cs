@@ -127,8 +127,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // magnitude (02-design-overview.md ~752-761), the DoT itself never ends on its own, so
         // the owning EffectTimerThread's own EndTotalHours has to outlive it too, or the thread's
         // normal end-of-duration poll would tear the "permanent" DoT down almost immediately.
-        // 1000 in-game days matches Task 1's own "effectively forever" reasoning for the DoT's
-        // real-world TimeSpan, just expressed in the calendar hours this field is measured in.
+        // 1000 in-game days matches EffectThreadManager's own "effectively forever" reasoning for
+        // the DoT's real-world TimeSpan, just expressed in the calendar hours this field is
+        // measured in.
         // Below the threshold, the exposure has no DoT at all and genuinely fades on its own -
         // 24h is this plan's own baseline for a poison with no stated fade-out duration.
         private const double ToxicInfiniteThreadLifetimeHours = 1000.0 * 24.0;
@@ -195,8 +196,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         }
 
         // Baseline full-phase durations for Neurotoxic Poison's 3-stage ladder
-        // (02-design-overview.md ~1431-1443; ladder semantics confirmed in Plan 12's
-        // decisions-locked-in section): dose 2 is double dose 1's baseline, dose 3 is quadruple
+        // (02-design-overview.md ~1431-1443): dose 2 is double dose 1's baseline, dose 3 is quadruple
         // Cardiac Poison's own normal 6h baseline. An arrow-hit's half-weight instance always
         // uses half of dose 1's baseline (3h) regardless of the cumulative dose number it
         // nominally completes - see ApplyNeurotoxicLadder.
@@ -507,8 +507,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             /*
              * PLACEHOLDER
              * §6's overdose-effect-per-potion-type table decides what actually happens here, once
-             * Plan 12/13 builds real potion effects to construct an overdose instance from. cluster
-             * identifies which potion caused this crossing (the only input this method needs later).
+             * real potion effects exist to construct an overdose instance from. cluster identifies
+             * which potion caused this crossing (the only input this method needs later).
              */
         }
 
@@ -679,20 +679,13 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         }
 
-        private Dictionary<string, bool> effectsApplied = new Dictionary<string, bool>(); //used to prevent double application of the same effect>
+        // Tracks which effect guids already have a running EffectTimerThread, so parseEffectsAndApply
+        // doesn't spin up a duplicate thread for an effect it's already seen.
+        private Dictionary<string, bool> effectsApplied = new Dictionary<string, bool>();
 
         void parseEffectsAndApply()
         {
-            //read effects from treeArrayAttribute and apply them. Write to effectsApplied to prevent double application.
-            /*
-             * rrpoisons
-             * rrillness
-             * rrpotions
-             */
-
             var liveKeys = new HashSet<string>();
-            //use the effect name + UID as actual key.
-            //pull rrpoisons
             TreeAttribute[] rrpoisons = RRPoisonEffects.value;
             foreach (var poison in rrpoisons)
             {
@@ -705,7 +698,6 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     threadManager.ApplyPoisonEffect(guid);
                 }
             }
-            //repeat for potions and illnesses
             TreeAttribute[] rrillnesses = RRIllnessEffects.value;
             foreach (var illness in rrillnesses)
             {
@@ -737,8 +729,6 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 effectsApplied.Remove(staleKey);
             }
         }
-
-        //============== ACTUAL CODE ==============//
 
         public void ApplyEffect(EffectStruct effect) => ApplyEffect(effect, forceIneligibleForTolerance: false);
 

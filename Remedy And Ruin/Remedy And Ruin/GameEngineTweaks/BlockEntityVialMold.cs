@@ -25,7 +25,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
     {
         private static readonly AssetLocation AcceptedMaterial = new AssetLocation("game", "glass-plain");
 
-        bool ILiquidMetalSink.CanReceive(ItemStack metal) // even though it's really glass... See ^^^
+        bool ILiquidMetalSink.CanReceive(ItemStack metal)
         {
             if (metal?.Collectible?.Code == null || !metal.Collectible.Code.Equals(AcceptedMaterial))
             {
