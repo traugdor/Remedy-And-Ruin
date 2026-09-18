@@ -533,6 +533,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         //============== CONSTRUCTORS ==============//
 
+        bool suppressEffect = false;
+
         public EntityBehaviorRemedyEffects(Entity entity) : base(entity)
         {
             //if (entity.World.Side != EnumAppSide.Server) return;
@@ -542,19 +544,23 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             }
             if (RREffects["rrpoisons"] == null)
             {
+                suppressEffect = true;
                 RREffects["rrpoisons"] = new TreeArrayAttribute(Array.Empty<TreeAttribute>());
                 MarkDirty("rrpoisons");
             }
             if (RREffects["rrillness"] == null)
             {
+                suppressEffect = true;
                 RREffects["rrillness"] = new TreeArrayAttribute(Array.Empty<TreeAttribute>());
                 MarkDirty("rrillness");
             }
             if (RREffects["rrpotions"] == null)
             {
+                suppressEffect = true;
                 RREffects["rrpotions"] = new TreeArrayAttribute(Array.Empty<TreeAttribute>());
                 MarkDirty("rrpotions");
             }
+            suppressEffect = false;
             threadManager = new EffectThreadManager(entity);
             toxicityDecayListenerId = entity.World.RegisterGameTickListener(DecayToxicity, 1000);
             lastToleranceDecayCheckDay = (int)Math.Floor(entity.World.Calendar.TotalDays);
@@ -685,6 +691,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         void parseEffectsAndApply()
         {
+            if (suppressEffect) return;
             var liveKeys = new HashSet<string>();
             TreeAttribute[] rrpoisons = RRPoisonEffects.value;
             foreach (var poison in rrpoisons)
