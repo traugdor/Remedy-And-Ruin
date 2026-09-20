@@ -10,6 +10,7 @@ using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
+using Vintagestory.GameContent;
 
 namespace Remedy_And_Ruin
 {
@@ -124,6 +125,23 @@ namespace Remedy_And_Ruin
                     player.Entity?.GetBehavior<EntityBehaviorRemedyEffects>()?.HandleGameWorldSaving();
                 }
             };
+
+            // Debug: BlockBed gates sleeping on Tiredness > 8f - 8.5 clears that gate with minimal
+            // fuss for testing sleep-related mechanics without waiting out real Tiredness accrual.
+            api.ChatCommands.Create("rrTired")
+                .WithDescription("Debug: set your own Tiredness to 8.5, just above the sleep-gate threshold, so you can sleep immediately.")
+                .RequiresPrivilege(Privilege.root)
+                .RequiresPlayer()
+                .HandleWith(args =>
+                {
+                    EntityBehaviorTiredness tiredness = args.Caller.Entity.GetBehavior<EntityBehaviorTiredness>();
+                    if (tiredness == null)
+                    {
+                        return TextCommandResult.Success("No EntityBehaviorTiredness on this entity.");
+                    }
+                    tiredness.Tiredness = 8.5f;
+                    return TextCommandResult.Success("Tiredness set to 8.5 - you should be able to sleep now.");
+                });
         }
 
         public override void StartClientSide(ICoreClientAPI api)
