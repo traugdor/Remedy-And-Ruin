@@ -38,6 +38,7 @@ namespace Remedy_And_Ruin
             api.RegisterBlockEntityClass("VialMold", typeof(BlockEntityVialMold));
             api.RegisterEntityBehaviorClass("remedyandruinEffects", typeof(EntityBehaviorRemedyEffects));
             api.RegisterEntityBehaviorClass("remedyandruinArrowPoisonDelivery", typeof(EntityBehaviorArrowPoisonDelivery));
+            api.RegisterEntityBehaviorClass("remedyandruinPlayerConditions", typeof(EntityBehaviorPlayerConditions));
             api.RegisterCollectibleBehaviorClass("RemedyArrowPoisoning", typeof(CollectibleBehaviorArrowPoisoning));
             api.RegisterBlockClass("Remedy_And_Ruin.GameEngineTweaks.BlockVial", typeof(BlockVial));
 
@@ -91,6 +92,11 @@ namespace Remedy_And_Ruin
                     entity.AddBehavior(new EntityBehaviorRemedyEffects(entity));
                 }
 
+                if (entity != null && entity.GetBehavior<EntityBehaviorPlayerConditions>() == null)
+                {
+                    entity.AddBehavior(new EntityBehaviorPlayerConditions(entity));
+                }
+
                 //EntityBehaviorRemedyEffects RRBehavior = entity.GetBehavior<EntityBehaviorRemedyEffects>();
                 if(entity != null && entity.GetBehavior<EntityBehaviorRemedyEffects>() is EntityBehaviorRemedyEffects RRBehavior)
                 {
@@ -110,6 +116,14 @@ namespace Remedy_And_Ruin
                 if (!(entity is EntityPlayer) && entity.GetBehavior<EntityBehaviorArrowPoisonDelivery>() == null)
                 {
                     entity.AddBehavior(new EntityBehaviorArrowPoisonDelivery(entity));
+                }
+            };
+
+            api.Event.OnEntitySpawn += (Entity entity) =>
+            {
+                if (entity.GetBehavior<EntityBehaviorHealth>() != null && entity.GetBehavior<EntityBehaviorPlayerConditions>() == null)
+                {
+                    entity.AddBehavior(new EntityBehaviorPlayerConditions(entity));
                 }
             };
 
@@ -141,6 +155,22 @@ namespace Remedy_And_Ruin
                     }
                     tiredness.Tiredness = 8.5f;
                     return TextCommandResult.Success("Tiredness set to 8.5 - you should be able to sleep now.");
+                });
+
+            api.ChatCommands.Create("rrSkinIrritation")
+                .WithDescription("Debug: toggle Skin Irritation on yourself to verify the debuff/self-resolve/clear cycle.")
+                .RequiresPrivilege(Privilege.root)
+                .RequiresPlayer()
+                .HandleWith(args =>
+                {
+                    EntityBehaviorPlayerConditions conditions = args.Caller.Entity.GetBehavior<EntityBehaviorPlayerConditions>();
+                    if (conditions.HasSkinIrritation)
+                    {
+                        conditions.ClearSkinIrritation((EntityAgent)args.Caller.Entity);
+                        return TextCommandResult.Success("Skin Irritation cleared.");
+                    }
+                    conditions.ApplySkinIrritation((EntityAgent)args.Caller.Entity);
+                    return TextCommandResult.Success("Skin Irritation applied - check healingeffectivness via the character screen.");
                 });
         }
 
