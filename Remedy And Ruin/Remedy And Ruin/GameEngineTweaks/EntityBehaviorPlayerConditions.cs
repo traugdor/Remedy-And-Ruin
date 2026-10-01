@@ -210,6 +210,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         private long woundInfectionRollListenerId;
         private int woundInfectionRollCount;
+        private double woundInfectionBaseChance;
+        private Random woundInfectionRandom;
 
         public bool HasWoundInfection => entity.WatchedAttributes.GetBool("remedyandruinWoundInfection", false);
 
@@ -231,9 +233,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 target.World.UnregisterGameTickListener(conditions.woundInfectionRollListenerId);
             }
             conditions.woundInfectionRollCount = 0;
+            conditions.woundInfectionBaseChance = WoundInfectionBaseChance[bleedingTier];
+            conditions.woundInfectionRandom = new Random();
 
-            double baseChance = WoundInfectionBaseChance[bleedingTier];
-            var rand = new System.Random();
             conditions.woundInfectionRollListenerId = target.World.RegisterGameTickListener(dt =>
             {
                 if (conditions.HasWoundInfection)
@@ -242,24 +244,36 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     conditions.woundInfectionRollListenerId = 0L;
                     return;
                 }
-                double chance = System.Math.Min(baseChance + WoundInfectionRollCap, baseChance + conditions.woundInfectionRollCount * WoundInfectionRollIncrement);
+                double chance = conditions.CurrentWoundInfectionChance();
                 conditions.woundInfectionRollCount++;
-                if (rand.NextDouble() < chance)
+                if (conditions.woundInfectionRandom.NextDouble() < chance)
                 {
                     conditions.ApplyWoundInfection(target);
                 }
             }, WoundInfectionRollIntervalMs);
         }
 
+        private double CurrentWoundInfectionChance()
+        {
+            return System.Math.Min(woundInfectionBaseChance + WoundInfectionRollCap, woundInfectionBaseChance + woundInfectionRollCount * WoundInfectionRollIncrement);
+        }
+
         /// <summary>
-        /// Called when Bleeding's own DoT ends (naturally or via staunching) - stops the infection-risk
-        /// roll. Does not clear an infection that already took hold; that only happens via
-        /// CureWoundInfection.
+        /// Called when a bandage/poultice stops Bleeding (StaunchBleeding) - resolves the wound's
+        /// currently accumulated infection chance with one final roll before stopping the risk timer,
+        /// rather than just cancelling the risk outright now that it's treated. Does nothing if no
+        /// risk timer is currently running (already infected, or Bleeding was never active). Does not
+        /// clear an infection that already took hold; that only happens via CureWoundInfection.
         /// </summary>
         public void StopWoundInfectionRisk(EntityAgent target)
         {
             if (woundInfectionRollListenerId != 0L)
             {
+                if (!HasWoundInfection && woundInfectionRandom.NextDouble() < CurrentWoundInfectionChance())
+                {
+                    ApplyWoundInfection(target);
+                }
+
                 target.World.UnregisterGameTickListener(woundInfectionRollListenerId);
                 woundInfectionRollListenerId = 0L;
             }
