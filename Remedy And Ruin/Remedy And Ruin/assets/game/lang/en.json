@@ -1,0 +1,8 @@
+{
+  "item-bandage-antiseptic": "Antiseptic-soaked bandage",
+  "itemdesc-bandage-antiseptic": "Cures Wound Infection, not just the bleed.",
+  "item-bandage-concentratedantiseptic": "Concentrated-antiseptic-soaked bandage",
+  "itemdesc-bandage-concentratedantiseptic": "Cures Wound Infection and its lingering debuff instantly, not just the bleed.",
+  "item-poultice-linen-antiseptic": "Antiseptic poultice (from linen)",
+  "item-poultice-reed-antiseptic": "Antiseptic poultice (from reeds)"
+}

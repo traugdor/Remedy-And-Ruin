@@ -1,0 +1,23 @@
+[
+  { "op": "add", "file": "game:itemtypes/bandage.json", "path": "/variantgroups/0/states/-", "value": "antiseptic" },
+  { "op": "add", "file": "game:itemtypes/bandage.json", "path": "/behaviors/0/propertiesByType/*-antiseptic", "value": {
+      "health": 3, "applicationtimesec": 3, "maxapplicationtimesec": 10, "effectdurationsec": 10,
+      "ticks": 4, "cancelinair": false, "cancelwhileswimming": false, "delaytocancelsec": 0.5
+  }},
+  { "op": "add", "file": "game:itemtypes/bandage.json", "path": "/transitionablePropsByType/*-antiseptic", "value": [{
+      "type": "Dry", "freshHours": { "avg": 0 }, "transitionHours": { "avg": 1 },
+      "transitionedStack": { "type": "item", "code": "bandage-clean" }, "transitionRatio": 1
+  }]},
+  { "op": "add", "file": "game:itemtypes/bandage.json", "path": "/texturesbyType/*-antiseptic", "value": { "normal1": { "base": "item/bag/linensack/linen" } } },
+
+  { "op": "add", "file": "game:itemtypes/bandage.json", "path": "/variantgroups/0/states/-", "value": "concentratedantiseptic" },
+  { "op": "add", "file": "game:itemtypes/bandage.json", "path": "/behaviors/0/propertiesByType/*-concentratedantiseptic", "value": {
+      "health": 3, "applicationtimesec": 3, "maxapplicationtimesec": 10, "effectdurationsec": 10,
+      "ticks": 4, "cancelinair": false, "cancelwhileswimming": false, "delaytocancelsec": 0.5
+  }},
+  { "op": "add", "file": "game:itemtypes/bandage.json", "path": "/transitionablePropsByType/*-concentratedantiseptic", "value": [{
+      "type": "Dry", "freshHours": { "avg": 0 }, "transitionHours": { "avg": 1 },
+      "transitionedStack": { "type": "item", "code": "bandage-clean" }, "transitionRatio": 1
+  }]},
+  { "op": "add", "file": "game:itemtypes/bandage.json", "path": "/texturesbyType/*-concentratedantiseptic", "value": { "normal1": { "base": "item/bag/linensack/linen" } } }
+]

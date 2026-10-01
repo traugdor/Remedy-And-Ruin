@@ -1061,9 +1061,12 @@ A separate, later-onset condition from Bleeding, not the same thing.
   - **Potency, now numbered**: applying a bandage/poultice made with regular Antiseptic clears
     the infection itself (stops the DoT, clears the infection flag) immediately on application,
     but the **-15% healingeffectivness / -10% walkSpeed debuff lingers, tapering off over 3
-    in-game hours** rather than vanishing with it. A bandage/poultice made with **Concentrated**
-    Antiseptic clears the infection *and* the debuff instantly, with nothing left to taper off —
-    the tangible reason to bother distilling twice.
+    in-game hours** rather than vanishing with it. A bandage made with **Concentrated** Antiseptic
+    clears the infection *and* the debuff instantly, with nothing left to taper off — the tangible
+    reason to bother distilling twice. **The poultice has no Concentrated tier** — it's crafted
+    from Antiseptic Potion Base directly (a solid item, one step before Diluted Potion/Potion/
+    Concentrated Potion even exist in the distillation chain), so there's no Concentrated Potion
+    Base to craft a Concentrated poultice from; only the bandage gets the instant-cure path.
 
 ### Upset Stomach / Vomiting
 

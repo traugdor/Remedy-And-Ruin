@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Server;
@@ -150,6 +151,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 hpPerSec * durationSec, TimeSpan.FromSeconds(durationSec), ticks, EnumDamageOverTimeEffectType.Bleeding);
 
             entity.WatchedAttributes.SetInt("remedyandruinBleedingTier", (int)newTier);
+            StartWoundInfectionRisk((EntityAgent)entity, newTier);
 
             if (entity is EntityPlayer entityPlayer && entityPlayer.Player is IServerPlayer serverPlayer)
             {
@@ -175,7 +177,157 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         public void StaunchBleeding()
         {
             if (entity.World.Side != EnumAppSide.Server) return;
+            StopWoundInfectionRisk((EntityAgent)entity);
             entity.GetBehavior<EntityBehaviorHealth>()?.StopDoTEffect((int)EnumDamageOverTimeEffectType.Bleeding);
+        }
+
+        // Base chance by the Bleeding tier that caused it, rolled every 30s the wound stays unbandaged,
+        // +5% per roll, capped at +50% total.
+        private static readonly Dictionary<BleedingTier, double> WoundInfectionBaseChance = new Dictionary<BleedingTier, double>
+        {
+            { BleedingTier.Minor, 0.05 },
+            { BleedingTier.Moderate, 0.15 },
+            { BleedingTier.Severe, 0.35 }
+        };
+        private const double WoundInfectionRollIncrement = 0.05;
+        private const double WoundInfectionRollCap = 0.50; // added on top of the base chance, not an absolute ceiling on the roll itself
+        private const int WoundInfectionRollIntervalMs = 30000;
+
+        // 0.05 HP/3s = ~1 HP/min. Never self-resolves.
+        private const float WoundInfectionDoTPerTick = 0.05f;
+        private const int WoundInfectionDoTTickSeconds = 3;
+        internal const int WoundInfectionDoTEffectType = -19343; // mod-defined, distinct from ArrowBonusToxicDoTEffectType (-19342) and vanilla's Poison/Bleeding
+
+        // -15% healingeffectivness, -10% walkspeed while infected.
+        private const float WoundInfectionHealingEffectivnessPenalty = -0.15f;
+        private const float WoundInfectionWalkSpeedPenalty = -0.10f;
+        private const string WoundInfectionHealStatKey = "remedyandruinWoundInfectionHeal";
+        private const string WoundInfectionWalkStatKey = "remedyandruinWoundInfectionWalk";
+
+        // Debuff taper after a regular-Antiseptic cure - 3 in-game hours. Concentrated Antiseptic clears
+        // both the infection and this debuff instantly instead - see CureWoundInfection.
+        private const double WoundInfectionDebuffTaperHours = 3.0;
+
+        private long woundInfectionRollListenerId;
+        private int woundInfectionRollCount;
+
+        public bool HasWoundInfection => entity.WatchedAttributes.GetBool("remedyandruinWoundInfection", false);
+
+        /// <summary>
+        /// Called whenever a new Bleeding DoT actually starts (not on a weaker hit that got dropped) -
+        /// starts the periodic infection-chance roll for as long as the wound stays unbandaged. A fresh
+        /// call while a roll timer is already running restarts it at the new tier's base chance, matching
+        /// "the wound" being singular (Bleeding itself doesn't stack, so neither does its infection risk).
+        /// </summary>
+        public void StartWoundInfectionRisk(EntityAgent target, BleedingTier bleedingTier)
+        {
+            if (target.World.Side != EnumAppSide.Server) return;
+
+            EntityBehaviorPlayerConditions conditions = target.GetBehavior<EntityBehaviorPlayerConditions>();
+            if (conditions == null) return;
+
+            if (conditions.woundInfectionRollListenerId != 0L)
+            {
+                target.World.UnregisterGameTickListener(conditions.woundInfectionRollListenerId);
+            }
+            conditions.woundInfectionRollCount = 0;
+
+            double baseChance = WoundInfectionBaseChance[bleedingTier];
+            var rand = new System.Random();
+            conditions.woundInfectionRollListenerId = target.World.RegisterGameTickListener(dt =>
+            {
+                if (conditions.HasWoundInfection)
+                {
+                    target.World.UnregisterGameTickListener(conditions.woundInfectionRollListenerId);
+                    conditions.woundInfectionRollListenerId = 0L;
+                    return;
+                }
+                double chance = System.Math.Min(baseChance + WoundInfectionRollCap, baseChance + conditions.woundInfectionRollCount * WoundInfectionRollIncrement);
+                conditions.woundInfectionRollCount++;
+                if (rand.NextDouble() < chance)
+                {
+                    conditions.ApplyWoundInfection(target);
+                }
+            }, WoundInfectionRollIntervalMs);
+        }
+
+        /// <summary>
+        /// Called when Bleeding's own DoT ends (naturally or via staunching) - stops the infection-risk
+        /// roll. Does not clear an infection that already took hold; that only happens via
+        /// CureWoundInfection.
+        /// </summary>
+        public void StopWoundInfectionRisk(EntityAgent target)
+        {
+            if (woundInfectionRollListenerId != 0L)
+            {
+                target.World.UnregisterGameTickListener(woundInfectionRollListenerId);
+                woundInfectionRollListenerId = 0L;
+            }
+        }
+
+        public void ApplyWoundInfection(EntityAgent target)
+        {
+            if (target.World.Side != EnumAppSide.Server) return;
+
+            target.WatchedAttributes.SetBool("remedyandruinWoundInfection", true);
+            target.Stats.Set("healingeffectivness", WoundInfectionHealStatKey, WoundInfectionHealingEffectivnessPenalty, persistent: true);
+            target.Stats.Set("walkspeed", WoundInfectionWalkStatKey, WoundInfectionWalkSpeedPenalty, persistent: true);
+
+            // Reuses EffectThreadManager's own "runs until explicitly stopped" DoT builder (1000 real days,
+            // sized so the per-tick math reproduces an exact damage-per-second rate) rather than re-deriving
+            // the same math here.
+            float damagePerSecond = WoundInfectionDoTPerTick / WoundInfectionDoTTickSeconds;
+            DoTSpec spec = EffectThreadManager.BuildEffectivelyForeverDoT(EnumDamageSource.Internal, EnumDamageType.Injury, 0, damagePerSecond);
+            EntityBehaviorHealth health = target.GetBehavior<EntityBehaviorHealth>();
+            health?.ApplyDoTEffect(spec.DamageSource, spec.DamageType, spec.DamageTier, spec.TotalDamage, spec.TotalTime, spec.TicksNumber, WoundInfectionDoTEffectType);
+        }
+
+        /// <summary>
+        /// Cures Wound Infection and/or its lingering debuff. Regular Antiseptic stops the DoT and
+        /// clears the infection flag immediately but leaves the -15%/-10% debuff to taper off over 3
+        /// in-game hours; Concentrated clears the debuff instantly too. A Concentrated application
+        /// also finishes off an already-tapering debuff from an earlier regular cure - the infection
+        /// flag alone isn't enough to gate this, since it's already false during that taper window,
+        /// which previously made a later Concentrated application silently no-op.
+        /// </summary>
+        public void CureWoundInfection(EntityAgent target, bool concentrated)
+        {
+            if (target.World.Side != EnumAppSide.Server) return;
+
+            bool wasInfected = target.WatchedAttributes.GetBool("remedyandruinWoundInfection", false);
+            bool tapering = target.WatchedAttributes.GetBool("remedyandruinWoundInfectionTapering", false);
+            if (!wasInfected && !tapering) return;
+
+            if (wasInfected)
+            {
+                target.WatchedAttributes.SetBool("remedyandruinWoundInfection", false);
+                target.GetBehavior<EntityBehaviorHealth>()?.StopDoTEffect(WoundInfectionDoTEffectType);
+            }
+
+            if (concentrated)
+            {
+                target.WatchedAttributes.SetBool("remedyandruinWoundInfectionTapering", false);
+                target.Stats.Remove("healingeffectivness", WoundInfectionHealStatKey);
+                target.Stats.Remove("walkspeed", WoundInfectionWalkStatKey);
+                return;
+            }
+
+            if (wasInfected && !tapering)
+            {
+                target.WatchedAttributes.SetBool("remedyandruinWoundInfectionTapering", true);
+                TaperWoundInfectionDebuff(target);
+            }
+        }
+
+        private void TaperWoundInfectionDebuff(EntityAgent target)
+        {
+            double taperRealSeconds = WoundInfectionDebuffTaperHours * CalendarTimeHelper.RealSecondsPerGameHour(target.World.Calendar);
+            target.World.RegisterCallback(dt =>
+            {
+                target.WatchedAttributes.SetBool("remedyandruinWoundInfectionTapering", false);
+                target.Stats.Remove("healingeffectivness", WoundInfectionHealStatKey);
+                target.Stats.Remove("walkspeed", WoundInfectionWalkStatKey);
+            }, (int)(taperRealSeconds * 1000.0));
         }
     }
 }
