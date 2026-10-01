@@ -256,7 +256,8 @@ necessarily by priority (priority is an open question, see Part D).
     cure), Antiviral (Chest Cold family), Mind Tonic, Sedative, Tonic (Immune contagion + HP
     restore), Topical Ointment (Skin Irritation), plus the 5 poison clusters' actual effects
     (Toxic/Noxious/Cardiac/Neurotoxic/Mind Poison).
-13. **Bleeding condition** — location bucketing, severity tiers, bandage interaction.
+13. **Bleeding condition** — DONE (Plan 13, along with Wound Infection, Skin Irritation, and the
+    sleep-completion event; see Part E's reordered list below for detail).
 14. **Liver Disease, Resurrection Sickness** — standalone condition mechanics.
 15. **Hallucination trigger wiring** — swap `.rrbrainrot` debug feed for the real `MINDPOISON`
     case's output once (12) exists.
@@ -482,10 +483,12 @@ in scope per D1/D11, so order here is about what unblocks what, not what matters
 11. **Arrow poisoning** — dip-craft recipe + delivery, standalone.
 12. **The 5 poison-cluster effects** (Toxic/Noxious/Cardiac/Neurotoxic/Mind Poison) — one plan,
     since they share the same `ApplyEffect` switch and the same tolerance-discount formula shape.
-13. **Bleeding + Wound Infection + Skin Irritation + Tiredness/sleep-gate completion** — grouped as
-    one plan (all standalone Part 3 condition state machines of similar shape). Reordered ahead of
-    remedy-potion effects: Antiseptic (Wound Infection), Sedative (sleep gate), and Topical
-    Ointment (Skin Irritation) each need one of these as their actual cure target to hook into.
+13. **Bleeding + Wound Infection + Skin Irritation + Tiredness/sleep-gate completion** — DONE
+    (Plan 13, all four tasks implemented, tested in-game, and committed). Sleep-completion event,
+    Skin Irritation debuff/self-resolve/cure, Bleeding's tag-based eligibility + tiered DoT, and
+    Wound Infection's escalating chance-DoT + antiseptic bandage/poultice cure are all live.
+    Antiseptic (Wound Infection), Sedative (sleep gate), and Topical Ointment (Skin Irritation) now
+    have real cure targets to hook into for Plan 16.
 14. **Chest Cold family (Cold/Flu/Bronchitis/Pneumonia), Liver Disease, Resurrection Sickness** —
     grouped as one plan (all standalone condition state machines of similar shape). Reordered ahead
     of remedy-potion effects: Antiviral needs Chest Cold family as its cure target.
