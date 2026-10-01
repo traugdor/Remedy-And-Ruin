@@ -172,6 +172,22 @@ namespace Remedy_And_Ruin
                     conditions.ApplySkinIrritation((EntityAgent)args.Caller.Entity);
                     return TextCommandResult.Success("Skin Irritation applied - check healingeffectivness via the character screen.");
                 });
+
+            api.ChatCommands.Create("rrWoundInfection")
+                .WithDescription("Debug: toggle Wound Infection on yourself to verify the DoT/debuff/cure cycle without waiting on Bleeding's own infection-chance rolls.")
+                .RequiresPrivilege(Privilege.root)
+                .RequiresPlayer()
+                .HandleWith(args =>
+                {
+                    EntityBehaviorPlayerConditions conditions = args.Caller.Entity.GetBehavior<EntityBehaviorPlayerConditions>();
+                    if (conditions.HasWoundInfection)
+                    {
+                        conditions.CureWoundInfection((EntityAgent)args.Caller.Entity, concentrated: true);
+                        return TextCommandResult.Success("Wound Infection cleared (concentrated cure - no debuff taper).");
+                    }
+                    conditions.ApplyWoundInfection((EntityAgent)args.Caller.Entity);
+                    return TextCommandResult.Success("Wound Infection applied - check healingeffectivness/walkspeed via the character screen.");
+                });
         }
 
         public override void StartClientSide(ICoreClientAPI api)

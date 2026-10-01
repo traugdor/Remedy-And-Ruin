@@ -1,0 +1,14 @@
+[
+  { "op": "add", "file": "game:itemtypes/utility/poultice.json", "path": "/variantgroups/1/states/-", "value": "antiseptic" },
+  { "op": "add", "file": "game:itemtypes/utility/poultice.json", "path": "/behaviors/0/propertiesByType/*-linen-antiseptic", "value": {
+      "health": 7, "applicationtimesec": 3, "maxapplicationtimesec": 10, "effectdurationsec": 10,
+      "ticks": 10, "cancelinair": false, "cancelwhileswimming": false, "delaytocancelsec": 0.5
+  }},
+  { "op": "add", "file": "game:itemtypes/utility/poultice.json", "path": "/behaviors/0/propertiesByType/*-reed-antiseptic", "value": {
+      "health": 4, "applicationtimesec": 3, "maxapplicationtimesec": 10, "effectdurationsec": 10,
+      "ticks": 10, "cancelinair": false, "cancelwhileswimming": false, "delaytocancelsec": 0.5
+  }},
+  { "op": "add", "file": "game:itemtypes/utility/poultice.json", "path": "/texturesByType", "value": {
+      "*-antiseptic": { "agent": { "base": "item/medicine/{material}/honey-sulfur" } }
+  }}
+]

@@ -1,0 +1,6 @@
+[
+  { "ingredientPattern": "PA", "ingredients": { "P": { "type": "item", "code": "game:poultice-linen-*" }, "A": { "type": "item", "code": "remedyandruin:potionbase-antiseptic" } },
+    "width": 2, "height": 1, "shapeless": true, "output": { "type": "item", "code": "game:poultice-linen-antiseptic" } },
+  { "ingredientPattern": "PA", "ingredients": { "P": { "type": "item", "code": "game:poultice-reed-*" }, "A": { "type": "item", "code": "remedyandruin:potionbase-antiseptic" } },
+    "width": 2, "height": 1, "shapeless": true, "output": { "type": "item", "code": "game:poultice-reed-antiseptic" } }
+]
