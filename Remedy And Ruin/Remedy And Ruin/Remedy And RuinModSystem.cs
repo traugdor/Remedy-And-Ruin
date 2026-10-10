@@ -43,6 +43,7 @@ namespace Remedy_And_Ruin
             api.RegisterEntityBehaviorClass("remedyandruinArrowPoisonDelivery", typeof(EntityBehaviorArrowPoisonDelivery));
             api.RegisterEntityBehaviorClass("remedyandruinPlayerConditions", typeof(EntityBehaviorPlayerConditions));
             api.RegisterEntityBehaviorClass("remedyandruinLiverDisease", typeof(EntityBehaviorLiverDisease));
+            api.RegisterEntityBehaviorClass("remedyandruinResurrectionSickness", typeof(EntityBehaviorResurrectionSickness));
             api.RegisterCollectibleBehaviorClass("RemedyArrowPoisoning", typeof(CollectibleBehaviorArrowPoisoning));
             api.RegisterBlockClass("Remedy_And_Ruin.GameEngineTweaks.BlockVial", typeof(BlockVial));
 
@@ -105,6 +106,10 @@ namespace Remedy_And_Ruin
                 {
                     entity.AddBehavior(new EntityBehaviorLiverDisease(entity));
                 }
+                if (entity != null && entity.GetBehavior<EntityBehaviorResurrectionSickness>() == null)
+                {
+                    entity.AddBehavior(new EntityBehaviorResurrectionSickness(entity));
+                }
                 entity?.GetBehavior<EntityBehaviorLiverDisease>()?.ResumeAfterLogin((EntityAgent)entity);
                 entity?.GetBehavior<EntityBehaviorPlayerConditions>()?.ResumeAfterLogin((EntityAgent)entity);
 
@@ -140,6 +145,11 @@ namespace Remedy_And_Ruin
                 if (entity.GetBehavior<EntityBehaviorHealth>() != null && entity.GetBehavior<EntityBehaviorLiverDisease>() == null)
                 {
                     entity.AddBehavior(new EntityBehaviorLiverDisease(entity));
+                }
+
+                if (entity.GetBehavior<EntityBehaviorHealth>() != null && entity.GetBehavior<EntityBehaviorResurrectionSickness>() == null)
+                {
+                    entity.AddBehavior(new EntityBehaviorResurrectionSickness(entity));
                 }
             };
 
@@ -235,6 +245,25 @@ namespace Remedy_And_Ruin
                     string key = (string)args.Parsers[1].GetValue();
                     args.Caller.Entity.Stats.Remove(category, key);
                     return TextCommandResult.Success($"Removed '{key}' from '{category}'. New blended value: {args.Caller.Entity.Stats.GetBlended(category):0.###}");
+                });
+
+            api.ChatCommands.Create("rrResurrectionSickness")
+                .WithDescription("Debug: toggle Resurrection Sickness on yourself. Turning it on also drops your Temporal Stability to 50%, as a real resurrection does.")
+                .RequiresPrivilege(Privilege.root)
+                .RequiresPlayer()
+                .HandleWith(args =>
+                {
+                    EntityBehaviorResurrectionSickness sickness = args.Caller.Entity.GetBehavior<EntityBehaviorResurrectionSickness>();
+                    EntityAgent agent = (EntityAgent)args.Caller.Entity;
+                    if (sickness.HasResurrectionSickness)
+                    {
+                        sickness.ClearResurrectionSickness(agent);
+                        return TextCommandResult.Success("Resurrection Sickness cleared.");
+                    }
+                    sickness.ApplyResurrectionSickness(agent);
+                    EntityBehaviorTemporalStabilityAffected stability = agent.GetBehavior<EntityBehaviorTemporalStabilityAffected>();
+                    if (stability != null) stability.OwnStability = 0.5;
+                    return TextCommandResult.Success("Resurrection Sickness applied for 1 in-game day, Temporal Stability set to 50%.");
                 });
 
             api.ChatCommands.Create("rrLiverDisease")
