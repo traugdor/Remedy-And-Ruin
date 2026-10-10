@@ -32,6 +32,7 @@ Thumbs.db
 # git worktrees
 .worktrees/
 
-# working docs (plans, archived specs) - not tracked
+# working docs (plans, research, archived specs) - not tracked
 docs/
+.claude/
 CLAUDE.md
