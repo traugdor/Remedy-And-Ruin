@@ -3,6 +3,7 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Datastructures;
 using Vintagestory.GameContent;
+using Remedy_And_Ruin.RRBehaviors;
 
 namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
 {

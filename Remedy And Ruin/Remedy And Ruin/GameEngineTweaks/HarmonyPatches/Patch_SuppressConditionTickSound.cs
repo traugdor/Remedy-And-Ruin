@@ -10,7 +10,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
     /// hurt sound once per tick for the whole condition's duration. Suppresses only that repeated
     /// grunt - identified by the tick's own DamageSource (EnumDamageSource.Bleed for Bleeding;
     /// EnumDamageSource.Internal + EnumDamageType.Injury, a combination nothing else in this mod or
-    /// vanilla uses, for Wound Infection) - so the original bite that caused a bleed still plays its
+    /// vanilla uses, shared by Wound Infection and Liver Failure) - so the original bite that caused a bleed still plays its
     /// own sound (it carries the attacker's own damage source, not this tick marker), and any other
     /// cause of health loss (falling, drowning, starvation, a different hit) is untouched.
     /// </summary>

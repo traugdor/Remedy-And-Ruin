@@ -1337,9 +1337,11 @@ consistent with the halve/zero pattern used everywhere else Mind Tonic reaches.
   food (bushmeat, redmeat, poultry, fish), so it can't be reused directly without also catching
   those. This needs its own dedicated counter, tracking cooked-bushmeat consumption specifically
   (`bushmeat-cooked` — `bushmeat.json` has no per-animal sub-variant, one singular meat type,
-  distinct from redmeat/poultry/fish as separate items entirely). **Numbered: triggers once
-  cooked bushmeat makes up more than 50% of meals eaten over a rolling 3-day window** — a
-  bushmeat-heavy diet, not occasional bushmeat mixed into a varied one.
+  distinct from redmeat/poultry/fish as separate items entirely). **Numbered: a liver toxicity
+  meter** — each cooked bushmeat eaten adds **0.25**, and the meter drains **1 per in-game day**
+  (decayed against the game calendar, so it follows calendar speed and keeps draining across
+  saves and relogs). Liver Disease starts once the meter reaches **3**; Liver Failure starts once
+  it reaches **6**.
 - **Trigger 2: overdosing on Tonic specifically** — Tonic's defined overdose effect (Part 2 §6)
   *is* Liver Disease directly, not a generic "any potion overdose" outcome; overdosing on other
   potions produces their own distinct effect instead (§6), not Liver Disease. Reuses the
@@ -1352,19 +1354,20 @@ consistent with the halve/zero pattern used everywhere else Mind Tonic reaches.
   max health** (via `EntityStats`' max-health-modifier path, same mechanism as Cardiac Poison's
   exertion stacking) — the max-health hit specifically reflecting toxin buildup rather than being
   just another flat penalty layered on top.
-- **Self-resolves after 3 in-game days with the trigger genuinely stopped** — bushmeat dropping
-  back under the 50% threshold, or no further Tonic overdose — same "stop doing the bad thing and
-  the body recovers" shape as a real mild liver complaint, no medicine strictly required.
-- **But if Liver Disease persists a full 7 in-game days without clearing** — i.e., the trigger
-  keeps it renewed instead of letting the 3-day self-resolve happen — **it progresses into Liver
-  Failure itself**, a second on-ramp into that same severe poison effect alongside the amatoxin
-  mushrooms, the same "escalation via continued cause while untreated" shape as Chest Cold and
-  Wound Infection.
+- **Fades on its own, no medicine needed**: both Liver Disease and Liver Failure last until the
+  toxicity meter has drained back to **0** (about 3 days from the Liver Disease threshold, 6 from
+  the Liver Failure one) or the player dies, whichever comes first. Eating more bushmeat while
+  affected pushes the meter back up and extends it.
+- **Liver Failure from this path** is a second on-ramp into Liver Failure, but a much gentler one
+  than the amatoxin mushrooms': it starts immediately at the threshold with no onset delay,
+  drains **0.1 HP/sec** (about 2.5 minutes from full health), and its damage is silent, like Wound
+  Infection's. It ends when the meter reaches 0, on death, or on an Antidote's second dose, which
+  stops the drain and drops the meter just under the Liver Failure threshold; Liver Disease is
+  left to fade with the meter.
 - Raw bushmeat cannot be eaten at all — `bushmeat.json`'s `nutritionPropsByType` only defines
   `*-cooked` and `*-cured` entries, no `*-raw` and no wildcard fallback, so the eat interaction
   has nothing to act on for the raw item. This condition can only ever be triggered by the cooked
   form.
-- Exact threshold, severity, and cure not decided.
 
 ### Resurrection Sickness
 
@@ -1407,7 +1410,7 @@ needs no new shader work, just a new strength input.
 
 | Cluster | Product | Coated-arrow effect | Drinking effect |
 |---|---|---|---|
-| Deadly Hepatotoxic | **Toxic Poison** (= Liver Failure) | +1.5 HP flat bonus damage per hit, applied immediately, plus a **chance** to also inject a smaller version of the delayed DoT below. **Hunting risk**: if the smaller DoT is what finishes off a killed animal, it drops no meat at all — the poison ruins it, deliberately making poisoned-arrow hunting a real risk (faster potential kill vs. a wasted, meatless one) rather than a free efficiency upgrade | Delayed onset with a mild early warning (small `healingeffectivness` dip during the delay window), then **1.5 HP/sec continuous drain — no natural end, only stops via Antidote or death**. Two triggers: the deadly mushrooms directly, or untreated Liver Disease fed more bushmeat |
+| Deadly Hepatotoxic | **Toxic Poison** (= Liver Failure) | +1.5 HP flat bonus damage per hit, applied immediately, plus a **chance** to also inject a smaller version of the delayed DoT below. **Hunting risk**: if the smaller DoT is what finishes off a killed animal, it drops no meat at all — the poison ruins it, deliberately making poisoned-arrow hunting a real risk (faster potential kill vs. a wasted, meatless one) rather than a free efficiency upgrade | Delayed onset with a mild early warning (small `healingeffectivness` dip during the delay window), then **1.5 HP/sec continuous drain — no natural end, only stops via Antidote or death**. Two triggers: the deadly mushrooms directly, or a liver toxicity meter built up by eating cooked bushmeat (see Liver Disease, which uses a gentler, meter-bound version of this drain) |
 | GI-toxic / Emetic | **Noxious Poison** (= Food Poisoning) | High chance of the same as drinking | Fever + genuine psychedelic tripping (vanilla's own `psychedelic`-attribute mushroom effect, not the mod's Hallucination condition) + vomiting (via the same `ConsumeSaturation` mechanic as Upset Stomach), lasting 24h, ends via Antidote or death from other causes. **No DoT** — deliberately not lethal on its own; not every poison needs to be a death spiral, some should be annoying and disruptive but survivable on purpose |
 | Cardiac Glycoside | **Cardiac Poison** (= Cardiac Strain) | **25-35% chance** of cardiac arrest: -5 current *and* max HP (instant death if current HP is already below 5), heavy movement-speed debuff, considerably slowed tool use, 6h duration, may lead to death. Exertion stacking below applies the same way | **100% guaranteed** cardiac arrest, same effect. Trigger model changed from the original design: no longer gated behind exertion — it fires directly on drink/hit, with exertion now a *worsening* factor (both duration and severity) rather than the sole trigger, see below |
 | Neurotoxic / Alkaloid | **Neurotoxic Poison** (= Weakness/Paralysis) | **25-35% chance** per hit of contributing toxicity toward the escalation ladder — each successful proc adds **half a stage's worth** (two arrow procs ≈ one drunk dose) | The 3-stage escalation ladder (numbered below): Weakness → Paralysis → Cardiac Arrest. **Each drunk dose advances the ladder by exactly one full stage**, expressed as toxicity-per-dose on the same counter used for potion overdose (Part 2 §5), which is already weighted rather than a raw dose count, so this needs no new mechanic. **Also causes headache and dizziness** (mouse-sway via `TemporalVignetteRenderer.DrunkWobbleStrength`) throughout, at every stage. Confusion and mind-fog are *not* part of this poison — moved to Mind Poison below, since those specifically drive Hallucination/Temporal Fog rather than this ladder's physical debuffs |

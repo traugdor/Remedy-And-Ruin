@@ -8,8 +8,9 @@ using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 using Vintagestory.Client.NoObf;
 using Vintagestory.GameContent;
+using Remedy_And_Ruin.GameEngineTweaks;
 
-namespace Remedy_And_Ruin.GameEngineTweaks
+namespace Remedy_And_Ruin.RRBehaviors
 {
     /// <summary>
     /// Attached to player entities (see Remedy And RuinModSystem.StartServerSide). Owns all
@@ -949,6 +950,12 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     // never sees it - stop it separately by its own fixed effect-type id. A no-op
                     // if none is currently active.
                     entity.GetBehavior<EntityBehaviorHealth>()?.StopDoTEffect(EffectThreadManager.ArrowBonusToxicDoTEffectType);
+                    // Liver Failure from the bushmeat toxicity meter is likewise its own directly
+                    // applied DoT, not a tracked thread.
+                    if (entity is EntityAgent antidoteTarget)
+                    {
+                        entity.GetBehavior<EntityBehaviorLiverDisease>()?.CureLiverFailure(antidoteTarget);
+                    }
                     drankAntidote = false;
                     timeAntidoteConsumed = DateTime.MinValue;
                     ApplyAntidoteAftermathEffect();

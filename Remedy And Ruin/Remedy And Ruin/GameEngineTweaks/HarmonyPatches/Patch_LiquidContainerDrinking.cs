@@ -3,6 +3,7 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Datastructures;
 using Vintagestory.GameContent;
+using Remedy_And_Ruin.RRBehaviors;
 
 namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
 {
@@ -18,15 +19,15 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
     [HarmonyPatch(typeof(BlockLiquidContainerBase), "tryEatStop")]
     public static class Patch_LiquidContainerDrinking
     {
-        public static void Prefix(BlockLiquidContainerBase __instance, ItemSlot slot, out (ItemStack contentBefore, int chargesBefore) __state)
+        public static void Prefix(BlockLiquidContainerBase __instance, ItemSlot slot, out (ItemStack contentBefore, int chargesBefore, int containerCountBefore) __state)
         {
             int chargesBefore = (__instance is BlockVial && slot?.Itemstack != null)
                 ? slot.Itemstack.Attributes.GetInt("poisonCharges", 9)
                 : 9;
-            __state = (__instance.GetContent(slot?.Itemstack)?.Clone(), chargesBefore);
+            __state = (__instance.GetContent(slot?.Itemstack)?.Clone(), chargesBefore, slot?.Itemstack?.StackSize ?? 0);
         }
 
-        public static void Postfix(BlockLiquidContainerBase __instance, ItemSlot slot, EntityAgent byEntity, (ItemStack contentBefore, int chargesBefore) __state)
+        public static void Postfix(BlockLiquidContainerBase __instance, ItemSlot slot, EntityAgent byEntity, (ItemStack contentBefore, int chargesBefore, int containerCountBefore) __state)
         {
             ItemStack contentBefore = __state.contentBefore;
             if (contentBefore == null)
@@ -34,9 +35,14 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
                 return;
             }
 
+            // A held stack of containers is drunk from via a one-container clone that gets handed
+            // back to the inventory (BlockLiquidContainerBase.SplitStackAndPerformAction), so the
+            // remaining held stack's own content never changes - only its count drops. A
+            // single container is drained in place and its content shrinks instead.
             ItemStack contentAfter = __instance.GetContent(slot?.Itemstack);
             int sizeAfter = contentAfter?.StackSize ?? 0;
-            if (sizeAfter >= contentBefore.StackSize)
+            int containerCountAfter = slot?.Itemstack?.StackSize ?? 0;
+            if (sizeAfter >= contentBefore.StackSize && containerCountAfter >= __state.containerCountBefore)
             {
                 return; // nothing was actually drunk
             }

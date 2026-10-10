@@ -2,6 +2,7 @@ using HarmonyLib;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Datastructures;
+using Remedy_And_Ruin.RRBehaviors;
 
 namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
 {
@@ -20,6 +21,14 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
 
             EntityBehaviorRemedyEffects remedyBehavior = byEntity.GetBehavior<EntityBehaviorRemedyEffects>();
             remedyBehavior?.OnAnyItemConsumed(stack, byEntity.World);
+
+            // tryEatStop runs on every release of an interact with any held item; mirror vanilla's
+            // own "completed eat of an actually-edible item" gate so only real meals are counted.
+            if (secondsUsed >= 0.95f && stack?.Collectible?.GetNutritionProperties(byEntity.World, stack, byEntity) != null)
+            {
+                EntityBehaviorLiverDisease liverDiseaseBehavior = byEntity.GetBehavior<EntityBehaviorLiverDisease>();
+                liverDiseaseBehavior?.OnFoodConsumed(stack, byEntity);
+            }
 
             JsonObject effectData = stack?.Collectible?.Attributes?["remedyandruinEffect"];
             if (effectData == null || !effectData.Exists)

@@ -5,8 +5,9 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
+using Remedy_And_Ruin.GameEngineTweaks;
 
-namespace Remedy_And_Ruin.GameEngineTweaks
+namespace Remedy_And_Ruin.RRBehaviors
 {
     /// <summary>
     /// Attached to the vanilla arrow item via a JSON patch (behaviors: [{ "name":

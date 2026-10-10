@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 using Remedy_And_Ruin.GameEngineTweaks;
@@ -11,6 +13,7 @@ using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 using Vintagestory.GameContent;
+using Remedy_And_Ruin.RRBehaviors;
 
 namespace Remedy_And_Ruin
 {
@@ -39,6 +42,7 @@ namespace Remedy_And_Ruin
             api.RegisterEntityBehaviorClass("remedyandruinEffects", typeof(EntityBehaviorRemedyEffects));
             api.RegisterEntityBehaviorClass("remedyandruinArrowPoisonDelivery", typeof(EntityBehaviorArrowPoisonDelivery));
             api.RegisterEntityBehaviorClass("remedyandruinPlayerConditions", typeof(EntityBehaviorPlayerConditions));
+            api.RegisterEntityBehaviorClass("remedyandruinLiverDisease", typeof(EntityBehaviorLiverDisease));
             api.RegisterCollectibleBehaviorClass("RemedyArrowPoisoning", typeof(CollectibleBehaviorArrowPoisoning));
             api.RegisterBlockClass("Remedy_And_Ruin.GameEngineTweaks.BlockVial", typeof(BlockVial));
 
@@ -97,6 +101,13 @@ namespace Remedy_And_Ruin
                     entity.AddBehavior(new EntityBehaviorPlayerConditions(entity));
                 }
 
+                if (entity != null && entity.GetBehavior<EntityBehaviorLiverDisease>() == null)
+                {
+                    entity.AddBehavior(new EntityBehaviorLiverDisease(entity));
+                }
+                entity?.GetBehavior<EntityBehaviorLiverDisease>()?.ResumeAfterLogin((EntityAgent)entity);
+                entity?.GetBehavior<EntityBehaviorPlayerConditions>()?.ResumeAfterLogin((EntityAgent)entity);
+
                 //EntityBehaviorRemedyEffects RRBehavior = entity.GetBehavior<EntityBehaviorRemedyEffects>();
                 if(entity != null && entity.GetBehavior<EntityBehaviorRemedyEffects>() is EntityBehaviorRemedyEffects RRBehavior)
                 {
@@ -124,6 +135,11 @@ namespace Remedy_And_Ruin
                 if (entity.GetBehavior<EntityBehaviorHealth>() != null && entity.GetBehavior<EntityBehaviorPlayerConditions>() == null)
                 {
                     entity.AddBehavior(new EntityBehaviorPlayerConditions(entity));
+                }
+
+                if (entity.GetBehavior<EntityBehaviorHealth>() != null && entity.GetBehavior<EntityBehaviorLiverDisease>() == null)
+                {
+                    entity.AddBehavior(new EntityBehaviorLiverDisease(entity));
                 }
             };
 
@@ -187,6 +203,55 @@ namespace Remedy_And_Ruin
                     }
                     conditions.ApplyWoundInfection((EntityAgent)args.Caller.Entity);
                     return TextCommandResult.Success("Wound Infection applied - check healingeffectivness/walkspeed via the character screen.");
+                });
+
+            api.ChatCommands.Create("rrStats")
+                .WithDescription("Debug: list every modifier contributing to one of your stat categories (default healingeffectivness), with its blended total.")
+                .RequiresPrivilege(Privilege.root)
+                .RequiresPlayer()
+                .WithArgs(api.ChatCommands.Parsers.OptionalWord("category"))
+                .HandleWith(args =>
+                {
+                    string category = args.Parsers[0].IsMissing ? "healingeffectivness" : (string)args.Parsers[0].GetValue();
+                    EntityStats stats = args.Caller.Entity.Stats;
+                    foreach (KeyValuePair<string, EntityFloatStats> entry in stats)
+                    {
+                        if (entry.Key != category) continue;
+
+                        string lines = string.Join("\n", entry.Value.ValuesByKey.Select(modifier => $"  {modifier.Key} = {modifier.Value.Value:0.###} (weight {modifier.Value.Weight:0.###}, persistent {modifier.Value.Persistent})"));
+                        return TextCommandResult.Success($"{category}: blended {stats.GetBlended(category):0.###}\n{lines}");
+                    }
+                    return TextCommandResult.Success($"No stat category '{category}' on you.");
+                });
+
+            api.ChatCommands.Create("rrStatRemove")
+                .WithDescription("Debug: remove one modifier key from one of your stat categories, e.g. to clear an orphaned modifier. Use /rrStats first to see the keys.")
+                .RequiresPrivilege(Privilege.root)
+                .RequiresPlayer()
+                .WithArgs(api.ChatCommands.Parsers.Word("category"), api.ChatCommands.Parsers.Word("key"))
+                .HandleWith(args =>
+                {
+                    string category = (string)args.Parsers[0].GetValue();
+                    string key = (string)args.Parsers[1].GetValue();
+                    args.Caller.Entity.Stats.Remove(category, key);
+                    return TextCommandResult.Success($"Removed '{key}' from '{category}'. New blended value: {args.Caller.Entity.Stats.GetBlended(category):0.###}");
+                });
+
+            api.ChatCommands.Create("rrLiverDisease")
+                .WithDescription("Debug: set your liver toxicity meter (3+ = Liver Disease, 6+ = Liver Failure, 0 clears both). With no value, shows the current meter.")
+                .RequiresPrivilege(Privilege.root)
+                .RequiresPlayer()
+                .WithArgs(api.ChatCommands.Parsers.OptionalFloat("toxicity"))
+                .HandleWith(args =>
+                {
+                    EntityBehaviorLiverDisease liverDisease = args.Caller.Entity.GetBehavior<EntityBehaviorLiverDisease>();
+                    if (args.Parsers[0].IsMissing)
+                    {
+                        return TextCommandResult.Success($"Liver toxicity: {liverDisease.CurrentToxicity:0.00} (Liver Disease: {liverDisease.HasLiverDisease}, Liver Failure: {liverDisease.HasLiverFailure})");
+                    }
+
+                    liverDisease.SetToxicity((EntityAgent)args.Caller.Entity, (float)args.Parsers[0].GetValue());
+                    return TextCommandResult.Success($"Liver toxicity set to {liverDisease.CurrentToxicity:0.00} (Liver Disease: {liverDisease.HasLiverDisease}, Liver Failure: {liverDisease.HasLiverFailure})");
                 });
         }
 

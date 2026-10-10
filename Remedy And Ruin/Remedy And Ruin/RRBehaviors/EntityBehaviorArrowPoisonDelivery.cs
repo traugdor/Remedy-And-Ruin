@@ -1,7 +1,7 @@
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Datastructures;
 
-namespace Remedy_And_Ruin.GameEngineTweaks
+namespace Remedy_And_Ruin.RRBehaviors
 {
     /// <summary>
     /// Attached to every non-player entity so a poisoned arrow has something to apply its effect

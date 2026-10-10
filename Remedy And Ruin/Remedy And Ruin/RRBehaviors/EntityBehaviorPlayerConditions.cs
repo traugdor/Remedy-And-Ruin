@@ -4,8 +4,9 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Server;
 using Vintagestory.GameContent;
+using Remedy_And_Ruin.GameEngineTweaks;
 
-namespace Remedy_And_Ruin.GameEngineTweaks
+namespace Remedy_And_Ruin.RRBehaviors
 {
     /// <summary>
     /// Owns Bleeding, Wound Infection, and Skin Irritation state - the combat/environment-triggered
@@ -39,6 +40,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // catalog.
         private const float SkinIrritationHealingEffectivnessPenalty = -0.05f;
         private const string SkinIrritationStatKey = "remedyandruinSkinIrritation";
+        private const string SkinIrritationEndDayKey = "remedyandruinSkinIrritationEndDay";
 
         // Self-resolves in 2-3 in-game days if untreated (02-design-overview.md:1191) - midpoint of
         // that range.
@@ -59,18 +61,51 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             if (target.World.Side != EnumAppSide.Server) return;
 
             target.WatchedAttributes.SetBool("remedyandruinSkinIrritation", true);
+            target.WatchedAttributes.SetDouble(SkinIrritationEndDayKey, target.World.Calendar.TotalDays + SkinIrritationSelfResolveHours / 24.0);
             target.Stats.Set("healingeffectivness", SkinIrritationStatKey, SkinIrritationHealingEffectivnessPenalty, persistent: true);
 
-            EntityBehaviorPlayerConditions conditions = target.GetBehavior<EntityBehaviorPlayerConditions>();
-            if (conditions == null) return;
+            ScheduleSkinIrritationResolve(target, SkinIrritationSelfResolveHours);
+        }
 
-            if (conditions.skinIrritationSelfResolveListenerId != 0L)
+        private void ScheduleSkinIrritationResolve(EntityAgent target, double gameHours)
+        {
+            if (skinIrritationSelfResolveListenerId != 0L)
             {
-                target.World.UnregisterGameTickListener(conditions.skinIrritationSelfResolveListenerId);
+                target.World.UnregisterCallback(skinIrritationSelfResolveListenerId);
             }
-            conditions.skinIrritationSelfResolveListenerId = target.World.RegisterCallback(
-                dt => conditions.ClearSkinIrritation(target),
-                (int)(SkinIrritationSelfResolveHours * CalendarTimeHelper.RealSecondsPerGameHour(target.World.Calendar) * 1000.0));
+            skinIrritationSelfResolveListenerId = target.World.RegisterCallback(
+                dt => ClearSkinIrritation(target),
+                (int)(gameHours * CalendarTimeHelper.RealSecondsPerGameHour(target.World.Calendar) * 1000.0));
+        }
+
+        /// <summary>
+        /// Re-arms the condition timers lost on logout/restart (callbacks aren't persisted, but the
+        /// stat modifiers and flags are) and removes any modifier left behind by a condition that is
+        /// no longer active. Without this, a stat modifier whose clearing callback was lost would
+        /// stay on the player permanently.
+        /// </summary>
+        public void ResumeAfterLogin(EntityAgent target)
+        {
+            if (target.World.Side != EnumAppSide.Server) return;
+
+            if (HasSkinIrritation)
+            {
+                double remainingDays = target.WatchedAttributes.GetDouble(SkinIrritationEndDayKey, 0.0) - target.World.Calendar.TotalDays;
+                if (remainingDays <= 0.0)
+                {
+                    ClearSkinIrritation(target);
+                }
+                else
+                {
+                    ScheduleSkinIrritationResolve(target, remainingDays * 24.0);
+                }
+            }
+            else
+            {
+                target.Stats.Remove("healingeffectivness", SkinIrritationStatKey);
+            }
+
+            ResumeWoundInfectionTaper(target);
         }
 
         public void ClearSkinIrritation(EntityAgent target)
@@ -84,7 +119,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             EntityBehaviorPlayerConditions conditions = target.GetBehavior<EntityBehaviorPlayerConditions>();
             if (conditions != null && conditions.skinIrritationSelfResolveListenerId != 0L)
             {
-                target.World.UnregisterGameTickListener(conditions.skinIrritationSelfResolveListenerId);
+                target.World.UnregisterCallback(conditions.skinIrritationSelfResolveListenerId);
                 conditions.skinIrritationSelfResolveListenerId = 0L;
             }
         }
@@ -203,6 +238,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         private const float WoundInfectionWalkSpeedPenalty = -0.10f;
         private const string WoundInfectionHealStatKey = "remedyandruinWoundInfectionHeal";
         private const string WoundInfectionWalkStatKey = "remedyandruinWoundInfectionWalk";
+        private const string WoundInfectionTaperEndDayKey = "remedyandruinWoundInfectionTaperEndDay";
 
         // Debuff taper after a regular-Antiseptic cure - 3 in-game hours. Concentrated Antiseptic clears
         // both the infection and this debuff instantly instead - see CureWoundInfection.
@@ -329,19 +365,64 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             if (wasInfected && !tapering)
             {
                 target.WatchedAttributes.SetBool("remedyandruinWoundInfectionTapering", true);
-                TaperWoundInfectionDebuff(target);
+                target.WatchedAttributes.SetDouble(WoundInfectionTaperEndDayKey, target.World.Calendar.TotalDays + WoundInfectionDebuffTaperHours / 24.0);
+                ScheduleWoundInfectionTaper(target, WoundInfectionDebuffTaperHours);
             }
         }
 
-        private void TaperWoundInfectionDebuff(EntityAgent target)
+        private void ScheduleWoundInfectionTaper(EntityAgent target, double gameHours)
         {
-            double taperRealSeconds = WoundInfectionDebuffTaperHours * CalendarTimeHelper.RealSecondsPerGameHour(target.World.Calendar);
-            target.World.RegisterCallback(dt =>
+            target.World.RegisterCallback(
+                dt => FinishWoundInfectionTaper(target),
+                (int)(gameHours * CalendarTimeHelper.RealSecondsPerGameHour(target.World.Calendar) * 1000.0));
+        }
+
+        private void FinishWoundInfectionTaper(EntityAgent target)
+        {
+            target.WatchedAttributes.SetBool("remedyandruinWoundInfectionTapering", false);
+            target.Stats.Remove("healingeffectivness", WoundInfectionHealStatKey);
+            target.Stats.Remove("walkspeed", WoundInfectionWalkStatKey);
+        }
+
+        private void ResumeWoundInfectionTaper(EntityAgent target)
+        {
+            if (target.WatchedAttributes.GetBool("remedyandruinWoundInfectionTapering", false))
             {
-                target.WatchedAttributes.SetBool("remedyandruinWoundInfectionTapering", false);
+                double remainingDays = target.WatchedAttributes.GetDouble(WoundInfectionTaperEndDayKey, 0.0) - target.World.Calendar.TotalDays;
+                if (remainingDays <= 0.0)
+                {
+                    FinishWoundInfectionTaper(target);
+                }
+                else
+                {
+                    ScheduleWoundInfectionTaper(target, remainingDays * 24.0);
+                }
+            }
+            else if (!HasWoundInfection)
+            {
                 target.Stats.Remove("healingeffectivness", WoundInfectionHealStatKey);
                 target.Stats.Remove("walkspeed", WoundInfectionWalkStatKey);
-            }, (int)(taperRealSeconds * 1000.0));
+            }
+        }
+
+        /// <summary>
+        /// Death ends Skin Irritation, Wound Infection and its taper, and the Bleeding bookkeeping -
+        /// vanilla clears the entity's DoTs on death, but the flags and stat modifiers persist
+        /// through respawn, which would leave their debuffs stuck on with nothing left to clear them.
+        /// </summary>
+        public override void OnEntityDeath(DamageSource damageSourceForDeath)
+        {
+            if (entity.World.Side != EnumAppSide.Server || !(entity is EntityAgent agent)) return;
+
+            ClearSkinIrritation(agent);
+
+            if (woundInfectionRollListenerId != 0L)
+            {
+                agent.World.UnregisterGameTickListener(woundInfectionRollListenerId);
+                woundInfectionRollListenerId = 0L;
+            }
+            agent.WatchedAttributes.SetBool("remedyandruinWoundInfection", false);
+            FinishWoundInfectionTaper(agent);
         }
     }
 }
