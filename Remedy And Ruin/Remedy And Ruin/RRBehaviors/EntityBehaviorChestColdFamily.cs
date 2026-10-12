@@ -22,6 +22,12 @@ namespace Remedy_And_Ruin.RRBehaviors
     /// stored on the calendar in WatchedAttributes and checked from the tick listener, so it follows
     /// calendar speed and sleep and survives relogs. The timer restarts at every stage change.
     ///
+    /// Cough: while any stage is active, roughly every 40-80 real seconds (checked on the 5 s tick,
+    /// deadline in memory only) the player takes 0.06 Internal/Suffocation damage so vanilla plays
+    /// the hurt sound and camera shake. Suffocation is deliberately outside the damage sources
+    /// Patch_SuppressConditionTickSound silences. Skipped while dead or at or below the cough's own
+    /// damage in health, so it cannot kill.
+    ///
     /// The tick listener is not persisted; ResumeAfterLogin re-registers it and reconciles stat
     /// modifiers for the stored stage. Death clears the illness entirely.
     ///
@@ -57,7 +63,13 @@ namespace Remedy_And_Ruin.RRBehaviors
         private const double PneumoniaExposureHours = 1.0;
         private const int TickIntervalMs = 5000;
 
+        private const int CoughMinIntervalMs = 40000;
+        private const int CoughMaxIntervalMs = 80000;
+        // Must exceed 0.05: vanilla only plays the hurt animation and client camera shake above that.
+        private const float CoughDamage = 0.06f;
+
         private long tickListenerId;
+        private long nextCoughMs;
         private double lastExposureCheckHours;
 
         private double ExposureHours
@@ -219,7 +231,8 @@ namespace Remedy_And_Ruin.RRBehaviors
             if (tickListenerId != 0L) return;
 
             lastExposureCheckHours = target.World.Calendar.TotalHours;
-            tickListenerId = target.World.RegisterGameTickListener(dt => OnTick(target), TickIntervalMs);
+            RollNextCough(target);
+            tickListenerId =target.World.RegisterGameTickListener(dt => OnTick(target), TickIntervalMs);
         }
 
         private void StopTicking(EntityAgent target)
@@ -245,6 +258,8 @@ namespace Remedy_And_Ruin.RRBehaviors
                 SetStage(target, Stage.None);
                 return;
             }
+
+            if (target.World.ElapsedMilliseconds >= nextCoughMs) Cough(target);
 
             double now = target.World.Calendar.TotalHours;
             double elapsed = System.Math.Max(0.0, now - lastExposureCheckHours);
@@ -273,6 +288,29 @@ namespace Remedy_And_Ruin.RRBehaviors
 
             if (next != stage) SetStage(target, next);
             else OpenWindow(target);
+        }
+
+        private void RollNextCough(EntityAgent target)
+        {
+            nextCoughMs = target.World.ElapsedMilliseconds
+                + target.World.Rand.Next(CoughMinIntervalMs, CoughMaxIntervalMs + 1);
+        }
+
+        private void Cough(EntityAgent target)
+        {
+            RollNextCough(target);
+
+            if (!target.Alive) return;
+
+            EntityBehaviorHealth health = target.GetBehavior<EntityBehaviorHealth>();
+            if (health == null || health.Health <= CoughDamage) return;
+
+            target.ReceiveDamage(new DamageSource
+            {
+                Source = EnumDamageSource.Internal,
+                Type = EnumDamageType.Suffocation,
+                DamageTier = 0
+            }, CoughDamage);
         }
 
         private void OpenWindow(EntityAgent target)
