@@ -39,6 +39,7 @@ namespace Remedy_And_Ruin
             Mod.Logger.Notification("Hello from template mod: " + api.Side);
 
             api.RegisterBlockEntityClass("VialMold", typeof(BlockEntityVialMold));
+            api.RegisterBlockEntityClass("VialRack", typeof(BlockEntityVialRack));
             api.RegisterEntityBehaviorClass("remedyandruinEffects", typeof(EntityBehaviorRemedyEffects));
             api.RegisterEntityBehaviorClass("remedyandruinArrowPoisonDelivery", typeof(EntityBehaviorArrowPoisonDelivery));
             api.RegisterEntityBehaviorClass("remedyandruinPlayerConditions", typeof(EntityBehaviorPlayerConditions));
@@ -46,6 +47,7 @@ namespace Remedy_And_Ruin
             api.RegisterEntityBehaviorClass("remedyandruinResurrectionSickness", typeof(EntityBehaviorResurrectionSickness));
             api.RegisterCollectibleBehaviorClass("RemedyArrowPoisoning", typeof(CollectibleBehaviorArrowPoisoning));
             api.RegisterBlockClass("Remedy_And_Ruin.GameEngineTweaks.BlockVial", typeof(BlockVial));
+            api.RegisterBlockClass("Remedy_And_Ruin.GameEngineTweaks.BlockVialRack", typeof(BlockVialRack));
 
             SetupConfig(api);
 

@@ -114,5 +114,9 @@
   "incontainer-item-potion-mindpoison": "Brain Rot",
   "incontainer-item-concentratedpotion-mindpoison": "Concentrated Brain Rot",
   "incontainer-item-potion-antidote": "Antidote",
-  "incontainer-item-concentratedpotion-antidote": "Concentrated Antidote"
+  "incontainer-item-concentratedpotion-antidote": "Concentrated Antidote",
+  "block-vialrack-*": "Vial Rack",
+  "vialrack-full-error": "That slot already holds a vial.",
+  "blockhelp-vialrack-place": "Place vial",
+  "blockhelp-vialrack-take": "Take vial"
 }
