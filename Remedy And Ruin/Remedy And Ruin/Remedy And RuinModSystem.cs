@@ -45,6 +45,7 @@ namespace Remedy_And_Ruin
             api.RegisterEntityBehaviorClass("remedyandruinPlayerConditions", typeof(EntityBehaviorPlayerConditions));
             api.RegisterEntityBehaviorClass("remedyandruinLiverDisease", typeof(EntityBehaviorLiverDisease));
             api.RegisterEntityBehaviorClass("remedyandruinResurrectionSickness", typeof(EntityBehaviorResurrectionSickness));
+            api.RegisterEntityBehaviorClass("remedyandruinChestColdFamily", typeof(EntityBehaviorChestColdFamily));
             api.RegisterCollectibleBehaviorClass("RemedyArrowPoisoning", typeof(CollectibleBehaviorArrowPoisoning));
             api.RegisterBlockClass("Remedy_And_Ruin.GameEngineTweaks.BlockVial", typeof(BlockVial));
             api.RegisterBlockClass("Remedy_And_Ruin.GameEngineTweaks.BlockVialRack", typeof(BlockVialRack));
@@ -112,7 +113,12 @@ namespace Remedy_And_Ruin
                 {
                     entity.AddBehavior(new EntityBehaviorResurrectionSickness(entity));
                 }
+                if (entity != null && entity.GetBehavior<EntityBehaviorChestColdFamily>() == null)
+                {
+                    entity.AddBehavior(new EntityBehaviorChestColdFamily(entity));
+                }
                 entity?.GetBehavior<EntityBehaviorLiverDisease>()?.ResumeAfterLogin((EntityAgent)entity);
+                entity?.GetBehavior<EntityBehaviorChestColdFamily>()?.ResumeAfterLogin((EntityAgent)entity);
                 entity?.GetBehavior<EntityBehaviorPlayerConditions>()?.ResumeAfterLogin((EntityAgent)entity);
 
                 //EntityBehaviorRemedyEffects RRBehavior = entity.GetBehavior<EntityBehaviorRemedyEffects>();
@@ -152,6 +158,11 @@ namespace Remedy_And_Ruin
                 if (entity.GetBehavior<EntityBehaviorHealth>() != null && entity.GetBehavior<EntityBehaviorResurrectionSickness>() == null)
                 {
                     entity.AddBehavior(new EntityBehaviorResurrectionSickness(entity));
+                }
+
+                if (entity.GetBehavior<EntityBehaviorHealth>() != null && entity.GetBehavior<EntityBehaviorChestColdFamily>() == null)
+                {
+                    entity.AddBehavior(new EntityBehaviorChestColdFamily(entity));
                 }
             };
 
@@ -266,6 +277,34 @@ namespace Remedy_And_Ruin
                     EntityBehaviorTemporalStabilityAffected stability = agent.GetBehavior<EntityBehaviorTemporalStabilityAffected>();
                     if (stability != null) stability.OwnStability = 0.5;
                     return TextCommandResult.Success("Resurrection Sickness applied for 1 in-game day, Temporal Stability set to 50%.");
+                });
+
+            api.ChatCommands.Create("rrChestCold")
+                .WithDescription("Debug: advance your Chest Cold family stage one step (None -> Chest Cold -> Bronchitis -> Flu -> Pneumonia -> None).")
+                .RequiresPrivilege(Privilege.root)
+                .RequiresPlayer()
+                .HandleWith(args =>
+                {
+                    EntityBehaviorChestColdFamily chestCold = args.Caller.Entity.GetBehavior<EntityBehaviorChestColdFamily>();
+                    EntityAgent agent = (EntityAgent)args.Caller.Entity;
+                    switch (chestCold.CurrentStage)
+                    {
+                        case EntityBehaviorChestColdFamily.Stage.None:
+                            chestCold.TriggerChestCold(agent);
+                            return TextCommandResult.Success("Chest Cold applied.");
+                        case EntityBehaviorChestColdFamily.Stage.ChestCold:
+                            chestCold.DebugSetStage(agent, EntityBehaviorChestColdFamily.Stage.Bronchitis);
+                            return TextCommandResult.Success("Stage set to Bronchitis.");
+                        case EntityBehaviorChestColdFamily.Stage.Bronchitis:
+                            chestCold.DebugSetStage(agent, EntityBehaviorChestColdFamily.Stage.Flu);
+                            return TextCommandResult.Success("Stage set to Flu.");
+                        case EntityBehaviorChestColdFamily.Stage.Flu:
+                            chestCold.DebugSetStage(agent, EntityBehaviorChestColdFamily.Stage.Pneumonia);
+                            return TextCommandResult.Success("Stage set to Pneumonia.");
+                        default:
+                            chestCold.CureCurrentStage(agent);
+                            return TextCommandResult.Success("Chest Cold family illness cured.");
+                    }
                 });
 
             api.ChatCommands.Create("rrLiverDisease")

@@ -1141,17 +1141,19 @@ Not really a "cure" — a direct utility effect.
   entirely by continued cold/wet exposure while sick, not by time or neglect alone — the design
   goal is that Chest Cold on its own is never dangerous, but repeatedly going back out into bad
   weather while sick is genuinely risky:
-  - **1-2 in-game hours of cold-and-wet exposure while Chest Cold is active is a hard threshold**
-    that progresses to **Bronchitis** — not a chance roll, a guarantee once that exposure is hit.
-  - **2-3 in-game hours of the same exposure** is a second hard threshold that progresses straight
-    to **Flu** instead — a worse outcome than Bronchitis for the same underlying cause, just more
-    of it. (Hitting 2-3 hours supersedes the 1-2 hour Bronchitis threshold; it doesn't pass through
-    Bronchitis first.)
+  - Escalation is decided once, **the next morning (6:00)**, from the total cold-and-wet exposure
+    accumulated since the illness began (or since the previous morning's check). Not a chance roll
+    — a guarantee once the exposure is met. Each morning check closes that window and opens the next.
+  - **2-4 in-game hours of cold-and-wet exposure while Chest Cold is active** progresses to
+    **Bronchitis** by the next morning.
+  - **4 or more in-game hours of the same exposure** progresses to **Flu** instead — a worse
+    outcome than Bronchitis for the same underlying cause, just more of it. Under 2 hours, the
+    Chest Cold simply continues.
   - **Bronchitis self-resolves after about a week** if exposure stops; **Flu self-resolves after
     about 3 days**. Both are recoverable without Antiviral, just slower and worse than a plain
     Chest Cold.
-  - **From either Bronchitis or Flu, just 1 more hour of cold-and-wet exposure is a hard threshold
-    that progresses to Pneumonia** — the shared, most severe terminal stage of this family, and the
+  - **From either Bronchitis or Flu, just 1 more hour of cold-and-wet exposure by the next morning
+    progresses to Pneumonia** — the shared, most severe terminal stage of this family, and the
     one point where "just stay warm and it'll pass" stops being good enough advice.
   - Fever is Flu's signature symptom: a `walkSpeed` penalty that compounds with (not replaces)
     the `healingeffectivness` penalty already present at the more severe stages.
