@@ -92,6 +92,8 @@ namespace Remedy_And_Ruin
                 serverPatched = true;
             }
 
+            ChestColdContagionSystem.Start(api);
+
             api.Event.PlayerNowPlaying += (IServerPlayer player) =>
             {
                 Entity entity = player.Entity;
@@ -307,6 +309,25 @@ namespace Remedy_And_Ruin
                     }
                 });
 
+            api.ChatCommands.Create("rrContagion")
+                .WithDescription("Debug: simulate sharing a room with a sick player. Runs the given number of 30-second transmission rolls (default 1) against you at the real chance, skipping the room and distance checks.")
+                .RequiresPrivilege(Privilege.root)
+                .RequiresPlayer()
+                .WithArgs(api.ChatCommands.Parsers.OptionalInt("rolls", 1))
+                .HandleWith(args =>
+                {
+                    int rolls = System.Math.Max(1, (int)args[0]);
+                    (bool infected, int rollsRun, double chance) = ChestColdContagionSystem.SimulateSickRoommate((EntityPlayer)args.Caller.Entity, rolls);
+                    if (rollsRun == 0)
+                    {
+                        return TextCommandResult.Success("You are already sick; no transmission rolls ran.");
+                    }
+
+                    return TextCommandResult.Success(infected
+                        ? $"Caught Chest Cold on roll {rollsRun} (chance per roll {chance:P1})."
+                        : $"No infection after {rollsRun} roll(s) (chance per roll {chance:P1}).");
+                });
+
             api.ChatCommands.Create("rrLiverDisease")
                 .WithDescription("Debug: set your liver toxicity meter (3+ = Liver Disease, 6+ = Liver Failure, 0 clears both). With no value, shows the current meter.")
                 .RequiresPrivilege(Privilege.root)
@@ -489,6 +510,7 @@ namespace Remedy_And_Ruin
             hallucinationManager?.Dispose();
             harmony?.UnpatchAll(HarmonyId);
             serverPatched = false;
+            ChestColdContagionSystem.Stop();
             base.Dispose();
         }
 
