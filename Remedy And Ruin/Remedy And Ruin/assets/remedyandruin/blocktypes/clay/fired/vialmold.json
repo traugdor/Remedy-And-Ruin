@@ -23,7 +23,7 @@
 		"fillQuadsByLevel": [
 			{ "x1": 4, "z1": 4, "x2": 12, "z2": 12 }
 		],
-		"drop": { "type": "block", "code": "remedyandruin:vial", "quantity": 4 }
+		"drop": { "type": "block", "code": "remedyandruin:vial-{metal}", "quantity": 4 }
 	},
 	"blockmaterial": "Ceramic",
 	"creativeinventory": { "general": ["*"], "construction": ["*"] },

@@ -4,7 +4,7 @@
 	"height": 1,
 	"ingredients": {
 		"A": { "type": "item", "code": "game:arrow-*", "name": "material" },
-		"B": { "type": "block", "code": "remedyandruin:vial", "isTool": true }
+		"B": { "type": "block", "code": "remedyandruin:vial-*", "isTool": true }
 	},
 	"output": { "type": "item", "code": "game:arrow-{material}" }
 }

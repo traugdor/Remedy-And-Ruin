@@ -17,17 +17,37 @@ namespace Remedy_And_Ruin.GameEngineTweaks
     /// override, because BlockEntityToolMold.CanReceive is not virtual; callers such as
     /// BlockSmeltedContainer invoke it only through the ILiquidMetalSink interface, so an
     /// explicit interface implementation is the only way to intercept it. It restricts
-    /// intake to glass-plain - the base implementation has no material check (the mold's
-    /// "drop" attribute is a single fixed code with no "{metal}" placeholder), so without
-    /// this override the mold would accept any liquid metal.
+    /// intake to glass-plain and the nine coloured glasses. The base implementation accepts
+    /// any stack whose "{metal}" substitution in the mold's "drop" code resolves to an
+    /// existing block, so without this override the mold would also accept liquid metals
+    /// that have no matching vial.
     /// </summary>
     public class BlockEntityVialMold : BlockEntityToolMold, ILiquidMetalSink
     {
-        private static readonly AssetLocation AcceptedMaterial = new AssetLocation("game", "glass-plain");
+        private static readonly string[] GlassColors =
+        {
+            "plain", "green", "blue", "violet", "red", "yellow", "brown", "vintage", "smoky", "pink"
+        };
+
+        private static bool IsAcceptedGlass(AssetLocation code)
+        {
+            if (code == null || code.Domain != "game")
+            {
+                return false;
+            }
+            foreach (string color in GlassColors)
+            {
+                if (code.Path == "glass-" + color)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
 
         bool ILiquidMetalSink.CanReceive(ItemStack metal)
         {
-            if (metal?.Collectible?.Code == null || !metal.Collectible.Code.Equals(AcceptedMaterial))
+            if (!IsAcceptedGlass(metal?.Collectible?.Code))
             {
                 return false;
             }
