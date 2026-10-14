@@ -21,8 +21,12 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
     ///   tag check, since tier-gating isn't expressible as a simple tag lookup: Drifter bleeds only
     ///   at corrupt/nightmare/double-headed tiers, Shiver bleeds at every tier, Bowtorn's melee never
     ///   bleeds.
+    /// - Scrap bomb blasts (EnumBlastType.EntityBlast, see Patch_ExplosionBlastType) are eligible
+    ///   with no attacker; every other explosion is not.
+    ///
+    /// Registered on PostArmorDamagePipeline, so the tier is chosen from damage after armor and the
+    /// returned instant portion replaces the damage vanilla subtracts.
     /// </summary>
-    [HarmonyPatch(typeof(EntityBehaviorHealth), "OnEntityReceiveDamage")]
     public static class Patch_BleedingDelivery
     {
         private static readonly string[] DrifterBleedingTiers = { "drifter-corrupt", "drifter-nightmare", "drifter-double-headed" };
@@ -31,22 +35,30 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
         private static TagSetFast? animalTag;
         private static TagSetFast? rustCreatureTag;
 
-        public static void Prefix(EntityBehaviorHealth __instance, DamageSource damageSource, ref float damage)
-        {
-            if (__instance.entity.World.Side != EnumAppSide.Server) return;
-            if (damageSource.Type == EnumDamageType.Heal) return;
+        /// <summary>Debug: while true, every hit counts as bleed-eligible regardless of attacker.</summary>
+        internal static bool ForceEligible;
 
-            Entity attacker = damageSource.GetCauseEntity();
-            if (attacker == null || !IsBleedingEligible(attacker)) return;
+        public static void Handle(EntityPlayer victim, DamageSource damageSource, ref float damage)
+        {
+            if (!ForceEligible && !IsScrapBombBlast(damageSource))
+            {
+                Entity attacker = damageSource.GetCauseEntity();
+                if (attacker == null || !IsBleedingEligible(attacker)) return;
+            }
 
             EntityBehaviorPlayerConditions.BleedingTier? tier = EntityBehaviorPlayerConditions.DetermineBleedingTier(damage);
             if (!tier.HasValue) return;
 
-            EntityBehaviorPlayerConditions conditions = __instance.entity.GetBehavior<EntityBehaviorPlayerConditions>();
+            EntityBehaviorPlayerConditions conditions = victim.GetBehavior<EntityBehaviorPlayerConditions>();
             if (conditions == null) return;
 
             damage = conditions.ApplyBleeding(tier.Value, damage, damageSource);
         }
+
+        // EntityBlast is used only by the scrap bomb; explosions have no cause entity.
+        private static bool IsScrapBombBlast(DamageSource damageSource) =>
+            damageSource.Source == EnumDamageSource.Explosion
+            && Patch_ExplosionBlastType.Current == EnumBlastType.EntityBlast;
 
         private static bool IsBleedingEligible(Entity attacker)
         {

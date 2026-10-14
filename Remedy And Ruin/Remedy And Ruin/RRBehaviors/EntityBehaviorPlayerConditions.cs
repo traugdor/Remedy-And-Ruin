@@ -180,9 +180,14 @@ namespace Remedy_And_Ruin.RRBehaviors
             // OnEntityReceiveDamage before its Health<=0 death check and before TicksLeft/
             // PreviousTickTime advance - so the bleed would never expire and health could go
             // negative without ever killing the player. Bleed avoids every OnHurt branch that
-            // touches GetCauseEntity(), and also marks each tick so Patch_SuppressBleedingSound can
+            // touches GetCauseEntity(), and also marks each tick so Patch_SuppressConditionTickSound can
             // silence its repeated hurt grunt without touching the original bite's own sound.
-            health.ApplyDoTEffect(EnumDamageSource.Bleed, damageSource.Type, damageSource.DamageTier,
+            //
+            // Ticks use EnumDamageType.Injury, not the hit's own type: vanilla armor runs on any
+            // Blunt/Piercing/Slashing damage whose source is not Internal or Suicide, so a Slashing
+            // tick would be reduced to nothing by flat armor reduction and would wear armor or
+            // clothing every second.
+            health.ApplyDoTEffect(EnumDamageSource.Bleed, EnumDamageType.Injury, 0,
                 hpPerSec * durationSec, TimeSpan.FromSeconds(durationSec), ticks, EnumDamageOverTimeEffectType.Bleeding);
 
             entity.WatchedAttributes.SetInt("remedyandruinBleedingTier", (int)newTier);

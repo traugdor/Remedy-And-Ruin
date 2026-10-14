@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 using Remedy_And_Ruin.GameEngineTweaks;
+using Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches;
 using Remedy_And_Ruin.GameEngineTweaks.Hallucination;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -89,6 +90,7 @@ namespace Remedy_And_Ruin
                         Mod.Logger.Error($"remedyandruin: failed to apply Harmony patch {patchType.FullName} - {ex}");
                     }
                 }
+                PostArmorDamagePipeline.Register(Patch_BleedingDelivery.Handle);
                 serverPatched = true;
             }
 
@@ -196,6 +198,57 @@ namespace Remedy_And_Ruin
                     }
                     tiredness.Tiredness = 8.5f;
                     return TextCommandResult.Success("Tiredness set to 8.5 - you should be able to sleep now.");
+                });
+
+            // Debug: slashing damage treated as bleed-eligible, to compare raw vs post-armor damage.
+            // The player is its own SourceEntity because EntityPlayer.OnHurt dereferences GetCauseEntity()
+            // for EnumDamageSource.Entity.
+            // With "scrap", the damage has the explosion shape (no source entity, BluntAttack) and the
+            // blast type is set to EntityBlast for the call, exercising the scrap bomb path.
+            api.ChatCommands.Create("rrDamage")
+                .WithDescription("Debug: deal <amount> bleed-eligible slashing damage to yourself and report raw vs health actually lost (post-armor) and whether Bleeding is active. Add 'scrap' to simulate a scrap bomb blast instead.")
+                .RequiresPrivilege(Privilege.root)
+                .RequiresPlayer()
+                .WithArgs(api.ChatCommands.Parsers.Float("amount"), api.ChatCommands.Parsers.OptionalWord("mode"))
+                .HandleWith(args =>
+                {
+                    float amount = (float)args.Parsers[0].GetValue();
+                    bool scrap = !args.Parsers[1].IsMissing && string.Equals((string)args.Parsers[1].GetValue(), "scrap", StringComparison.OrdinalIgnoreCase);
+                    EntityPlayer player = args.Caller.Entity as EntityPlayer;
+                    EntityBehaviorHealth health = player?.GetBehavior<EntityBehaviorHealth>();
+                    if (health == null)
+                    {
+                        return TextCommandResult.Success("No EntityBehaviorHealth on this entity.");
+                    }
+
+                    float before = health.Health;
+                    Patch_BleedingDelivery.ForceEligible = !scrap;
+                    if (scrap) Patch_ExplosionBlastType.Current = EnumBlastType.EntityBlast;
+                    try
+                    {
+                        DamageSource source = scrap
+                            ? new DamageSource
+                            {
+                                Source = EnumDamageSource.Explosion,
+                                Type = EnumDamageType.BluntAttack,
+                                SourcePos = player.Pos.XYZ
+                            }
+                            : new DamageSource
+                            {
+                                Source = EnumDamageSource.Entity,
+                                SourceEntity = player,
+                                Type = EnumDamageType.SlashingAttack
+                            };
+                        player.ReceiveDamage(source, amount);
+                    }
+                    finally
+                    {
+                        Patch_BleedingDelivery.ForceEligible = false;
+                        Patch_ExplosionBlastType.Current = null;
+                    }
+
+                    bool bleeding = health.ActiveDoTEffects.Any(effect => effect.EffectType == (int)EnumDamageOverTimeEffectType.Bleeding);
+                    return TextCommandResult.Success($"Raw {amount:0.##}, health lost {before - health.Health:0.##}, Bleeding active: {bleeding}.");
                 });
 
             api.ChatCommands.Create("rrSkinIrritation")
@@ -510,6 +563,7 @@ namespace Remedy_And_Ruin
             hallucinationManager?.Dispose();
             harmony?.UnpatchAll(HarmonyId);
             serverPatched = false;
+            PostArmorDamagePipeline.Clear();
             ChestColdContagionSystem.Stop();
             base.Dispose();
         }
