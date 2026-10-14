@@ -490,8 +490,11 @@ in scope per D1/D11, so order here is about what unblocks what, not what matters
     Antiseptic (Wound Infection), Sedative (sleep gate), and Topical Ointment (Skin Irritation) now
     have real cure targets to hook into for Plan 16.
 14. **Chest Cold family (Cold/Flu/Bronchitis/Pneumonia), Liver Disease, Resurrection Sickness** —
-    grouped as one plan (all standalone condition state machines of similar shape). Reordered ahead
-    of remedy-potion effects: Antiviral needs Chest Cold family as its cure target.
+    DONE (Plan 14, implemented, tested in-game except two-player contagion, and committed). The
+    Chest Cold stage machine with morning exposure checks, room-based contagion, and the cosmetic
+    cough; Liver Disease's toxicity meter with Liver Failure; and Resurrection Sickness are live.
+    Antiviral now has real cure targets (`ReverseOneStage`/`CureCurrentStage`) and Tonic has its
+    `contagionresistance` hook for Plan 16.
 15. **Broken Bones (Part 4)** — its own large plan, buildable in isolation per your explicit note in
     D12. Reordered ahead of remedy-potion effects: Analgesic needs Skull-Strain's pain (Part 4) as
     part of its cure target, alongside Flu's fever from #14.
@@ -506,7 +509,21 @@ in scope per D1/D11, so order here is about what unblocks what, not what matters
     swaps, Broken Bones ↔ poison/remedy cross-references (e.g. Bell proximity, splinting
     interactions), the session/persistence hooks from #7 if deferred here, and anything else that
     only makes sense once every piece exists.
-20. **Handbook pages** — last, per the doc's own note.
+20. **Handbook pages and Creative menu tab** — last, per the doc's own note. Two parts: the
+    in-game handbook entries, and a dedicated "Remedy and Ruin" tab in the Creative menu listing
+    every item and block this mod adds.
+21. **Mod compatibility** — investigates how this mod behaves alongside others and adds soft
+    integrations where worthwhile. First item: Temporal Symphony's bellhead shivers (how they
+    ring, and whether they should trigger Skull-Strain's Bell headache alongside the vanilla Bell,
+    detected as a soft dependency via `IModLoader.IsModEnabled("temporalsymphony")`). Prosequor is
+    also on the list, since it modifies a large part of the UI. Clay Works is on the list because it
+    forces molds to be dried after forming and before firing, which affects the vial mold's
+    clay-forming and firing chain. Realistic Soap adds a cleanliness system (Spotless, Clean, Grubby,
+    Dirty, Filthy, expressed through healing effectiveness, animal notice range and hunger stats);
+    the planned integration is that being injured while Filthy raises the chance of Wound Infection.
+    How the mod exposes a player's cleanliness tier needs investigating first. Also covers interactions with
+    other mods that touch health, damage, armor, stats, or HUDs (health-bar and status-HUD mods,
+    hydration and temperature mods, entity-AI libraries).
 
 Does this breakdown and ordering look right, or would you reshuffle/split/merge anything before I
 start writing the first actual plan document?
