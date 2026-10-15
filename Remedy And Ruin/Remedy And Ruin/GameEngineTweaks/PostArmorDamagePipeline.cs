@@ -13,7 +13,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
     /// ref, so a value a handler writes is what vanilla then subtracts from health.
     ///
     /// Handlers run in registration order, only for EntityPlayer victims, non-Heal damage and
-    /// damage &gt; 0. Damage converted into a DoT (DamageSource.Duration &gt; 0) and DoT ticks never
+    /// damage &gt; 0. The chain stops early once the damage reaches 0 or a handler marks the hit
+    /// <see cref="HitContext.Lethal"/>. Damage converted into a DoT (DamageSource.Duration &gt; 0) and DoT ticks never
     /// reach ApplyOnDamageDelegates, so handlers never see them. Register once per server start and
     /// call Clear when the server shuts down.
     /// </summary>
@@ -33,7 +34,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             foreach (Handler handler in handlers)
             {
                 handler(victim, source, ref damage);
-                if (damage <= 0f) return;
+                if (damage <= 0f || HitContext.Lethal) return;
             }
         }
 

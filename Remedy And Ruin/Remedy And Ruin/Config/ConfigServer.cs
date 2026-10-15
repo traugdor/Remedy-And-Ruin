@@ -33,6 +33,9 @@ namespace Remedy_And_Ruin
         [JsonProperty(Order = 7)]
         public float toxicityOverdoseThreshold { get; set; } = 1.0f;
 
+        [JsonProperty(Order = 8)]
+        public bool injuryChatMessagesEnabled { get; set; } = true;
+
         public ConfigServer(ICoreAPI api, ConfigServer previousConfig = null)
         {
             if (previousConfig == null) return;
@@ -42,6 +45,7 @@ namespace Remedy_And_Ruin
             allowEffectsToExpireWhenOffline = previousConfig.allowEffectsToExpireWhenOffline;
             toxicityDecayPerRealSecond = previousConfig.toxicityDecayPerRealSecond;
             toxicityOverdoseThreshold = previousConfig.toxicityOverdoseThreshold;
+            injuryChatMessagesEnabled = previousConfig.injuryChatMessagesEnabled;
         }
     }
 }

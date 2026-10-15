@@ -16,6 +16,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
         public static void Prefix(EntityBehaviorHealth __instance, DamageSource damageSource)
         {
             HitContext.Current = null;
+            HitContext.Lethal = false;
             if (__instance.entity.World.Side != EnumAppSide.Server) return;
             if (__instance.entity is not EntityPlayer victim) return;
             if (damageSource.Type == EnumDamageType.Heal) return;
@@ -29,6 +30,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
         public static void Finalizer()
         {
             HitContext.Current = null;
+            HitContext.Lethal = false;
         }
     }
 }

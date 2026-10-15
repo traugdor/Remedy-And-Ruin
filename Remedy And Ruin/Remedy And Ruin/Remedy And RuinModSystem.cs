@@ -47,6 +47,7 @@ namespace Remedy_And_Ruin
             api.RegisterEntityBehaviorClass("remedyandruinLiverDisease", typeof(EntityBehaviorLiverDisease));
             api.RegisterEntityBehaviorClass("remedyandruinResurrectionSickness", typeof(EntityBehaviorResurrectionSickness));
             api.RegisterEntityBehaviorClass("remedyandruinChestColdFamily", typeof(EntityBehaviorChestColdFamily));
+            api.RegisterEntityBehaviorClass("remedyandruinBrokenBones", typeof(EntityBehaviorBrokenBones));
             api.RegisterCollectibleBehaviorClass("RemedyArrowPoisoning", typeof(CollectibleBehaviorArrowPoisoning));
             api.RegisterBlockClass("Remedy_And_Ruin.GameEngineTweaks.BlockVial", typeof(BlockVial));
             api.RegisterBlockClass("Remedy_And_Ruin.GameEngineTweaks.BlockVialRack", typeof(BlockVialRack));
@@ -90,6 +91,9 @@ namespace Remedy_And_Ruin
                         Mod.Logger.Error($"remedyandruin: failed to apply Harmony patch {patchType.FullName} - {ex}");
                     }
                 }
+                // Bones registers first: the Bleeding handler returns only the instant share of the
+                // damage, and bone escalation needs the full post-armor amount.
+                PostArmorDamagePipeline.Register(EntityBehaviorBrokenBones.HandlePostArmorDamage);
                 PostArmorDamagePipeline.Register(Patch_BleedingDelivery.Handle);
                 serverPatched = true;
             }
@@ -120,6 +124,10 @@ namespace Remedy_And_Ruin
                 if (entity != null && entity.GetBehavior<EntityBehaviorChestColdFamily>() == null)
                 {
                     entity.AddBehavior(new EntityBehaviorChestColdFamily(entity));
+                }
+                if (entity != null && entity.GetBehavior<EntityBehaviorBrokenBones>() == null)
+                {
+                    entity.AddBehavior(new EntityBehaviorBrokenBones(entity));
                 }
                 entity?.GetBehavior<EntityBehaviorLiverDisease>()?.ResumeAfterLogin((EntityAgent)entity);
                 entity?.GetBehavior<EntityBehaviorChestColdFamily>()?.ResumeAfterLogin((EntityAgent)entity);
@@ -167,6 +175,11 @@ namespace Remedy_And_Ruin
                 if (entity.GetBehavior<EntityBehaviorHealth>() != null && entity.GetBehavior<EntityBehaviorChestColdFamily>() == null)
                 {
                     entity.AddBehavior(new EntityBehaviorChestColdFamily(entity));
+                }
+
+                if (entity.GetBehavior<EntityBehaviorHealth>() != null && entity.GetBehavior<EntityBehaviorBrokenBones>() == null)
+                {
+                    entity.AddBehavior(new EntityBehaviorBrokenBones(entity));
                 }
             };
 
@@ -224,6 +237,12 @@ namespace Remedy_And_Ruin
                     if (health == null)
                     {
                         return TextCommandResult.Success("No EntityBehaviorHealth on this entity.");
+                    }
+
+                    EnumGameMode gameMode = player.Player?.WorldData?.CurrentGameMode ?? EnumGameMode.Survival;
+                    if (gameMode == EnumGameMode.Creative || gameMode == EnumGameMode.Spectator)
+                    {
+                        return TextCommandResult.Success($"You are in {gameMode} mode: vanilla ignores all damage to you, so no armor, bleeding or injury logic runs. Switch with /gamemode survival.");
                     }
 
                     float before = health.Health;
@@ -460,6 +479,77 @@ namespace Remedy_And_Ruin
                     }
 
                     return TextCommandResult.Success($"{header}\nHit height {hitHeight:0.###}, result: {Describe(hitHeight)}");
+                });
+
+            api.ChatCommands.Create("rrBones")
+                .WithDescription("Debug: show each limb's injury tier and splint (/rrBones), set a tier (/rrBones set followed by arms, legs or skull and a tier 0-4 or its name; skull maxes at 2), set a splint (/rrBones splint followed by a limb and on or off), or roll a use escalation (/rrBones use followed by a limb). Test hits with /rrDamage.")
+                .RequiresPrivilege(Privilege.root)
+                .RequiresPlayer()
+                .WithArgs(api.ChatCommands.Parsers.OptionalWord("action"), api.ChatCommands.Parsers.OptionalWord("limb"), api.ChatCommands.Parsers.OptionalWord("value"))
+                .HandleWith(args =>
+                {
+                    EntityBehaviorBrokenBones bones = args.Caller.Entity.GetBehavior<EntityBehaviorBrokenBones>();
+                    if (bones == null) return TextCommandResult.Error("No EntityBehaviorBrokenBones on this entity.");
+
+                    string Word(int index) => args.Parsers[index].IsMissing ? null : (string)args.Parsers[index].GetValue();
+
+                    bool TryLimb(string text, out BoneLocation limb)
+                    {
+                        switch (text?.ToLowerInvariant())
+                        {
+                            case "arms": case "chest": case "chestarms": limb = BoneLocation.ChestArms; return true;
+                            case "legs": limb = BoneLocation.Legs; return true;
+                            case "skull": limb = BoneLocation.Skull; return true;
+                            default: limb = BoneLocation.ChestArms; return false;
+                        }
+                    }
+
+                    string Describe(BoneLocation limb) => $"{limb}: {bones.GetTier(limb)}{(bones.IsSplinted(limb) ? " (splinted)" : "")}";
+
+                    string action = Word(0);
+                    if (action == null)
+                    {
+                        return TextCommandResult.Success(string.Join("\n", Enum.GetValues(typeof(BoneLocation)).Cast<BoneLocation>().Select(Describe)));
+                    }
+
+                    if (!TryLimb(Word(1), out BoneLocation target))
+                    {
+                        return TextCommandResult.Error("Usage: /rrBones, /rrBones set [arms|legs|skull] [tier], /rrBones splint [limb] [on|off], /rrBones use [limb]");
+                    }
+
+                    switch (action.ToLowerInvariant())
+                    {
+                        case "set":
+                        {
+                            string text = Word(2);
+                            InjuryTier tier;
+                            if (text != null && int.TryParse(text, out int number) && number >= 0 && number <= 4) tier = (InjuryTier)number;
+                            else if (text == null || !Enum.TryParse(text, true, out tier)) return TextCommandResult.Error("Tier must be 0-4 or None, Strain, Fracture, Break, Crush.");
+
+                            if (tier > EntityBehaviorBrokenBones.MaxTier(target)) return TextCommandResult.Error($"{target} cannot exceed {EntityBehaviorBrokenBones.MaxTier(target)}.");
+
+                            bones.SetTier(target, tier);
+                            return TextCommandResult.Success(Describe(target));
+                        }
+                        case "splint":
+                        {
+                            string text = Word(2);
+                            if (!string.Equals(text, "on", StringComparison.OrdinalIgnoreCase) && !string.Equals(text, "off", StringComparison.OrdinalIgnoreCase))
+                            {
+                                return TextCommandResult.Error("Usage: /rrBones splint [limb] [on|off]");
+                            }
+
+                            bones.SetSplinted(target, string.Equals(text, "on", StringComparison.OrdinalIgnoreCase));
+                            return TextCommandResult.Success(Describe(target));
+                        }
+                        case "use":
+                        {
+                            bool rose = bones.RollUseEscalation(target);
+                            return TextCommandResult.Success($"Use escalation rose: {rose}. {Describe(target)}");
+                        }
+                        default:
+                            return TextCommandResult.Error("Usage: /rrBones, /rrBones set [arms|legs|skull] [tier], /rrBones splint [limb] [on|off], /rrBones use [limb]");
+                    }
                 });
 
             api.ChatCommands.Create("rrLiverDisease")

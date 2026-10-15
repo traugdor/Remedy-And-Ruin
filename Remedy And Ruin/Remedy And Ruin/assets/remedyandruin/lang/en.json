@@ -138,5 +138,13 @@
   "block-vialrack-purpleheart-*": "Vial Rack (Purpleheart)",
   "vialrack-full-error": "That slot already holds a vial.",
   "blockhelp-vialrack-place": "Place vial",
-  "blockhelp-vialrack-take": "Take vial"
+  "blockhelp-vialrack-take": "Take vial",
+  "bones-limb-skull": "skull",
+  "bones-limb-arms": "arms",
+  "bones-limb-legs": "legs",
+  "bones-tier-strain": "strained",
+  "bones-tier-fracture": "fractured",
+  "bones-tier-break": "broken",
+  "bones-tier-crush": "crushed",
+  "bones-tier-raised": "The injury to your {0} is now {1}."
 }

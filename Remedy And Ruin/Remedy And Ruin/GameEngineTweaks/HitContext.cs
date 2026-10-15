@@ -13,6 +13,19 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         [System.ThreadStatic]
         private static BoneLocation? forcedLocation;
 
+        [System.ThreadStatic]
+        private static bool lethal;
+
+        /// <summary>
+        /// True once a post-armor handler has made the hit fatal. PostArmorDamagePipeline stops running further
+        /// handlers, so none of them can reduce the lethal damage. Reset at the start and end of every hit.
+        /// </summary>
+        public static bool Lethal
+        {
+            get => lethal;
+            set => lethal = value;
+        }
+
         /// <summary>The classification of the hit being applied, or null outside a hit or for damage the classifier ignores.</summary>
         public static HitClassification? Current
         {
