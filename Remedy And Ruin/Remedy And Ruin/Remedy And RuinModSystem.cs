@@ -206,14 +206,19 @@ namespace Remedy_And_Ruin
             // With "scrap", the damage has the explosion shape (no source entity, BluntAttack) and the
             // blast type is set to EntityBlast for the call, exercising the scrap bomb path.
             api.ChatCommands.Create("rrDamage")
-                .WithDescription("Debug: deal the given amount of bleed-eligible slashing damage to yourself and report raw vs health actually lost (post-armor) and whether Bleeding is active. Add 'scrap' to simulate a scrap bomb blast instead.")
+                .WithDescription("Debug: deal the given amount of bleed-eligible slashing damage to yourself and report raw vs health actually lost (post-armor) and whether Bleeding is active. Add 'scrap' to simulate a scrap bomb blast instead, or 'skull', 'chest' or 'legs' to force the hit location (and so the armor slot).")
                 .RequiresPrivilege(Privilege.root)
                 .RequiresPlayer()
                 .WithArgs(api.ChatCommands.Parsers.Float("amount"), api.ChatCommands.Parsers.OptionalWord("mode"))
                 .HandleWith(args =>
                 {
                     float amount = (float)args.Parsers[0].GetValue();
-                    bool scrap = !args.Parsers[1].IsMissing && string.Equals((string)args.Parsers[1].GetValue(), "scrap", StringComparison.OrdinalIgnoreCase);
+                    string mode = args.Parsers[1].IsMissing ? "" : (string)args.Parsers[1].GetValue();
+                    bool scrap = string.Equals(mode, "scrap", StringComparison.OrdinalIgnoreCase);
+                    BoneLocation? forcedLocation = null;
+                    if (string.Equals(mode, "skull", StringComparison.OrdinalIgnoreCase)) forcedLocation = BoneLocation.Skull;
+                    else if (string.Equals(mode, "chest", StringComparison.OrdinalIgnoreCase)) forcedLocation = BoneLocation.ChestArms;
+                    else if (string.Equals(mode, "legs", StringComparison.OrdinalIgnoreCase)) forcedLocation = BoneLocation.Legs;
                     EntityPlayer player = args.Caller.Entity as EntityPlayer;
                     EntityBehaviorHealth health = player?.GetBehavior<EntityBehaviorHealth>();
                     if (health == null)
@@ -224,6 +229,7 @@ namespace Remedy_And_Ruin
                     float before = health.Health;
                     Patch_BleedingDelivery.ForceEligible = !scrap;
                     if (scrap) Patch_ExplosionBlastType.Current = EnumBlastType.EntityBlast;
+                    HitContext.ForcedLocation = forcedLocation;
                     try
                     {
                         DamageSource source = scrap
@@ -245,10 +251,12 @@ namespace Remedy_And_Ruin
                     {
                         Patch_BleedingDelivery.ForceEligible = false;
                         Patch_ExplosionBlastType.Current = null;
+                        HitContext.ForcedLocation = null;
                     }
 
                     bool bleeding = health.ActiveDoTEffects.Any(effect => effect.EffectType == (int)EnumDamageOverTimeEffectType.Bleeding);
-                    return TextCommandResult.Success($"Raw {amount:0.##}, health lost {before - health.Health:0.##}, Bleeding active: {bleeding}.");
+                    string forcedText = forcedLocation.HasValue ? $" Forced location: {forcedLocation.Value}." : "";
+                    return TextCommandResult.Success($"Raw {amount:0.##}, health lost {before - health.Health:0.##}, Bleeding active: {bleeding}.{forcedText}");
                 });
 
             api.ChatCommands.Create("rrSkinIrritation")
