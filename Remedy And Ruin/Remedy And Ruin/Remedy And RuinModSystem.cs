@@ -206,7 +206,7 @@ namespace Remedy_And_Ruin
             // With "scrap", the damage has the explosion shape (no source entity, BluntAttack) and the
             // blast type is set to EntityBlast for the call, exercising the scrap bomb path.
             api.ChatCommands.Create("rrDamage")
-                .WithDescription("Debug: deal <amount> bleed-eligible slashing damage to yourself and report raw vs health actually lost (post-armor) and whether Bleeding is active. Add 'scrap' to simulate a scrap bomb blast instead.")
+                .WithDescription("Debug: deal the given amount of bleed-eligible slashing damage to yourself and report raw vs health actually lost (post-armor) and whether Bleeding is active. Add 'scrap' to simulate a scrap bomb blast instead.")
                 .RequiresPrivilege(Privilege.root)
                 .RequiresPlayer()
                 .WithArgs(api.ChatCommands.Parsers.Float("amount"), api.ChatCommands.Parsers.OptionalWord("mode"))
@@ -335,7 +335,7 @@ namespace Remedy_And_Ruin
                 });
 
             api.ChatCommands.Create("rrChestCold")
-                .WithDescription("Debug: advance your Chest Cold family stage one step (None -> Chest Cold -> Bronchitis -> Flu -> Pneumonia -> None).")
+                .WithDescription("Debug: advance your Chest Cold family stage one step (None, Chest Cold, Bronchitis, Flu, Pneumonia, then cured).")
                 .RequiresPrivilege(Privilege.root)
                 .RequiresPlayer()
                 .HandleWith(args =>
@@ -379,6 +379,79 @@ namespace Remedy_And_Ruin
                     return TextCommandResult.Success(infected
                         ? $"Caught Chest Cold on roll {rollsRun} (chance per roll {chance:P1})."
                         : $"No infection after {rollsRun} roll(s) (chance per roll {chance:P1}).");
+                });
+
+            api.ChatCommands.Create("rrHitLocation")
+                .WithDescription("Debug: classify a hit height against your current height (/rrHitLocation followed by a number), or a creature's estimated melee hit (/rrHitLocation creature followed by an entity code such as wolf-eurasian-adult-male; a partial code lists matches), or an arrow flying at you (/rrHitLocation arrow followed by optional origin height, drop per block and distance).")
+                .RequiresPrivilege(Privilege.root)
+                .RequiresPlayer()
+                .WithArgs(api.ChatCommands.Parsers.Word("heightOrMode"), api.ChatCommands.Parsers.OptionalWord("entityCodeOrOriginHeight"), api.ChatCommands.Parsers.OptionalWord("dropPerBlock"), api.ChatCommands.Parsers.OptionalWord("distance"))
+                .HandleWith(args =>
+                {
+                    EntityPlayer player = (EntityPlayer)args.Caller.Entity;
+                    double victimHeight = player.SelectionBox.Y2;
+                    HitLocationClassifier.GetCutoffs(victimHeight, out double legsCutoff, out double skullCutoff, out double band);
+                    string header = $"Your height {victimHeight:0.###}: Legs below {legsCutoff:0.###}, Skull above {skullCutoff:0.###}, Chest/Arms between (coin flip within {band:0.####} of a cutoff).";
+                    string first = (string)args.Parsers[0].GetValue();
+                    Random rand = player.World.Rand;
+
+                    string Describe(double height)
+                    {
+                        if (System.Math.Abs(height - legsCutoff) <= band) return "coin flip between Legs and ChestArms";
+                        if (System.Math.Abs(height - skullCutoff) <= band) return "coin flip between ChestArms and Skull";
+                        return HitLocationClassifier.ClassifyHeight(height, victimHeight, rand).ToString();
+                    }
+
+                    if (first.Equals("creature", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (args.Parsers[1].IsMissing) return TextCommandResult.Error("Usage: /rrHitLocation creature [entityCode]");
+
+                        string code = (string)args.Parsers[1].GetValue();
+                        EntityProperties props = player.World.GetEntityType(new AssetLocation(code));
+                        if (props == null)
+                        {
+                            List<string> matches = player.World.EntityTypes
+                                .Select(type => type.Code.Path)
+                                .Where(path => path.Contains(code, StringComparison.OrdinalIgnoreCase))
+                                .OrderBy(path => path)
+                                .Take(12)
+                                .ToList();
+                            return TextCommandResult.Error(matches.Count > 0
+                                ? $"Entity code '{code}' did not resolve. Codes containing it: {string.Join(", ", matches)}"
+                                : $"Entity code '{code}' did not resolve and no entity code contains it.");
+                        }
+
+                        double boxHeight = (props.SelectionBoxSize ?? props.CollisionBoxSize).Y;
+                        double estimate = HitLocationClassifier.EstimateAttackerHeight(boxHeight);
+                        string path = props.Code.Path;
+                        string result = HitLocationClassifier.TryGetFixedLocation(path, true, rand, out BoneLocation fixedLocation)
+                            ? $"fixed attacker rule (this roll: {fixedLocation})"
+                            : Describe(estimate);
+                        return TextCommandResult.Success($"{header}\n{code}: box height {boxHeight:0.###}, estimated hit height {estimate:0.###}, result: {result}");
+                    }
+
+                    if (first.Equals("arrow", StringComparison.OrdinalIgnoreCase))
+                    {
+                        double ArrowArg(int index, double fallback) =>
+                            !args.Parsers[index].IsMissing && double.TryParse((string)args.Parsers[index].GetValue(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double parsed)
+                                ? parsed
+                                : fallback;
+
+                        double originHeight = ArrowArg(1, 1.8);
+                        double dropPerBlock = ArrowArg(2, 0.0);
+                        double distance = System.Math.Max(0.1, ArrowArg(3, 10.0));
+
+                        Cuboidd box = new Cuboidd().SetAndTranslate(player.CollisionBox, 0, 0, 0);
+                        double entry = ProjectileImpactHeight.Estimate(box, 0, new Vec3d(-distance, originHeight, 0), new Vec3d(1, -dropPerBlock, 0));
+                        return TextCommandResult.Success($"{header}\nArrow from {distance:0.##} blocks away at height {originHeight:0.###}, dropping {dropPerBlock:0.###} per block: entry height {entry:0.###}, result: {Describe(entry)}");
+                    }
+
+                    if (!double.TryParse(first, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double hitHeight))
+                    {
+                        return TextCommandResult.Error("Usage: /rrHitLocation [height], /rrHitLocation creature [entityCode], or /rrHitLocation arrow [originHeight] [dropPerBlock] [distance]");
+                    }
+
+                    return TextCommandResult.Success($"{header}\nHit height {hitHeight:0.###}, result: {Describe(hitHeight)}");
                 });
 
             api.ChatCommands.Create("rrLiverDisease")
