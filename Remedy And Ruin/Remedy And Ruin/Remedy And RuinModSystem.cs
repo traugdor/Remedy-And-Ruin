@@ -99,6 +99,7 @@ namespace Remedy_And_Ruin
             }
 
             ChestColdContagionSystem.Start(api);
+            SplintingInteraction.Start(api);
 
             api.Event.PlayerNowPlaying += (IServerPlayer player) =>
             {
@@ -736,6 +737,7 @@ namespace Remedy_And_Ruin
             serverPatched = false;
             PostArmorDamagePipeline.Clear();
             ChestColdContagionSystem.Stop();
+            SplintingInteraction.Stop();
             base.Dispose();
         }
 

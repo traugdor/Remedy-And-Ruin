@@ -35,6 +35,8 @@ namespace Remedy_And_Ruin.RRBehaviors
     /// decide who may roll.
     ///
     /// GetTier / IsSplinted: read the state. SetTier / SetSplinted: write it, server only, no message.
+    /// FindWorstSplintableLimb / TrySplintWorstLimb: pick and splint the worst injured, unsplinted limb.
+    ///
     /// Death clears every limb to None and unsplinted.
     /// </summary>
     public class EntityBehaviorBrokenBones : EntityBehavior
@@ -68,6 +70,37 @@ namespace Remedy_And_Ruin.RRBehaviors
 
             entity.WatchedAttributes.SetBool(SplintedKey(limb), splinted);
             entity.WatchedAttributes.MarkPathDirty(SplintedKey(limb));
+        }
+
+        // The injured, unsplinted limb with the highest tier among Legs and ChestArms (Legs wins a tie).
+        // The skull is never splintable.
+        public BoneLocation? FindWorstSplintableLimb()
+        {
+            BoneLocation? worst = null;
+            InjuryTier worstTier = InjuryTier.None;
+            foreach (BoneLocation limb in new[] { BoneLocation.Legs, BoneLocation.ChestArms })
+            {
+                InjuryTier tier = GetTier(limb);
+                if (tier == InjuryTier.None || IsSplinted(limb) || tier <= worstTier) continue;
+
+                worst = limb;
+                worstTier = tier;
+            }
+            return worst;
+        }
+
+        // Splints the limb FindWorstSplintableLimb picks and tells the player; returns it, or null when
+        // no limb qualifies.
+        public BoneLocation? TrySplintWorstLimb()
+        {
+            if (entity.World.Side != EnumAppSide.Server) return null;
+
+            BoneLocation? limb = FindWorstSplintableLimb();
+            if (limb == null) return null;
+
+            SetSplinted(limb.Value, true);
+            NotifySplinted(limb.Value);
+            return limb;
         }
 
         public static InjuryTier MaxTier(BoneLocation limb) =>
@@ -158,11 +191,19 @@ namespace Remedy_And_Ruin.RRBehaviors
 
         private void Notify(BoneLocation limb, InjuryTier tier)
         {
-            if (entity is not EntityPlayer player || player.Player is not IServerPlayer serverPlayer) return;
-
             string text = Lang.Get("remedyandruin:bones-tier-raised",
                 Lang.Get("remedyandruin:bones-limb-" + LimbName(limb)),
                 Lang.Get("remedyandruin:bones-tier-" + tier.ToString().ToLowerInvariant()));
+            SendMessage(limb, text);
+        }
+
+        private void NotifySplinted(BoneLocation limb) =>
+            SendMessage(limb, Lang.Get("remedyandruin:bones-splinted", Lang.Get("remedyandruin:bones-limb-" + LimbName(limb))));
+
+        private void SendMessage(BoneLocation limb, string text)
+        {
+            if (entity is not EntityPlayer player || player.Player is not IServerPlayer serverPlayer) return;
+
             serverPlayer.SendIngameError("remedyandruinBones" + LimbName(limb), text);
             if (Remedy_And_RuinModSystem.Config?.injuryChatMessagesEnabled ?? true)
             {
