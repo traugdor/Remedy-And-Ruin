@@ -83,6 +83,10 @@ namespace Remedy_And_Ruin.RRBehaviors
     /// and on death; the modifier never drives the blended stat below 0. Block-break speed is
     /// computed on the client and is scaled there (see Patch_ArmDigSpeed).
     ///
+    /// Skull effects: ApplySkullEffects keeps a -10 max-health modifier (SkullMaxHealthKey) while the Skull
+    /// is at Fracture and removes it otherwise. Vanilla does not persist max-health modifiers, so it
+    /// runs on every Skull tier change and at login, and limits current health to the new maximum.
+    ///
     /// Bow rules: a bow takes two working arms. HasBrokenArm is true for a Break or Crush ChestArms
     /// injury on a player outside creative and spectator mode. IsBowDrawBlocked is true when that arm
     /// is unsplinted and the server setting allowBowWithUnsplintedBrokenArm is off. Whenever HasBrokenArm
@@ -108,6 +112,9 @@ namespace Remedy_And_Ruin.RRBehaviors
         private const float LegBrokenWalkPenalty = -0.40f;
 
         private const string ArmMeleeStatKey = "remedyandruinBonesArms";
+
+        private const string SkullMaxHealthKey = "remedyandruinBonesSkull";
+        private const float SkullFractureMaxHealthPenalty = -10f;
 
         private long tickListenerId;
 
@@ -136,6 +143,7 @@ namespace Remedy_And_Ruin.RRBehaviors
             RefreshHealing(limb);
             UpdateTickListener();
             if (limb == BoneLocation.Legs) ApplyLegEffects();
+            else if (limb == BoneLocation.Skull) ApplySkullEffects();
             else if (limb == BoneLocation.ChestArms)
             {
                 ApplyArmEffects();
@@ -300,6 +308,21 @@ namespace Remedy_And_Ruin.RRBehaviors
             entity.Stats.Set("meleeWeaponsDamage", ArmMeleeStatKey, value, persistent: true);
         }
 
+        // Applies or removes the Skull Fracture max-health penalty. Vanilla does not persist max-health
+        // modifiers, so this runs again on login, and current health is limited to the new maximum
+        // because vanilla only lowers it for a player who was at full health.
+        public void ApplySkullEffects()
+        {
+            if (entity.World.Side != EnumAppSide.Server) return;
+
+            EntityBehaviorHealth health = entity.GetBehavior<EntityBehaviorHealth>();
+            if (health == null) return;
+
+            bool fractured = GetTier(BoneLocation.Skull) >= InjuryTier.Fracture;
+            health.SetMaxHealthModifiers(SkullMaxHealthKey, fractured ? SkullFractureMaxHealthPenalty : 0f);
+            if (health.Health > health.MaxHealth) health.Health = health.MaxHealth;
+        }
+
         // Sums the other modifiers' weighted values in a stat category and reads this mod's own value.
         private void ReadStatModifiers(string category, string ownKey, out float others, out float? existing)
         {
@@ -348,6 +371,7 @@ namespace Remedy_And_Ruin.RRBehaviors
             UpdateTickListener();
             ApplyLegEffects();
             ApplyArmEffects();
+            ApplySkullEffects();
             EnforceOffhand();
         }
 
