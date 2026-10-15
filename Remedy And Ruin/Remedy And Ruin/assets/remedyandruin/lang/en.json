@@ -150,5 +150,6 @@
   "bones-splinted": "You splint your {0}.",
   "bones-splint-broken": "Your splint on your {0} breaks.",
   "bones-healed": "Your {0} has healed.",
-  "bones-bow-blocked": "You cannot draw a bow with a broken arm."
+  "bones-bow-blocked": "You cannot draw a bow with a broken arm.",
+  "bones-offhand-dropped": "Your broken arm cannot hold that."
 }

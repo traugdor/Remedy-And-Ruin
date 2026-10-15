@@ -1,5 +1,6 @@
 using System;
 using Remedy_And_Ruin.GameEngineTweaks;
+using Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Config;
@@ -15,6 +16,14 @@ namespace Remedy_And_Ruin.RRBehaviors
         Fracture = 2,
         Break = 3,
         Crush = 4
+    }
+
+    /// <summary>Offhand restriction level imposed by a broken ChestArms limb.</summary>
+    public enum OffhandMode
+    {
+        Free = 0,
+        Restricted = 1,
+        Locked = 2
     }
 
     /// <summary>
@@ -79,6 +88,12 @@ namespace Remedy_And_Ruin.RRBehaviors
     /// is unsplinted and the server setting allowBowWithUnsplintedBrokenArm is off. Whenever HasBrokenArm
     /// is true and the draw is not blocked, draw time and arrow damage carry the
     /// brokenArmBowPenaltyPercent penalty (see BowDrawPenaltyDivisor and BowDamageMultiplier).
+    ///
+    /// Offhand rules: GetOffhandMode is Locked for an unsplinted Break or Crush ChestArms injury and
+    /// Restricted for a splinted one (Free in creative and spectator mode); it reads only
+    /// WatchedAttributes, so the client-side slot guard can use it (see OffhandRules and
+    /// Patch_OffhandGuard). EnforceOffhand (server) drops an offhand stack the mode no longer allows;
+    /// it runs on every ChestArms tier or splint change, at login and on the heal tick.
     /// </summary>
     public class EntityBehaviorBrokenBones : EntityBehavior
     {
@@ -121,7 +136,11 @@ namespace Remedy_And_Ruin.RRBehaviors
             RefreshHealing(limb);
             UpdateTickListener();
             if (limb == BoneLocation.Legs) ApplyLegEffects();
-            else if (limb == BoneLocation.ChestArms) ApplyArmEffects();
+            else if (limb == BoneLocation.ChestArms)
+            {
+                ApplyArmEffects();
+                EnforceOffhand();
+            }
         }
 
         public void SetSplinted(BoneLocation limb, bool splinted)
@@ -133,7 +152,11 @@ namespace Remedy_And_Ruin.RRBehaviors
 
             RefreshHealing(limb);
             if (limb == BoneLocation.Legs) ApplyLegEffects();
-            else if (limb == BoneLocation.ChestArms) ApplyArmEffects();
+            else if (limb == BoneLocation.ChestArms)
+            {
+                ApplyArmEffects();
+                EnforceOffhand();
+            }
         }
 
         // Work-speed factor for digging and melee damage from the entity's ChestArms state; 1 when
@@ -181,6 +204,33 @@ namespace Remedy_And_Ruin.RRBehaviors
         // Factor arrow damage is multiplied by; 1 when no bow penalty applies.
         public static float BowDamageMultiplier(Entity entity) =>
             HasBrokenArm(entity) ? 1f - ConfigServer.BrokenArmBowPenaltyPercent(entity.World) / 100f : 1f;
+
+        // Offhand restriction for the entity: Locked for an unsplinted broken arm, Restricted for a
+        // splinted one, Free otherwise (including creative and spectator players).
+        public static OffhandMode GetOffhandMode(Entity entity)
+        {
+            if (!HasBrokenArm(entity)) return OffhandMode.Free;
+
+            return ReadSplinted(entity, BoneLocation.ChestArms) ? OffhandMode.Restricted : OffhandMode.Locked;
+        }
+
+        // Drops the offhand stack when the current offhand mode no longer allows it. Server only.
+        public void EnforceOffhand()
+        {
+            if (entity.World.Side != EnumAppSide.Server || !entity.Alive) return;
+            if (entity is not EntityPlayer player || player.Player is not IServerPlayer serverPlayer) return;
+
+            OffhandMode mode = GetOffhandMode(entity);
+            if (mode == OffhandMode.Free) return;
+
+            ItemSlot slot = serverPlayer.InventoryManager?.OffhandHotbarSlot;
+            if (slot?.Itemstack == null || OffhandRules.Allows(mode, slot.Itemstack, entity.World)) return;
+
+            if (serverPlayer.InventoryManager.DropItem(slot, true))
+            {
+                SendMessage(BoneLocation.ChestArms, Lang.Get("remedyandruin:bones-offhand-dropped"));
+            }
+        }
 
         // True when the entity's own movement input is disabled by an unsplinted Break or Crush Legs
         // injury. Creative, spectator and mounted players are never locked.
@@ -298,6 +348,7 @@ namespace Remedy_And_Ruin.RRBehaviors
             UpdateTickListener();
             ApplyLegEffects();
             ApplyArmEffects();
+            EnforceOffhand();
         }
 
         public override void OnEntityDespawn(EntityDespawnData despawn)
@@ -490,8 +541,8 @@ namespace Remedy_And_Ruin.RRBehaviors
             double endDay = GetEndDay(limb);
             if (endDay <= 0.0 || entity.World.Calendar.TotalDays < endDay) return false;
 
-            SetSplinted(limb, false);
             SetTier(limb, InjuryTier.None);
+            SetSplinted(limb, false);
             SetEndDay(limb, 0.0);
             NotifyHealed(limb);
             return true;
@@ -527,6 +578,7 @@ namespace Remedy_And_Ruin.RRBehaviors
             UpdateTickListener();
             ApplyLegEffects();
             ApplyArmEffects();
+            EnforceOffhand();
         }
 
         private void Notify(BoneLocation limb, InjuryTier tier)

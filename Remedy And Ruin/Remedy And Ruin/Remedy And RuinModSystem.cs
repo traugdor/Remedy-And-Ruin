@@ -66,6 +66,8 @@ namespace Remedy_And_Ruin
             api.World.Config.SetBool("RemedyAndRuin.concussionWobbleEnabled", Config.concussionWobbleEnabled);
             api.World.Config.SetBool(ConfigServer.AllowBowWorldKey, Config.allowBowWithUnsplintedBrokenArm);
             api.World.Config.SetFloat(ConfigServer.BowPenaltyWorldKey, Config.brokenArmBowPenaltyPercent);
+            api.World.Config.SetString(ConfigServer.OffhandExtraBlockedWorldKey, ConfigServer.JoinPatterns(Config.offhandExtraBlockedItems));
+            api.World.Config.SetString(ConfigServer.OffhandAlwaysAllowedWorldKey, ConfigServer.JoinPatterns(Config.offhandAlwaysAllowedItems));
         }
 
         public override void StartServerSide(ICoreServerAPI api)
@@ -494,7 +496,13 @@ namespace Remedy_And_Ruin
                         InjuryTier tier = bones.GetTier(limb);
                         string locked = limb == BoneLocation.Legs && EntityBehaviorBrokenBones.IsLegLocked(args.Caller.Entity) ? " (movement locked)" : "";
                         string work = limb == BoneLocation.ChestArms ? $" (work speed {EntityBehaviorBrokenBones.WorkSpeedMultiplier(args.Caller.Entity) * 100f:0}%)" : "";
-                        string text = $"{limb}: {tier}{(bones.IsSplinted(limb) ? " (splinted)" : "")}{locked}{work}";
+                        string offhand = limb != BoneLocation.ChestArms ? "" : EntityBehaviorBrokenBones.GetOffhandMode(args.Caller.Entity) switch
+                        {
+                            OffhandMode.Locked => " (offhand locked)",
+                            OffhandMode.Restricted => " (offhand restricted)",
+                            _ => ""
+                        };
+                        string text = $"{limb}: {tier}{(bones.IsSplinted(limb) ? " (splinted)" : "")}{locked}{work}{offhand}";
                         if (tier == InjuryTier.None) return text;
 
                         double? days = bones.GetHealDaysRemaining(limb);

@@ -42,9 +42,28 @@ namespace Remedy_And_Ruin
         [JsonProperty(Order = 10)]
         public float brokenArmBowPenaltyPercent { get; set; } = 40f;
 
+        // Item-code wildcard patterns (for example "somemod:*shield*"); see OffhandRules.
+        [JsonProperty(Order = 11)]
+        public string[] offhandExtraBlockedItems { get; set; } = System.Array.Empty<string>();
+
+        [JsonProperty(Order = 12)]
+        public string[] offhandAlwaysAllowedItems { get; set; } = System.Array.Empty<string>();
+
         // World config keys that publish the settings the client needs to read.
         public const string AllowBowWorldKey = "RemedyAndRuin.allowBowWithUnsplintedBrokenArm";
         public const string BowPenaltyWorldKey = "RemedyAndRuin.brokenArmBowPenaltyPercent";
+        public const string OffhandExtraBlockedWorldKey = "RemedyAndRuin.offhandExtraBlockedItems";
+        public const string OffhandAlwaysAllowedWorldKey = "RemedyAndRuin.offhandAlwaysAllowedItems";
+
+        // Joins a pattern list into the single string published to the world config.
+        public static string JoinPatterns(string[] patterns) =>
+            patterns == null ? "" : string.Join("\n", System.Array.FindAll(patterns, p => !string.IsNullOrWhiteSpace(p)));
+
+        public static string OffhandExtraBlockedItems(IWorldAccessor world) =>
+            world?.Config?.GetString(OffhandExtraBlockedWorldKey, "") ?? "";
+
+        public static string OffhandAlwaysAllowedItems(IWorldAccessor world) =>
+            world?.Config?.GetString(OffhandAlwaysAllowedWorldKey, "") ?? "";
 
         // Reads the published setting from the world config; the default applies when it is absent.
         public static bool AllowBowWithUnsplintedBrokenArm(IWorldAccessor world) =>
@@ -69,6 +88,8 @@ namespace Remedy_And_Ruin
             injuryChatMessagesEnabled = previousConfig.injuryChatMessagesEnabled;
             allowBowWithUnsplintedBrokenArm = previousConfig.allowBowWithUnsplintedBrokenArm;
             brokenArmBowPenaltyPercent = previousConfig.brokenArmBowPenaltyPercent;
+            offhandExtraBlockedItems = previousConfig.offhandExtraBlockedItems ?? System.Array.Empty<string>();
+            offhandAlwaysAllowedItems = previousConfig.offhandAlwaysAllowedItems ?? System.Array.Empty<string>();
         }
     }
 }
