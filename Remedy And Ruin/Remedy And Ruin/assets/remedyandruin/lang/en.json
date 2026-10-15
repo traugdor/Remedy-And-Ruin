@@ -147,5 +147,7 @@
   "bones-tier-break": "broken",
   "bones-tier-crush": "crushed",
   "bones-tier-raised": "The injury to your {0} is now {1}.",
-  "bones-splinted": "You splint your {0}."
+  "bones-splinted": "You splint your {0}.",
+  "bones-splint-broken": "Your splint on your {0} breaks.",
+  "bones-healed": "Your {0} has healed."
 }

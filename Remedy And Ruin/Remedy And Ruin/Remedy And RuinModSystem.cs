@@ -133,6 +133,7 @@ namespace Remedy_And_Ruin
                 entity?.GetBehavior<EntityBehaviorLiverDisease>()?.ResumeAfterLogin((EntityAgent)entity);
                 entity?.GetBehavior<EntityBehaviorChestColdFamily>()?.ResumeAfterLogin((EntityAgent)entity);
                 entity?.GetBehavior<EntityBehaviorPlayerConditions>()?.ResumeAfterLogin((EntityAgent)entity);
+                entity?.GetBehavior<EntityBehaviorBrokenBones>()?.ResumeAfterLogin((EntityAgent)entity);
 
                 //EntityBehaviorRemedyEffects RRBehavior = entity.GetBehavior<EntityBehaviorRemedyEffects>();
                 if(entity != null && entity.GetBehavior<EntityBehaviorRemedyEffects>() is EntityBehaviorRemedyEffects RRBehavior)
@@ -483,7 +484,7 @@ namespace Remedy_And_Ruin
                 });
 
             api.ChatCommands.Create("rrBones")
-                .WithDescription("Debug: show each limb's injury tier and splint (/rrBones), set a tier (/rrBones set followed by arms, legs or skull and a tier 0-4 or its name; skull maxes at 2), set a splint (/rrBones splint followed by a limb and on or off), or roll a use escalation (/rrBones use followed by a limb). Test hits with /rrDamage.")
+                .WithDescription("Debug: show each limb's injury tier and splint (/rrBones), set a tier (/rrBones set followed by arms, legs or skull and a tier 0-4 or its name; skull maxes at 2), set a splint (/rrBones splint followed by a limb and on or off), roll a use escalation (/rrBones use followed by a limb), or set a healing limb's remaining time (/rrBones healin followed by a limb and a number of in-game days). Test hits with /rrDamage.")
                 .RequiresPrivilege(Privilege.root)
                 .RequiresPlayer()
                 .WithArgs(api.ChatCommands.Parsers.OptionalWord("action"), api.ChatCommands.Parsers.OptionalWord("limb"), api.ChatCommands.Parsers.OptionalWord("value"))
@@ -505,7 +506,15 @@ namespace Remedy_And_Ruin
                         }
                     }
 
-                    string Describe(BoneLocation limb) => $"{limb}: {bones.GetTier(limb)}{(bones.IsSplinted(limb) ? " (splinted)" : "")}";
+                    string Describe(BoneLocation limb)
+                    {
+                        InjuryTier tier = bones.GetTier(limb);
+                        string text = $"{limb}: {tier}{(bones.IsSplinted(limb) ? " (splinted)" : "")}";
+                        if (tier == InjuryTier.None) return text;
+
+                        double? days = bones.GetHealDaysRemaining(limb);
+                        return days != null ? $"{text}, heals in {days.Value:0.0} days" : $"{text}, not healing";
+                    }
 
                     string action = Word(0);
                     if (action == null)
@@ -515,7 +524,7 @@ namespace Remedy_And_Ruin
 
                     if (!TryLimb(Word(1), out BoneLocation target))
                     {
-                        return TextCommandResult.Error("Usage: /rrBones, /rrBones set [arms|legs|skull] [tier], /rrBones splint [limb] [on|off], /rrBones use [limb]");
+                        return TextCommandResult.Error("Usage: /rrBones, /rrBones set [arms|legs|skull] [tier], /rrBones splint [limb] [on|off], /rrBones use [limb], /rrBones healin [limb] [days]");
                     }
 
                     switch (action.ToLowerInvariant())
@@ -548,8 +557,18 @@ namespace Remedy_And_Ruin
                             bool rose = bones.RollUseEscalation(target);
                             return TextCommandResult.Success($"Use escalation rose: {rose}. {Describe(target)}");
                         }
+                        case "healin":
+                        {
+                            if (!double.TryParse(Word(2), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double days) || days < 0)
+                            {
+                                return TextCommandResult.Error("Usage: /rrBones healin [limb] [days]");
+                            }
+
+                            if (!bones.SetHealDaysRemaining(target, days)) return TextCommandResult.Error($"{target} is not healing.");
+                            return TextCommandResult.Success(Describe(target));
+                        }
                         default:
-                            return TextCommandResult.Error("Usage: /rrBones, /rrBones set [arms|legs|skull] [tier], /rrBones splint [limb] [on|off], /rrBones use [limb]");
+                            return TextCommandResult.Error("Usage: /rrBones, /rrBones set [arms|legs|skull] [tier], /rrBones splint [limb] [on|off], /rrBones use [limb], /rrBones healin [limb] [days]");
                     }
                 });
 

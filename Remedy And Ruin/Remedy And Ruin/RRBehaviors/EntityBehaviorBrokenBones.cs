@@ -19,7 +19,7 @@ namespace Remedy_And_Ruin.RRBehaviors
 
     /// <summary>
     /// Owns the per-limb bone injury state (Skull, ChestArms, Legs) and its escalation. This class holds
-    /// state and escalation only; tier effects, healing and splinting interactions live elsewhere.
+    /// state, escalation and healing only; tier effects and splinting interactions live elsewhere.
     ///
     /// State: each limb has an InjuryTier and a splinted flag in WatchedAttributes, so both survive
     /// saves and relogs and are readable on the client. ChestArms and Legs reach Crush; Skull stops at
@@ -37,12 +37,30 @@ namespace Remedy_And_Ruin.RRBehaviors
     /// GetTier / IsSplinted: read the state. SetTier / SetSplinted: write it, server only, no message.
     /// FindWorstSplintableLimb / TrySplintWorstLimb: pick and splint the worst injured, unsplinted limb.
     ///
-    /// Death clears every limb to None and unsplinted.
+    /// Healing: a limb heals while it is injured and either splinted or the Skull (which cannot be
+    /// splinted). Full duration in game months by tier: Strain 0.75, Fracture 1.5, Break 1.5, Crush
+    /// 2.25, times Calendar.DaysPerMonth. The countdown is one calendar end day per limb in
+    /// WatchedAttributes (0 = not healing), so it follows calendar speed and sleep and survives
+    /// relogs. It starts at the current tier's full duration when a limb becomes eligible, and is
+    /// dropped when the limb stops being eligible. A tier rise unsplints ChestArms and Legs (they must
+    /// be re-splinted) and restarts the Skull's countdown. A hit that may injure a healing limb but
+    /// does not raise it pushes the end day later by 10% of that tier's duration. When the end day
+    /// passes the limb clears entirely to None and unsplinted. One game tick listener per instance
+    /// runs while any limb is injured; ResumeAfterLogin re-evaluates all limbs and restarts it.
+    ///
+    /// GetHealDaysRemaining / SetHealDaysRemaining: read or (debug) overwrite the countdown.
+    /// ResumeAfterLogin: server side, call once per login.
+    ///
+    /// Death clears every limb to None and unsplinted, and every end day to 0.
     /// </summary>
     public class EntityBehaviorBrokenBones : EntityBehavior
     {
         private const float UseEscalationChance = 0.05f;
         private const InjuryTier SkullMaxTier = InjuryTier.Fracture;
+        private const int TickIntervalMs = 5000;
+        private const double DockFraction = 0.1;
+
+        private long tickListenerId;
 
         public EntityBehaviorBrokenBones(Entity entity) : base(entity)
         {
@@ -60,8 +78,14 @@ namespace Remedy_And_Ruin.RRBehaviors
         {
             if (entity.World.Side != EnumAppSide.Server) return;
 
-            entity.WatchedAttributes.SetInt(TierKey(limb), (int)ClampToLimb(limb, tier));
+            InjuryTier clamped = ClampToLimb(limb, tier);
+            bool changed = clamped != GetTier(limb);
+            entity.WatchedAttributes.SetInt(TierKey(limb), (int)clamped);
             entity.WatchedAttributes.MarkPathDirty(TierKey(limb));
+
+            if (changed) SetEndDay(limb, 0.0);
+            RefreshHealing(limb);
+            UpdateTickListener();
         }
 
         public void SetSplinted(BoneLocation limb, bool splinted)
@@ -70,6 +94,48 @@ namespace Remedy_And_Ruin.RRBehaviors
 
             entity.WatchedAttributes.SetBool(SplintedKey(limb), splinted);
             entity.WatchedAttributes.MarkPathDirty(SplintedKey(limb));
+
+            RefreshHealing(limb);
+        }
+
+        // Days of healing left, or null when the limb is not healing.
+        public double? GetHealDaysRemaining(BoneLocation limb)
+        {
+            double endDay = GetEndDay(limb);
+            if (endDay <= 0.0) return null;
+
+            return Math.Max(0.0, endDay - entity.World.Calendar.TotalDays);
+        }
+
+        // Returns false when the limb is not currently healing.
+        public bool SetHealDaysRemaining(BoneLocation limb, double days)
+        {
+            if (entity.World.Side != EnumAppSide.Server) return false;
+            if (GetEndDay(limb) <= 0.0) return false;
+
+            SetEndDay(limb, entity.World.Calendar.TotalDays + Math.Max(0.0, days));
+            return true;
+        }
+
+        public void ResumeAfterLogin(EntityAgent target)
+        {
+            if (entity.World.Side != EnumAppSide.Server) return;
+
+            foreach (BoneLocation limb in Enum.GetValues(typeof(BoneLocation)))
+            {
+                if (CompleteIfExpired(limb)) continue;
+                RefreshHealing(limb);
+            }
+            UpdateTickListener();
+        }
+
+        public override void OnEntityDespawn(EntityDespawnData despawn)
+        {
+            if (tickListenerId != 0L)
+            {
+                entity.World.UnregisterGameTickListener(tickListenerId);
+                tickListenerId = 0L;
+            }
         }
 
         // The injured, unsplinted limb with the highest tier among Legs and ChestArms (Legs wins a tie).
@@ -129,9 +195,11 @@ namespace Remedy_And_Ruin.RRBehaviors
 
             foreach (BoneLocation limb in Enum.GetValues(typeof(BoneLocation)))
             {
-                SetTier(limb, InjuryTier.None);
                 SetSplinted(limb, false);
+                SetTier(limb, InjuryTier.None);
+                SetEndDay(limb, 0.0);
             }
+            UpdateTickListener();
         }
 
         public static void HandlePostArmorDamage(EntityPlayer victim, DamageSource source, ref float damage)
@@ -144,10 +212,14 @@ namespace Remedy_And_Ruin.RRBehaviors
 
             // The jump size is decided by post-armor damage alone for every damage type; revisit when
             // enemies can deal several damage types in one hit.
-            int jump = RollEscalationJump(damage, victim.World.Rand);
-            if (jump <= 0) return;
-
             BoneLocation limb = hit.Value.Location;
+            int jump = RollEscalationJump(damage, victim.World.Rand);
+            if (jump <= 0)
+            {
+                bones.DockHealing(limb);
+                return;
+            }
+
             if (limb == BoneLocation.Skull && ExceedsSkullLimit(bones.GetTier(limb), jump))
             {
                 EntityBehaviorHealth health = victim.GetBehavior<EntityBehaviorHealth>();
@@ -159,7 +231,7 @@ namespace Remedy_And_Ruin.RRBehaviors
                 return;
             }
 
-            bones.Raise(limb, jump);
+            if (!bones.Raise(limb, jump)) bones.DockHealing(limb);
         }
 
         // Returns the tier jump for a hit of the given post-armor damage, or 0 when the roll fails.
@@ -184,9 +256,102 @@ namespace Remedy_And_Ruin.RRBehaviors
             InjuryTier after = ClampToLimb(limb, (InjuryTier)((int)before + jump));
             if (after <= before) return false;
 
+            bool splintBroke = limb != BoneLocation.Skull && IsSplinted(limb);
+            if (limb != BoneLocation.Skull) SetSplinted(limb, false);
             SetTier(limb, after);
             Notify(limb, after);
+            if (splintBroke) NotifySplintBroken(limb);
             return true;
+        }
+
+        private static double MonthsFor(InjuryTier tier) => tier switch
+        {
+            InjuryTier.Strain => 0.75,
+            InjuryTier.Fracture => 1.5,
+            InjuryTier.Break => 1.5,
+            InjuryTier.Crush => 2.25,
+            _ => 0.0
+        };
+
+        private double DurationDays(InjuryTier tier) => MonthsFor(tier) * entity.World.Calendar.DaysPerMonth;
+
+        private bool IsHealEligible(BoneLocation limb) =>
+            GetTier(limb) != InjuryTier.None && (limb == BoneLocation.Skull || IsSplinted(limb));
+
+        private double GetEndDay(BoneLocation limb) =>
+            entity.WatchedAttributes.GetDouble(EndDayKey(limb), 0.0);
+
+        private void SetEndDay(BoneLocation limb, double endDay)
+        {
+            if (entity.World.Side != EnumAppSide.Server) return;
+
+            entity.WatchedAttributes.SetDouble(EndDayKey(limb), endDay);
+            entity.WatchedAttributes.MarkPathDirty(EndDayKey(limb));
+        }
+
+        // Starts the full countdown for an eligible limb with none running; drops it for an ineligible one.
+        private void RefreshHealing(BoneLocation limb)
+        {
+            if (entity.World.Side != EnumAppSide.Server) return;
+
+            double endDay = GetEndDay(limb);
+            if (!IsHealEligible(limb))
+            {
+                if (endDay != 0.0) SetEndDay(limb, 0.0);
+                return;
+            }
+
+            if (endDay <= 0.0) SetEndDay(limb, entity.World.Calendar.TotalDays + DurationDays(GetTier(limb)));
+        }
+
+        private void DockHealing(BoneLocation limb)
+        {
+            double endDay = GetEndDay(limb);
+            if (endDay <= 0.0) return;
+
+            SetEndDay(limb, endDay + DockFraction * DurationDays(GetTier(limb)));
+        }
+
+        private bool CompleteIfExpired(BoneLocation limb)
+        {
+            double endDay = GetEndDay(limb);
+            if (endDay <= 0.0 || entity.World.Calendar.TotalDays < endDay) return false;
+
+            SetSplinted(limb, false);
+            SetTier(limb, InjuryTier.None);
+            SetEndDay(limb, 0.0);
+            NotifyHealed(limb);
+            return true;
+        }
+
+        private void UpdateTickListener()
+        {
+            if (entity.World.Side != EnumAppSide.Server) return;
+
+            bool injured = false;
+            foreach (BoneLocation limb in Enum.GetValues(typeof(BoneLocation)))
+            {
+                if (GetTier(limb) != InjuryTier.None) { injured = true; break; }
+            }
+
+            if (injured && tickListenerId == 0L)
+            {
+                tickListenerId = entity.World.RegisterGameTickListener(dt => OnHealTick(), TickIntervalMs);
+            }
+            else if (!injured && tickListenerId != 0L)
+            {
+                entity.World.UnregisterGameTickListener(tickListenerId);
+                tickListenerId = 0L;
+            }
+        }
+
+        private void OnHealTick()
+        {
+            foreach (BoneLocation limb in Enum.GetValues(typeof(BoneLocation)))
+            {
+                CompleteIfExpired(limb);
+            }
+            UpdateTickListener();
         }
 
         private void Notify(BoneLocation limb, InjuryTier tier)
@@ -199,6 +364,12 @@ namespace Remedy_And_Ruin.RRBehaviors
 
         private void NotifySplinted(BoneLocation limb) =>
             SendMessage(limb, Lang.Get("remedyandruin:bones-splinted", Lang.Get("remedyandruin:bones-limb-" + LimbName(limb))));
+
+        private void NotifyHealed(BoneLocation limb) =>
+            SendMessage(limb, Lang.Get("remedyandruin:bones-healed", Lang.Get("remedyandruin:bones-limb-" + LimbName(limb))));
+
+        private void NotifySplintBroken(BoneLocation limb) =>
+            SendMessage(limb, Lang.Get("remedyandruin:bones-splint-broken", Lang.Get("remedyandruin:bones-limb-" + LimbName(limb))));
 
         private void SendMessage(BoneLocation limb, string text)
         {
@@ -227,6 +398,8 @@ namespace Remedy_And_Ruin.RRBehaviors
         };
 
         private static string TierKey(BoneLocation limb) => "remedyandruinBones" + limb + "Tier";
+
+        private static string EndDayKey(BoneLocation limb) => "remedyandruinBones" + limb + "HealEndDay";
 
         private static string SplintedKey(BoneLocation limb) => "remedyandruinBones" + limb + "Splinted";
     }
