@@ -22,7 +22,6 @@ namespace Remedy_And_Ruin
     {
         private TemporalVignetteRenderer temporalVignetteRenderer;
         private HallucinationManager hallucinationManager;
-        private Harmony harmony;
         private ICoreClientAPI legLockApi;
         private long legLockTickId;
 
@@ -31,15 +30,6 @@ namespace Remedy_And_Ruin
             EnumEntityAction.Forward, EnumEntityAction.Backward, EnumEntityAction.Left,
             EnumEntityAction.Right, EnumEntityAction.Jump, EnumEntityAction.Sprint
         };
-
-        private const string HarmonyId = "remedyandruin";
-
-        // Every patch in GameEngineTweaks/HarmonyPatches targets server-authoritative logic
-        // (damage, drops, effect application) - none belong on the client. Applying them from
-        // StartServerSide (guarded here) means they only ever run in a process that's actually
-        // acting as a server (including the integrated singleplayer server), and never from a
-        // remote multiplayer client, which never runs this server logic at all.
-        private static bool serverPatched;
 
         public static ConfigServer Config;
 
@@ -74,36 +64,21 @@ namespace Remedy_And_Ruin
             Config = ModConfig.ReadConfig<ConfigServer>(api, ConfigServer.configName);
             api.World.Config.SetBool("RemedyAndRuin.debugMode", Config.debugMode);
             api.World.Config.SetBool("RemedyAndRuin.concussionWobbleEnabled", Config.concussionWobbleEnabled);
+            api.World.Config.SetBool(ConfigServer.AllowBowWorldKey, Config.allowBowWithUnsplintedBrokenArm);
+            api.World.Config.SetFloat(ConfigServer.BowPenaltyWorldKey, Config.brokenArmBowPenaltyPercent);
         }
 
         public override void StartServerSide(ICoreServerAPI api)
         {
             Mod.Logger.Notification("Hello from template mod server side: " + Lang.Get("remedyandruin:hello"));
 
-            if (!serverPatched)
+            PatchBootstrap.EnsureSharedSet(Mod.Logger);
+            if (PatchBootstrap.EnsureServerSet(Mod.Logger))
             {
-                harmony = new Harmony(HarmonyId);
-                // Patch each [HarmonyPatch] class individually rather than one PatchAll call, so a
-                // single patch that can't resolve its target logs an error and gets skipped
-                // instead of aborting every other patch in the mod.
-                foreach (Type patchType in AccessTools.GetTypesFromAssembly(Assembly.GetExecutingAssembly()))
-                {
-                    if (patchType.GetCustomAttributes(typeof(HarmonyPatch), inherit: false).Length == 0) continue;
-
-                    try
-                    {
-                        harmony.CreateClassProcessor(patchType).Patch();
-                    }
-                    catch (Exception ex)
-                    {
-                        Mod.Logger.Error($"remedyandruin: failed to apply Harmony patch {patchType.FullName} - {ex}");
-                    }
-                }
                 // Bones registers first: the Bleeding handler returns only the instant share of the
                 // damage, and bone escalation needs the full post-armor amount.
                 PostArmorDamagePipeline.Register(EntityBehaviorBrokenBones.HandlePostArmorDamage);
                 PostArmorDamagePipeline.Register(Patch_BleedingDelivery.Handle);
-                serverPatched = true;
             }
 
             ChestColdContagionSystem.Start(api);
@@ -518,7 +493,8 @@ namespace Remedy_And_Ruin
                     {
                         InjuryTier tier = bones.GetTier(limb);
                         string locked = limb == BoneLocation.Legs && EntityBehaviorBrokenBones.IsLegLocked(args.Caller.Entity) ? " (movement locked)" : "";
-                        string text = $"{limb}: {tier}{(bones.IsSplinted(limb) ? " (splinted)" : "")}{locked}";
+                        string work = limb == BoneLocation.ChestArms ? $" (work speed {EntityBehaviorBrokenBones.WorkSpeedMultiplier(args.Caller.Entity) * 100f:0}%)" : "";
+                        string text = $"{limb}: {tier}{(bones.IsSplinted(limb) ? " (splinted)" : "")}{locked}{work}";
                         if (tier == InjuryTier.None) return text;
 
                         double? days = bones.GetHealDaysRemaining(limb);
@@ -602,6 +578,8 @@ namespace Remedy_And_Ruin
         public override void StartClientSide(ICoreClientAPI api)
         {
             Mod.Logger.Notification("Hello from template mod client side: " + Lang.Get("remedyandruin:hello"));
+
+            PatchBootstrap.EnsureSharedSet(Mod.Logger);
 
             // Player physics is simulated on the client, so the server cannot veto movement input. While
             // IsLegLocked, the gate refuses to press the movement keys (releases always pass) and the
@@ -795,8 +773,7 @@ namespace Remedy_And_Ruin
             }
             temporalVignetteRenderer?.Dispose();
             hallucinationManager?.Dispose();
-            harmony?.UnpatchAll(HarmonyId);
-            serverPatched = false;
+            PatchBootstrap.Reset();
             PostArmorDamagePipeline.Clear();
             ChestColdContagionSystem.Stop();
             SplintingInteraction.Stop();

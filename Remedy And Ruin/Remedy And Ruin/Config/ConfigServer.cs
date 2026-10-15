@@ -36,6 +36,27 @@ namespace Remedy_And_Ruin
         [JsonProperty(Order = 8)]
         public bool injuryChatMessagesEnabled { get; set; } = true;
 
+        [JsonProperty(Order = 9)]
+        public bool allowBowWithUnsplintedBrokenArm { get; set; } = false;
+
+        [JsonProperty(Order = 10)]
+        public float brokenArmBowPenaltyPercent { get; set; } = 40f;
+
+        // World config keys that publish the settings the client needs to read.
+        public const string AllowBowWorldKey = "RemedyAndRuin.allowBowWithUnsplintedBrokenArm";
+        public const string BowPenaltyWorldKey = "RemedyAndRuin.brokenArmBowPenaltyPercent";
+
+        // Reads the published setting from the world config; the default applies when it is absent.
+        public static bool AllowBowWithUnsplintedBrokenArm(IWorldAccessor world) =>
+            world?.Config?.GetBool(AllowBowWorldKey, false) ?? false;
+
+        // Bow draw-time and damage penalty percentage for a broken arm, limited to 0 through 90.
+        public static float BrokenArmBowPenaltyPercent(IWorldAccessor world)
+        {
+            float percent = world?.Config?.GetFloat(BowPenaltyWorldKey, 40f) ?? 40f;
+            return System.Math.Clamp(percent, 0f, 90f);
+        }
+
         public ConfigServer(ICoreAPI api, ConfigServer previousConfig = null)
         {
             if (previousConfig == null) return;
@@ -46,6 +67,8 @@ namespace Remedy_And_Ruin
             toxicityDecayPerRealSecond = previousConfig.toxicityDecayPerRealSecond;
             toxicityOverdoseThreshold = previousConfig.toxicityOverdoseThreshold;
             injuryChatMessagesEnabled = previousConfig.injuryChatMessagesEnabled;
+            allowBowWithUnsplintedBrokenArm = previousConfig.allowBowWithUnsplintedBrokenArm;
+            brokenArmBowPenaltyPercent = previousConfig.brokenArmBowPenaltyPercent;
         }
     }
 }

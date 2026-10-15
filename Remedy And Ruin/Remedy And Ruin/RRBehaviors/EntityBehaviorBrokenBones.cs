@@ -65,6 +65,20 @@ namespace Remedy_And_Ruin.RRBehaviors
     /// on the client, so the server cannot veto movement input; the client enforces the lock (see
     /// Remedy_And_RuinModSystem), and the server backstop sets the modifier so the blended walkspeed
     /// is 0.
+    ///
+    /// Arm effects: WorkSpeedMultiplier maps the ChestArms state to a work-speed factor: Strain 0.95,
+    /// Fracture 0.90, Break or Crush 0.60 splinted and 0.50 unsplinted (one injured arm means
+    /// everything is done one-handed). It reads only WatchedAttributes, so it is valid on the client
+    /// and ignores game mode. ApplyArmEffects mirrors it into one persistent meleeWeaponsDamage
+    /// modifier (ArmMeleeStatKey) on every ChestArms tier or splint change, at login, on the heal tick
+    /// and on death; the modifier never drives the blended stat below 0. Block-break speed is
+    /// computed on the client and is scaled there (see Patch_ArmDigSpeed).
+    ///
+    /// Bow rules: a bow takes two working arms. HasBrokenArm is true for a Break or Crush ChestArms
+    /// injury on a player outside creative and spectator mode. IsBowDrawBlocked is true when that arm
+    /// is unsplinted and the server setting allowBowWithUnsplintedBrokenArm is off. Whenever HasBrokenArm
+    /// is true and the draw is not blocked, draw time and arrow damage carry the
+    /// brokenArmBowPenaltyPercent penalty (see BowDrawPenaltyDivisor and BowDamageMultiplier).
     /// </summary>
     public class EntityBehaviorBrokenBones : EntityBehavior
     {
@@ -77,6 +91,8 @@ namespace Remedy_And_Ruin.RRBehaviors
         private const float LegStrainWalkPenalty = -0.05f;
         private const float LegFractureWalkPenalty = -0.10f;
         private const float LegBrokenWalkPenalty = -0.40f;
+
+        private const string ArmMeleeStatKey = "remedyandruinBonesArms";
 
         private long tickListenerId;
 
@@ -105,6 +121,7 @@ namespace Remedy_And_Ruin.RRBehaviors
             RefreshHealing(limb);
             UpdateTickListener();
             if (limb == BoneLocation.Legs) ApplyLegEffects();
+            else if (limb == BoneLocation.ChestArms) ApplyArmEffects();
         }
 
         public void SetSplinted(BoneLocation limb, bool splinted)
@@ -116,7 +133,54 @@ namespace Remedy_And_Ruin.RRBehaviors
 
             RefreshHealing(limb);
             if (limb == BoneLocation.Legs) ApplyLegEffects();
+            else if (limb == BoneLocation.ChestArms) ApplyArmEffects();
         }
+
+        // Work-speed factor for digging and melee damage from the entity's ChestArms state; 1 when
+        // uninjured. Independent of game mode.
+        public static float WorkSpeedMultiplier(Entity entity)
+        {
+            if (entity?.WatchedAttributes == null) return 1f;
+
+            switch (ReadTier(entity, BoneLocation.ChestArms))
+            {
+                case InjuryTier.Strain: return 0.95f;
+                case InjuryTier.Fracture: return 0.90f;
+                case InjuryTier.Break:
+                case InjuryTier.Crush:
+                    return ReadSplinted(entity, BoneLocation.ChestArms) ? 0.60f : 0.50f;
+                default: return 1f;
+            }
+        }
+
+        // True for a Break or Crush ChestArms injury on a player outside creative and spectator mode.
+        // Mounted players are not exempt.
+        public static bool HasBrokenArm(Entity entity)
+        {
+            if (entity is not EntityPlayer player || entity.WatchedAttributes == null) return false;
+
+            EnumGameMode? mode = player.Player?.WorldData?.CurrentGameMode;
+            if (mode == EnumGameMode.Creative || mode == EnumGameMode.Spectator) return false;
+
+            return ReadTier(entity, BoneLocation.ChestArms) >= InjuryTier.Break;
+        }
+
+        // True when the entity may not draw a bow: a broken, unsplinted arm with the server setting off.
+        public static bool IsBowDrawBlocked(Entity entity)
+        {
+            if (!HasBrokenArm(entity)) return false;
+            if (ReadSplinted(entity, BoneLocation.ChestArms)) return false;
+
+            return !ConfigServer.AllowBowWithUnsplintedBrokenArm(entity.World);
+        }
+
+        // Factor a bow draw time is divided by; 1 when no bow penalty applies.
+        public static float BowDrawPenaltyDivisor(Entity entity) =>
+            HasBrokenArm(entity) ? 1f + ConfigServer.BrokenArmBowPenaltyPercent(entity.World) / 100f : 1f;
+
+        // Factor arrow damage is multiplied by; 1 when no bow penalty applies.
+        public static float BowDamageMultiplier(Entity entity) =>
+            HasBrokenArm(entity) ? 1f - ConfigServer.BrokenArmBowPenaltyPercent(entity.World) / 100f : 1f;
 
         // True when the entity's own movement input is disabled by an unsplinted Break or Crush Legs
         // injury. Creative, spectator and mounted players are never locked.
@@ -150,18 +214,7 @@ namespace Remedy_And_Ruin.RRBehaviors
                 _ => 0f
             };
 
-            float others = 0f;
-            float? existing = null;
-            foreach (System.Collections.Generic.KeyValuePair<string, EntityFloatStats> category in entity.Stats)
-            {
-                if (category.Key != "walkspeed") continue;
-
-                foreach (System.Collections.Generic.KeyValuePair<string, EntityStat<float>> modifier in category.Value.ValuesByKey)
-                {
-                    if (modifier.Key == LegWalkStatKey) existing = modifier.Value.Value;
-                    else others += modifier.Value.Value * modifier.Value.Weight;
-                }
-            }
+            ReadStatModifiers("walkspeed", LegWalkStatKey, out float others, out float? existing);
 
             if (penalty == 0f)
             {
@@ -174,6 +227,44 @@ namespace Remedy_And_Ruin.RRBehaviors
             if (existing != null && Math.Abs(existing.Value - value) < 0.00001f) return;
 
             entity.Stats.Set("walkspeed", LegWalkStatKey, value, persistent: true);
+        }
+
+        // Sets, updates or removes the ChestArms meleeWeaponsDamage modifier: the work-speed factor minus
+        // 1, limited so the blended stat stays at or above 0.
+        public void ApplyArmEffects()
+        {
+            if (entity.World.Side != EnumAppSide.Server) return;
+
+            float penalty = WorkSpeedMultiplier(entity) - 1f;
+            ReadStatModifiers("meleeWeaponsDamage", ArmMeleeStatKey, out float others, out float? existing);
+
+            if (penalty == 0f)
+            {
+                if (existing != null) entity.Stats.Remove("meleeWeaponsDamage", ArmMeleeStatKey);
+                return;
+            }
+
+            float value = Math.Max(penalty, -Math.Max(0f, others));
+            if (existing != null && Math.Abs(existing.Value - value) < 0.00001f) return;
+
+            entity.Stats.Set("meleeWeaponsDamage", ArmMeleeStatKey, value, persistent: true);
+        }
+
+        // Sums the other modifiers' weighted values in a stat category and reads this mod's own value.
+        private void ReadStatModifiers(string category, string ownKey, out float others, out float? existing)
+        {
+            others = 0f;
+            existing = null;
+            foreach (System.Collections.Generic.KeyValuePair<string, EntityFloatStats> entry in entity.Stats)
+            {
+                if (entry.Key != category) continue;
+
+                foreach (System.Collections.Generic.KeyValuePair<string, EntityStat<float>> modifier in entry.Value.ValuesByKey)
+                {
+                    if (modifier.Key == ownKey) existing = modifier.Value.Value;
+                    else others += modifier.Value.Value * modifier.Value.Weight;
+                }
+            }
         }
 
         // Days of healing left, or null when the limb is not healing.
@@ -206,6 +297,7 @@ namespace Remedy_And_Ruin.RRBehaviors
             }
             UpdateTickListener();
             ApplyLegEffects();
+            ApplyArmEffects();
         }
 
         public override void OnEntityDespawn(EntityDespawnData despawn)
@@ -280,6 +372,7 @@ namespace Remedy_And_Ruin.RRBehaviors
             }
             UpdateTickListener();
             ApplyLegEffects();
+            ApplyArmEffects();
         }
 
         public static void HandlePostArmorDamage(EntityPlayer victim, DamageSource source, ref float damage)
@@ -433,6 +526,7 @@ namespace Remedy_And_Ruin.RRBehaviors
             }
             UpdateTickListener();
             ApplyLegEffects();
+            ApplyArmEffects();
         }
 
         private void Notify(BoneLocation limb, InjuryTier tier)
@@ -477,6 +571,12 @@ namespace Remedy_And_Ruin.RRBehaviors
             BoneLocation.Legs => "legs",
             _ => "arms"
         };
+
+        private static InjuryTier ReadTier(Entity entity, BoneLocation limb) =>
+            (InjuryTier)entity.WatchedAttributes.GetInt(TierKey(limb), (int)InjuryTier.None);
+
+        private static bool ReadSplinted(Entity entity, BoneLocation limb) =>
+            entity.WatchedAttributes.GetBool(SplintedKey(limb), false);
 
         private static string TierKey(BoneLocation limb) => "remedyandruinBones" + limb + "Tier";
 
