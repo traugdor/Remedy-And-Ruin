@@ -10,7 +10,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
     /// <summary>
     /// Server-side player-to-player Chest Cold contagion. A (sick source, healthy target) pair rolls
     /// only while both players stand in the same enclosed room (per RoomRegistry) and within
-    /// MaxDistance blocks of each other; outdoors or in an open area never counts as shared.
+    /// MaxDistance blocks of each other; outdoors or in an open area never counts as shared. Players in
+    /// creative or spectator mode neither catch nor spread it.
     ///
     /// One roll per RollIntervalSeconds of in-game time per eligible pair, at BaseChance scaled by
     /// the target's "contagionresistance" stat (1.0 when unset). In-game time is read from the
@@ -104,7 +105,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             {
                 if (!(player is IServerPlayer serverPlayer)) continue;
                 if (serverPlayer.ConnectionState != EnumClientState.Playing) continue;
-                if (serverPlayer.WorldData.CurrentGameMode == EnumGameMode.Spectator) continue;
+                EnumGameMode gameMode = serverPlayer.WorldData.CurrentGameMode;
+                if (gameMode == EnumGameMode.Spectator || gameMode == EnumGameMode.Creative) continue;
 
                 EntityPlayer entity = serverPlayer.Entity;
                 if (entity == null || !entity.Alive) continue;

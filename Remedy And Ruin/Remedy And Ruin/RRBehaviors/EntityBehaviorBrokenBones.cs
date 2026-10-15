@@ -52,6 +52,19 @@ namespace Remedy_And_Ruin.RRBehaviors
     /// ResumeAfterLogin: server side, call once per login.
     ///
     /// Death clears every limb to None and unsplinted, and every end day to 0.
+    ///
+    /// Leg effects: ApplyLegEffects maintains one persistent walkspeed modifier (LegWalkStatKey) from
+    /// the Legs tier: Strain -0.05, Fracture -0.10, Break or Crush -0.40. It runs on every Legs tier or
+    /// splint change, at login and on the heal tick, and removes the modifier when the Legs tier is
+    /// None. The modifier never drives the blended walkspeed below 0, because air control reads the
+    /// blended value without a lower clamp.
+    ///
+    /// Movement lock: IsLegLocked is true for an unsplinted Break or Crush Legs injury on a
+    /// non-mounted player outside creative and spectator mode. It reads only WatchedAttributes, so it is
+    /// valid on the client where this behavior instance does not exist. Player physics is simulated
+    /// on the client, so the server cannot veto movement input; the client enforces the lock (see
+    /// Remedy_And_RuinModSystem), and the server backstop sets the modifier so the blended walkspeed
+    /// is 0.
     /// </summary>
     public class EntityBehaviorBrokenBones : EntityBehavior
     {
@@ -59,6 +72,11 @@ namespace Remedy_And_Ruin.RRBehaviors
         private const InjuryTier SkullMaxTier = InjuryTier.Fracture;
         private const int TickIntervalMs = 5000;
         private const double DockFraction = 0.1;
+
+        private const string LegWalkStatKey = "remedyandruinBonesLegs";
+        private const float LegStrainWalkPenalty = -0.05f;
+        private const float LegFractureWalkPenalty = -0.10f;
+        private const float LegBrokenWalkPenalty = -0.40f;
 
         private long tickListenerId;
 
@@ -86,6 +104,7 @@ namespace Remedy_And_Ruin.RRBehaviors
             if (changed) SetEndDay(limb, 0.0);
             RefreshHealing(limb);
             UpdateTickListener();
+            if (limb == BoneLocation.Legs) ApplyLegEffects();
         }
 
         public void SetSplinted(BoneLocation limb, bool splinted)
@@ -96,6 +115,65 @@ namespace Remedy_And_Ruin.RRBehaviors
             entity.WatchedAttributes.MarkPathDirty(SplintedKey(limb));
 
             RefreshHealing(limb);
+            if (limb == BoneLocation.Legs) ApplyLegEffects();
+        }
+
+        // True when the entity's own movement input is disabled by an unsplinted Break or Crush Legs
+        // injury. Creative, spectator and mounted players are never locked.
+        public static bool IsLegLocked(Entity entity)
+        {
+            if (entity is not EntityPlayer player || entity.WatchedAttributes == null) return false;
+            if (player.MountedOn != null) return false;
+
+            EnumGameMode? mode = player.Player?.WorldData?.CurrentGameMode;
+            if (mode == EnumGameMode.Creative || mode == EnumGameMode.Spectator) return false;
+
+            InjuryTier tier = (InjuryTier)entity.WatchedAttributes.GetInt(TierKey(BoneLocation.Legs), (int)InjuryTier.None);
+            if (tier < InjuryTier.Break) return false;
+
+            return !entity.WatchedAttributes.GetBool(SplintedKey(BoneLocation.Legs), false);
+        }
+
+        // Sets, updates or removes the Legs walkspeed modifier. The modifier is the Legs penalty,
+        // limited so the blended walkspeed stays at or above 0; while locked it is the negative of
+        // the other modifiers' blended sum (floored at 0), which makes the blended walkspeed 0.
+        public void ApplyLegEffects()
+        {
+            if (entity.World.Side != EnumAppSide.Server) return;
+
+            float penalty = GetTier(BoneLocation.Legs) switch
+            {
+                InjuryTier.Strain => LegStrainWalkPenalty,
+                InjuryTier.Fracture => LegFractureWalkPenalty,
+                InjuryTier.Break => LegBrokenWalkPenalty,
+                InjuryTier.Crush => LegBrokenWalkPenalty,
+                _ => 0f
+            };
+
+            float others = 0f;
+            float? existing = null;
+            foreach (System.Collections.Generic.KeyValuePair<string, EntityFloatStats> category in entity.Stats)
+            {
+                if (category.Key != "walkspeed") continue;
+
+                foreach (System.Collections.Generic.KeyValuePair<string, EntityStat<float>> modifier in category.Value.ValuesByKey)
+                {
+                    if (modifier.Key == LegWalkStatKey) existing = modifier.Value.Value;
+                    else others += modifier.Value.Value * modifier.Value.Weight;
+                }
+            }
+
+            if (penalty == 0f)
+            {
+                if (existing != null) entity.Stats.Remove("walkspeed", LegWalkStatKey);
+                return;
+            }
+
+            float floor = -Math.Max(0f, others);
+            float value = IsLegLocked(entity) ? floor : Math.Max(penalty, floor);
+            if (existing != null && Math.Abs(existing.Value - value) < 0.00001f) return;
+
+            entity.Stats.Set("walkspeed", LegWalkStatKey, value, persistent: true);
         }
 
         // Days of healing left, or null when the limb is not healing.
@@ -127,6 +205,7 @@ namespace Remedy_And_Ruin.RRBehaviors
                 RefreshHealing(limb);
             }
             UpdateTickListener();
+            ApplyLegEffects();
         }
 
         public override void OnEntityDespawn(EntityDespawnData despawn)
@@ -200,6 +279,7 @@ namespace Remedy_And_Ruin.RRBehaviors
                 SetEndDay(limb, 0.0);
             }
             UpdateTickListener();
+            ApplyLegEffects();
         }
 
         public static void HandlePostArmorDamage(EntityPlayer victim, DamageSource source, ref float damage)
@@ -352,6 +432,7 @@ namespace Remedy_And_Ruin.RRBehaviors
                 CompleteIfExpired(limb);
             }
             UpdateTickListener();
+            ApplyLegEffects();
         }
 
         private void Notify(BoneLocation limb, InjuryTier tier)

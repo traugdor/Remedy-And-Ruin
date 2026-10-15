@@ -23,6 +23,14 @@ namespace Remedy_And_Ruin
         private TemporalVignetteRenderer temporalVignetteRenderer;
         private HallucinationManager hallucinationManager;
         private Harmony harmony;
+        private ICoreClientAPI legLockApi;
+        private long legLockTickId;
+
+        private static readonly EnumEntityAction[] LegLockedActions =
+        {
+            EnumEntityAction.Forward, EnumEntityAction.Backward, EnumEntityAction.Left,
+            EnumEntityAction.Right, EnumEntityAction.Jump, EnumEntityAction.Sprint
+        };
 
         private const string HarmonyId = "remedyandruin";
 
@@ -509,7 +517,8 @@ namespace Remedy_And_Ruin
                     string Describe(BoneLocation limb)
                     {
                         InjuryTier tier = bones.GetTier(limb);
-                        string text = $"{limb}: {tier}{(bones.IsSplinted(limb) ? " (splinted)" : "")}";
+                        string locked = limb == BoneLocation.Legs && EntityBehaviorBrokenBones.IsLegLocked(args.Caller.Entity) ? " (movement locked)" : "";
+                        string text = $"{limb}: {tier}{(bones.IsSplinted(limb) ? " (splinted)" : "")}{locked}";
                         if (tier == InjuryTier.None) return text;
 
                         double? days = bones.GetHealDaysRemaining(limb);
@@ -594,6 +603,13 @@ namespace Remedy_And_Ruin
         {
             Mod.Logger.Notification("Hello from template mod client side: " + Lang.Get("remedyandruin:hello"));
 
+            // Player physics is simulated on the client, so the server cannot veto movement input. While
+            // IsLegLocked, the gate refuses to press the movement keys (releases always pass) and the
+            // tick clears keys that were already held when the lock began.
+            legLockApi = api;
+            api.Input.InWorldAction += OnLegLockInput;
+            legLockTickId = api.Event.RegisterGameTickListener(OnLegLockTick, 100);
+
             temporalVignetteRenderer = new TemporalVignetteRenderer(api);
             // Combines the .rrbrainrot debug command's manual sample with Mind Poison's real,
             // server-driven severity so either can independently trigger Hallucination spawns.
@@ -667,6 +683,27 @@ namespace Remedy_And_Ruin
                         return TextCommandResult.Success($"Concussion drunken sway {(value ? "enabled" : "disabled")}.");
                     })
                 .EndSubCommand();
+        }
+
+        private void OnLegLockInput(EnumEntityAction action, bool on, ref EnumHandling handling)
+        {
+            if (!on || Array.IndexOf(LegLockedActions, action) < 0) return;
+            if (!EntityBehaviorBrokenBones.IsLegLocked(legLockApi.World.Player?.Entity)) return;
+
+            handling = EnumHandling.PreventDefault;
+        }
+
+        private void OnLegLockTick(float dt)
+        {
+            EntityPlayer player = legLockApi.World.Player?.Entity;
+            if (!EntityBehaviorBrokenBones.IsLegLocked(player)) return;
+
+            // The indexer writes the flag without raising an action event; the control system then
+            // reports the change to the server on its next tick.
+            foreach (EnumEntityAction action in LegLockedActions)
+            {
+                player.Controls[action] = false;
+            }
         }
 
         /// <summary>
@@ -750,6 +787,12 @@ namespace Remedy_And_Ruin
 
         public override void Dispose()
         {
+            if (legLockApi != null)
+            {
+                legLockApi.Input.InWorldAction -= OnLegLockInput;
+                legLockApi.Event.UnregisterGameTickListener(legLockTickId);
+                legLockApi = null;
+            }
             temporalVignetteRenderer?.Dispose();
             hallucinationManager?.Dispose();
             harmony?.UnpatchAll(HarmonyId);
