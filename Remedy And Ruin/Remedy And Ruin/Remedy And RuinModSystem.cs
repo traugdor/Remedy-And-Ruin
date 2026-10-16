@@ -66,8 +66,6 @@ namespace Remedy_And_Ruin
             api.World.Config.SetBool("RemedyAndRuin.concussionWobbleEnabled", Config.concussionWobbleEnabled);
             api.World.Config.SetBool(ConfigServer.AllowBowWorldKey, Config.allowBowWithUnsplintedBrokenArm);
             api.World.Config.SetFloat(ConfigServer.BowPenaltyWorldKey, Config.brokenArmBowPenaltyPercent);
-            api.World.Config.SetString(ConfigServer.OffhandExtraBlockedWorldKey, ConfigServer.JoinPatterns(Config.offhandExtraBlockedItems));
-            api.World.Config.SetString(ConfigServer.OffhandAlwaysAllowedWorldKey, ConfigServer.JoinPatterns(Config.offhandAlwaysAllowedItems));
         }
 
         public override void StartServerSide(ICoreServerAPI api)
@@ -469,7 +467,7 @@ namespace Remedy_And_Ruin
                 });
 
             api.ChatCommands.Create("rrBones")
-                .WithDescription("Debug: show each limb's injury tier and splint (/rrBones), set a tier (/rrBones set followed by arms, legs or skull and a tier 0-4 or its name; skull maxes at 2), set a splint (/rrBones splint followed by a limb and on or off), roll a use escalation (/rrBones use followed by a limb), or set a healing limb's remaining time (/rrBones healin followed by a limb and a number of in-game days). Test hits with /rrDamage.")
+                .WithDescription("Debug: show each limb's injury tier and splint (/rrBones), set a tier (/rrBones set followed by arms, legs or skull and a tier 0-4 or its name; skull maxes at 2), set a splint (/rrBones splint followed by a limb and on or off), roll a use escalation (/rrBones use followed by a limb), force a shield block to break a splinted arm's splint (/rrBones shieldblock arms), or set a healing limb's remaining time (/rrBones healin followed by a limb and a number of in-game days). Test hits with /rrDamage.")
                 .RequiresPrivilege(Privilege.root)
                 .RequiresPlayer()
                 .WithArgs(api.ChatCommands.Parsers.OptionalWord("action"), api.ChatCommands.Parsers.OptionalWord("limb"), api.ChatCommands.Parsers.OptionalWord("value"))
@@ -499,7 +497,6 @@ namespace Remedy_And_Ruin
                         string offhand = limb != BoneLocation.ChestArms ? "" : EntityBehaviorBrokenBones.GetOffhandMode(args.Caller.Entity) switch
                         {
                             OffhandMode.Locked => " (offhand locked)",
-                            OffhandMode.Restricted => " (offhand restricted)",
                             _ => ""
                         };
                         string text = $"{limb}: {tier}{(bones.IsSplinted(limb) ? " (splinted)" : "")}{locked}{work}{offhand}";
@@ -544,6 +541,17 @@ namespace Remedy_And_Ruin
 
                             bones.SetSplinted(target, string.Equals(text, "on", StringComparison.OrdinalIgnoreCase));
                             return TextCommandResult.Success(Describe(target));
+                        }
+                        case "shieldblock":
+                        {
+                            EntityPlayer holder = (EntityPlayer)args.Caller.Entity;
+                            ItemSlot shieldSlot = Patch_ShieldBlockBreaksSplint.IsShield(holder.LeftHandItemSlot) ? holder.LeftHandItemSlot
+                                : Patch_ShieldBlockBreaksSplint.IsShield(holder.RightHandItemSlot) ? holder.RightHandItemSlot : null;
+                            if (shieldSlot == null) return TextCommandResult.Error("Hold a shield in either hand first.");
+                            if (!bones.IsSplinted(BoneLocation.ChestArms)) return TextCommandResult.Error("The arm is not splinted, so a shield block cannot break a splint.");
+
+                            bones.OnShieldBlock(shieldSlot, force: true);
+                            return TextCommandResult.Success(Describe(BoneLocation.ChestArms));
                         }
                         case "use":
                         {

@@ -22,8 +22,7 @@ namespace Remedy_And_Ruin.RRBehaviors
     public enum OffhandMode
     {
         Free = 0,
-        Restricted = 1,
-        Locked = 2
+        Locked = 1
     }
 
     /// <summary>
@@ -94,10 +93,15 @@ namespace Remedy_And_Ruin.RRBehaviors
     /// brokenArmBowPenaltyPercent penalty (see BowDrawPenaltyDivisor and BowDamageMultiplier).
     ///
     /// Offhand rules: GetOffhandMode is Locked for an unsplinted Break or Crush ChestArms injury and
-    /// Restricted for a splinted one (Free in creative and spectator mode); it reads only
+    /// Free otherwise, including a splinted arm and creative and spectator mode; it reads only
     /// WatchedAttributes, so the client-side slot guard can use it (see OffhandRules and
     /// Patch_OffhandGuard). EnforceOffhand (server) drops an offhand stack the mode no longer allows;
     /// it runs on every ChestArms tier or splint change, at login and on the heal tick.
+    ///
+    /// Shield blocks: OnShieldBlock (server) is called when a shield absorbed part of a hit on this
+    /// player (see Patch_ShieldBlockBreaksSplint). While ChestArms is splinted it has a
+    /// ShieldBlockSplintBreakChance chance to break the splint without changing the tier, drop that
+    /// shield and tell the player.
     /// </summary>
     public class EntityBehaviorBrokenBones : EntityBehavior
     {
@@ -105,6 +109,10 @@ namespace Remedy_And_Ruin.RRBehaviors
         private const InjuryTier SkullMaxTier = InjuryTier.Fracture;
         private const int TickIntervalMs = 5000;
         private const double DockFraction = 0.1;
+        private const float ShieldBlockSplintBreakChance = 0.25f;
+
+        // Played when a hit raises a limb to Fracture or above; Strain is a sprain, not a break.
+        private static readonly AssetLocation BoneBreakSound = new AssetLocation("sounds/effect/toolbreak");
 
         private const string LegWalkStatKey = "remedyandruinBonesLegs";
         private const float LegStrainWalkPenalty = -0.05f;
@@ -213,13 +221,13 @@ namespace Remedy_And_Ruin.RRBehaviors
         public static float BowDamageMultiplier(Entity entity) =>
             HasBrokenArm(entity) ? 1f - ConfigServer.BrokenArmBowPenaltyPercent(entity.World) / 100f : 1f;
 
-        // Offhand restriction for the entity: Locked for an unsplinted broken arm, Restricted for a
-        // splinted one, Free otherwise (including creative and spectator players).
+        // Offhand restriction for the entity: Locked for an unsplinted broken arm, Free otherwise
+        // (including a splinted arm and creative and spectator players).
         public static OffhandMode GetOffhandMode(Entity entity)
         {
             if (!HasBrokenArm(entity)) return OffhandMode.Free;
 
-            return ReadSplinted(entity, BoneLocation.ChestArms) ? OffhandMode.Restricted : OffhandMode.Locked;
+            return ReadSplinted(entity, BoneLocation.ChestArms) ? OffhandMode.Free : OffhandMode.Locked;
         }
 
         // Drops the offhand stack when the current offhand mode no longer allows it. Server only.
@@ -232,12 +240,29 @@ namespace Remedy_And_Ruin.RRBehaviors
             if (mode == OffhandMode.Free) return;
 
             ItemSlot slot = serverPlayer.InventoryManager?.OffhandHotbarSlot;
-            if (slot?.Itemstack == null || OffhandRules.Allows(mode, slot.Itemstack, entity.World)) return;
+            if (slot?.Itemstack == null || OffhandRules.Allows(mode, slot.Itemstack)) return;
 
             if (serverPlayer.InventoryManager.DropItem(slot, true))
             {
                 SendMessage(BoneLocation.ChestArms, Lang.Get("remedyandruin:bones-offhand-dropped"));
             }
+        }
+
+        // Called after a shield in shieldSlot absorbed part of a hit on this player. Server only. With
+        // a splinted ChestArms (any tier) the splint breaks with ShieldBlockSplintBreakChance: the
+        // tier is unchanged, the shield is dropped from the hand and the player is told. The drop
+        // happens before the splint state changes so EnforceOffhand finds the slot already empty.
+        public void OnShieldBlock(ItemSlot shieldSlot, bool force = false)
+        {
+            if (entity.World.Side != EnumAppSide.Server || !entity.Alive) return;
+            if (entity is not EntityPlayer player || player.Player is not IServerPlayer serverPlayer) return;
+            if (shieldSlot?.Itemstack == null) return;
+            if (GetTier(BoneLocation.ChestArms) == InjuryTier.None || !IsSplinted(BoneLocation.ChestArms)) return;
+            if (!force && entity.World.Rand.NextDouble() >= ShieldBlockSplintBreakChance) return;
+
+            serverPlayer.InventoryManager.DropItem(shieldSlot, true);
+            SetSplinted(BoneLocation.ChestArms, false);
+            SendMessage(BoneLocation.ChestArms, Lang.Get("remedyandruin:bones-splint-broken-shield"));
         }
 
         // True when the entity's own movement input is disabled by an unsplinted Break or Crush Legs
@@ -508,6 +533,7 @@ namespace Remedy_And_Ruin.RRBehaviors
             if (limb != BoneLocation.Skull) SetSplinted(limb, false);
             SetTier(limb, after);
             Notify(limb, after);
+            if (after >= InjuryTier.Fracture) entity.World.PlaySoundAt(BoneBreakSound, entity);
             if (splintBroke) NotifySplintBroken(limb);
             return true;
         }
