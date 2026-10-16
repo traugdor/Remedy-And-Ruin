@@ -586,6 +586,8 @@ namespace Remedy_And_Ruin.RRBehaviors
         {
             base.OnEntityDeath(damageSourceForDeath);
             threadManager.HandleForcefulEnd();
+            entity.WatchedAttributes.SetDouble(DiscoloredMeatToxinsKey, 0.0);
+            entity.WatchedAttributes.MarkPathDirty(DiscoloredMeatToxinsKey);
         }
 
         public void DestroyProgress()
@@ -1027,6 +1029,51 @@ namespace Remedy_And_Ruin.RRBehaviors
             {
                 TriggerAntidoteWindowVomit();
             }
+        }
+
+        // Accumulated toxin load from discolored meat; reaching FoodPoisoningThreshold causes food
+        // poisoning and resets it to zero.
+        private const string DiscoloredMeatToxinsKey = "remedyandruinDiscoloredMeatToxins";
+        private const double FoodPoisoningThreshold = 1.0;
+
+        /// <summary>
+        /// Called once per completed eating action (one plain item, or one meal regardless of
+        /// servings) that involves discolored meat. Adds a random amount between 0 and 1 to the
+        /// player's persisted toxin total; when the total reaches FoodPoisoningThreshold the
+        /// player gets food poisoning and the total resets to zero, so the first meals may do
+        /// nothing while the toxins build up. Server side only.
+        /// </summary>
+        public void OnDiscoloredMeatEaten()
+        {
+            if (entity.World.Side != EnumAppSide.Server) return;
+
+            double toxins = entity.WatchedAttributes.GetDouble(DiscoloredMeatToxinsKey, 0.0) + entity.World.Rand.NextDouble();
+            bool poisoned = toxins >= FoodPoisoningThreshold;
+            double stored = poisoned ? 0.0 : toxins;
+            entity.WatchedAttributes.SetDouble(DiscoloredMeatToxinsKey, stored);
+            entity.WatchedAttributes.MarkPathDirty(DiscoloredMeatToxinsKey);
+            if (poisoned)
+            {
+                TriggerFoodPoisoning();
+            }
+
+            if (Remedy_And_RuinModSystem.Config?.debugMode == true
+                && entity is EntityPlayer player && player.Player is Vintagestory.API.Server.IServerPlayer serverPlayer)
+            {
+                serverPlayer.SendMessage(
+                    Vintagestory.API.Config.GlobalConstants.InfoLogChatGroup,
+                    "Discolored meat eaten: toxins " + toxins.ToString("0.00") + " of " + FoodPoisoningThreshold.ToString("0.00")
+                        + (poisoned ? ", food poisoning triggered and toxins reset" : ", no effect yet"),
+                    EnumChatType.Notification);
+            }
+        }
+
+        /// <summary>
+        /// Attachment point for the gastrointestinal illness (the Upset Stomach condition) that
+        /// discolored meat causes; intentionally empty until that condition exists.
+        /// </summary>
+        private void TriggerFoodPoisoning()
+        {
         }
 
         private void ApplyAntidoteAftermathEffect()

@@ -1,0 +1,67 @@
+[
+  { "op": "add", "file": "game:itemtypes/food/redmeat.json", "path": "/variantgroups/0/states/-", "value": "discolored" },
+  { "op": "add", "file": "game:itemtypes/food/redmeat.json", "path": "/variantgroups/0/states/-", "value": "cookeddiscolored" },
+  { "op": "add", "file": "game:itemtypes/food/redmeat.json", "path": "/variantgroups/0/states/-", "value": "cureddiscolored" },
+  { "op": "add", "file": "game:itemtypes/food/redmeat.json", "path": "/texturesbytype/redmeat-discolored", "value": {
+      "meat": { "base": "remedyandruin:item/food/meat/meat_discolored_raw_generated" }
+  }},
+  { "op": "add", "file": "game:itemtypes/food/redmeat.json", "path": "/texturesbytype/redmeat-cookeddiscolored", "value": {
+      "meat": { "base": "remedyandruin:item/food/meat/meat_discolored_cooked_generated" }
+  }},
+  { "op": "add", "file": "game:itemtypes/food/redmeat.json", "path": "/texturesbytype/redmeat-cureddiscolored", "value": {
+      "meat": { "base": "remedyandruin:item/food/meat/meat_discolored_cured_generated" }
+  }},
+  { "op": "add", "file": "game:itemtypes/food/redmeat.json", "path": "/nutritionPropsByType/redmeat-cookeddiscolored", "value": {
+      "satiety": 280, "health": 0, "foodcategory": "Protein"
+  }},
+  { "op": "add", "file": "game:itemtypes/food/redmeat.json", "path": "/nutritionPropsByType/redmeat-cureddiscolored", "value": {
+      "satiety": 200, "health": 0, "foodcategory": "Protein"
+  }},
+  { "op": "add", "file": "game:itemtypes/food/redmeat.json", "path": "/transitionablePropsByType/redmeat-discolored", "value": [{
+      "type": "Perish", "freshHours": { "avg": 72 }, "transitionHours": { "avg": 48 },
+      "transitionedStack": { "type": "item", "code": "rot" }, "transitionRatio": 1
+  }]},
+  { "op": "add", "file": "game:itemtypes/food/redmeat.json", "path": "/transitionablePropsByType/redmeat-cookeddiscolored", "value": [{
+      "type": "Perish", "freshHours": { "avg": 240 }, "spoilHours": { "avg": 72 },
+      "transitionedStack": { "type": "item", "code": "rot" }, "transitionRatio": 1
+  }]},
+  { "op": "add", "file": "game:itemtypes/food/redmeat.json", "path": "/transitionablePropsByType/redmeat-cureddiscolored", "value": [{
+      "type": "Perish", "freshHours": { "avg": 8760 }, "spoilHours": { "avg": 4380 },
+      "transitionedStack": { "type": "item", "code": "rot" }, "transitionRatio": 1
+  }]},
+  { "op": "add", "file": "game:itemtypes/food/redmeat.json", "path": "/combustiblePropsByType/redmeat-discolored", "value": {
+      "meltingPoint": 150, "meltingDuration": 30, "smeltedRatio": 1, "smeltingType": "cook",
+      "smeltedStack": { "type": "item", "code": "redmeat-cookeddiscolored" }, "requiresContainer": false
+  }},
+
+  { "op": "add", "file": "game:itemtypes/food/bushmeat.json", "path": "/variantgroups/0/states/-", "value": "discolored" },
+  { "op": "add", "file": "game:itemtypes/food/bushmeat.json", "path": "/variantgroups/0/states/-", "value": "cookeddiscolored" },
+  { "op": "add", "file": "game:itemtypes/food/bushmeat.json", "path": "/variantgroups/0/states/-", "value": "cureddiscolored" },
+  { "op": "add", "file": "game:itemtypes/food/bushmeat.json", "path": "/texturesByType", "value": {
+      "bushmeat-discolored": { "meat": { "base": "remedyandruin:item/food/meat/meat_discolored_raw_generated" } },
+      "bushmeat-cookeddiscolored": { "meat": { "base": "remedyandruin:item/food/meat/meat_discolored_cooked_generated" } },
+      "bushmeat-cureddiscolored": { "meat": { "base": "remedyandruin:item/food/meat/meat_discolored_cured_generated" } }
+  }},
+  { "op": "add", "file": "game:itemtypes/food/bushmeat.json", "path": "/nutritionPropsByType/bushmeat-cookeddiscolored", "value": {
+      "satiety": 120, "foodcategory": "Protein"
+  }},
+  { "op": "add", "file": "game:itemtypes/food/bushmeat.json", "path": "/nutritionPropsByType/bushmeat-cureddiscolored", "value": {
+      "satiety": 90, "foodcategory": "Protein"
+  }},
+  { "op": "add", "file": "game:itemtypes/food/bushmeat.json", "path": "/transitionablePropsByType/bushmeat-discolored", "value": [{
+      "type": "Perish", "freshHours": { "avg": 72 }, "transitionHours": { "avg": 48 },
+      "transitionedStack": { "type": "item", "code": "rot" }, "transitionRatio": 1
+  }]},
+  { "op": "add", "file": "game:itemtypes/food/bushmeat.json", "path": "/transitionablePropsByType/bushmeat-cookeddiscolored", "value": [{
+      "type": "Perish", "freshHours": { "avg": 240 }, "transitionHours": { "avg": 72 },
+      "transitionedStack": { "type": "item", "code": "rot" }, "transitionRatio": 1
+  }]},
+  { "op": "add", "file": "game:itemtypes/food/bushmeat.json", "path": "/transitionablePropsByType/bushmeat-cureddiscolored", "value": [{
+      "type": "Perish", "freshHours": { "avg": 8760 }, "spoilHours": { "avg": 4380 },
+      "transitionedStack": { "type": "item", "code": "rot" }, "transitionRatio": 1
+  }]},
+  { "op": "add", "file": "game:itemtypes/food/bushmeat.json", "path": "/combustiblePropsByType/bushmeat-discolored", "value": {
+      "meltingPoint": 150, "meltingDuration": 30, "smeltedRatio": 1, "smeltingType": "cook",
+      "smeltedStack": { "type": "item", "code": "bushmeat-cookeddiscolored" }, "requiresContainer": false
+  }}
+]

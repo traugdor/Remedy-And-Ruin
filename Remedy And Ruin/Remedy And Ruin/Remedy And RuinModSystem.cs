@@ -55,6 +55,10 @@ namespace Remedy_And_Ruin
             if (api.Side == EnumAppSide.Client)
             {
                 GenerateAllClusterTextures(api);
+                if (!DiscoloredMeat.EnsureGeneratedTextures(api))
+                {
+                    Mod.Logger.Error("remedyandruin: could not generate discolored meat textures - vanilla raw/cooked meat texture missing.");
+                }
                 api.Assets.AddModOrigin("remedyandruin", RemedyPoisonClusterTextures.GetAssetRootPath(api));
             }
         }
@@ -393,6 +397,41 @@ namespace Remedy_And_Ruin
                     return TextCommandResult.Success(infected
                         ? $"Caught Chest Cold on roll {rollsRun} (chance per roll {chance:P1})."
                         : $"No infection after {rollsRun} roll(s) (chance per roll {chance:P1}).");
+                });
+
+            api.ChatCommands.Create("rrDiscolored")
+                .WithDescription("Debug: give yourself raw-tier discolored meat for testing cooking, pot meals and eating. Usage: /rrDiscolored followed by optional red or bush (default red) and an optional count (default 1).")
+                .RequiresPrivilege(Privilege.root)
+                .RequiresPlayer()
+                .WithArgs(api.ChatCommands.Parsers.OptionalWord("kind"), api.ChatCommands.Parsers.OptionalInt("count", 1))
+                .HandleWith(args =>
+                {
+                    string kind = args.Parsers[0].IsMissing ? "red" : ((string)args.Parsers[0].GetValue()).ToLowerInvariant();
+                    int count = System.Math.Max(1, (int)args[1]);
+                    string path = kind switch
+                    {
+                        "red" => DiscoloredMeat.RedMeatRawTierPath,
+                        "bush" => DiscoloredMeat.BushMeatRawTierPath,
+                        _ => null
+                    };
+                    if (path == null)
+                    {
+                        return TextCommandResult.Error("Unknown kind '" + kind + "'. Use red or bush.");
+                    }
+
+                    Item item = api.World.GetItem(new AssetLocation("game", path));
+                    if (item == null)
+                    {
+                        return TextCommandResult.Error("Item game:" + path + " is not registered; the discolored meat JSON patches did not apply.");
+                    }
+
+                    IPlayer player = args.Caller.Player;
+                    ItemStack stack = new ItemStack(item, count);
+                    if (!player.InventoryManager.TryGiveItemstack(stack, true))
+                    {
+                        api.World.SpawnItemEntity(stack, player.Entity.Pos.XYZ);
+                    }
+                    return TextCommandResult.Success("Gave " + count + " x game:" + path + ".");
                 });
 
             api.ChatCommands.Create("rrHitLocation")

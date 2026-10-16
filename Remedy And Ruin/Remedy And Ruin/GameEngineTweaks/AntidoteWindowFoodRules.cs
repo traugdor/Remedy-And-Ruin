@@ -16,7 +16,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
     {
         private static readonly HashSet<string> SoupProteinIngredientCodes = new HashSet<string>
         {
-            "redmeat-raw", "redmeat-cured", "poultry-raw", "poultry-cured",
+            "redmeat-raw", "redmeat-discolored", "redmeat-cured", "redmeat-cureddiscolored", "poultry-raw", "poultry-cured",
             "egg-chicken-raw", "fish-raw", "fish-cured"
         };
 

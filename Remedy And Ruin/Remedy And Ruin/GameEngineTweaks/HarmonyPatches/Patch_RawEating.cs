@@ -28,6 +28,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
             {
                 EntityBehaviorLiverDisease liverDiseaseBehavior = byEntity.GetBehavior<EntityBehaviorLiverDisease>();
                 liverDiseaseBehavior?.OnFoodConsumed(stack, byEntity);
+
+                if (byEntity.World.Side == EnumAppSide.Server && DiscoloredMeat.IsDiscolored(stack))
+                {
+                    remedyBehavior?.OnDiscoloredMeatEaten();
+                }
             }
 
             JsonObject effectData = stack?.Collectible?.Attributes?["remedyandruinEffect"];

@@ -1,3 +1,4 @@
+using System.Linq;
 using HarmonyLib;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
@@ -30,6 +31,12 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
             }
 
             behavior.OnMealConsumed(world, inSlot?.Itemstack, contentStacks, __instance);
+
+            // Once per eating action, however many servings or discolored ingredients it holds.
+            if (world.Side == EnumAppSide.Server && contentStacks.Any(DiscoloredMeat.IsDiscolored))
+            {
+                behavior.OnDiscoloredMeatEaten();
+            }
 
             foreach (ItemStack stack in contentStacks)
             {

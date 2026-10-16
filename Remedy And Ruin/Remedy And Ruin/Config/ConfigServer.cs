@@ -42,6 +42,11 @@ namespace Remedy_And_Ruin
         [JsonProperty(Order = 10)]
         public float brokenArmBowPenaltyPercent { get; set; } = 40f;
 
+        // When true, bush meat from animals killed by Toxic arrow poison drops as discolored bush
+        // meat; when false it is removed. Read server-side only.
+        [JsonProperty(Order = 11)]
+        public bool discoloredBushMeatEnabled { get; set; } = false;
+
         // World config keys that publish the settings the client needs to read.
         public const string AllowBowWorldKey = "RemedyAndRuin.allowBowWithUnsplintedBrokenArm";
         public const string BowPenaltyWorldKey = "RemedyAndRuin.brokenArmBowPenaltyPercent";
@@ -69,6 +74,7 @@ namespace Remedy_And_Ruin
             injuryChatMessagesEnabled = previousConfig.injuryChatMessagesEnabled;
             allowBowWithUnsplintedBrokenArm = previousConfig.allowBowWithUnsplintedBrokenArm;
             brokenArmBowPenaltyPercent = previousConfig.brokenArmBowPenaltyPercent;
+            discoloredBushMeatEnabled = previousConfig.discoloredBushMeatEnabled;
         }
     }
 }

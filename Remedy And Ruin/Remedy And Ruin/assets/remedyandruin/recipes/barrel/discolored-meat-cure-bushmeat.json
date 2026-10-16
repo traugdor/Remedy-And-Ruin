@@ -1,0 +1,9 @@
+{
+	"code": "remedyandruin-barrel-curedmeat-bushmeat-discolored",
+	"sealHours": 480,
+	"ingredients": [
+		{ "type": "item", "code": "game:salt", "quantity": 2 },
+		{ "type": "item", "code": "game:bushmeat-discolored", "quantity": 1 }
+	],
+	"output": { "type": "item", "code": "game:bushmeat-cureddiscolored", "stackSize": 1 }
+}

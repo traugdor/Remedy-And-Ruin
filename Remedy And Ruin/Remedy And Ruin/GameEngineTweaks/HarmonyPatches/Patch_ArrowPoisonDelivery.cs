@@ -271,10 +271,13 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
     }
 
     /// <summary>
-    /// Strips meat-coded drops (redmeat/bushmeat/poultry, any variant - the game's only three meat
-    /// item bases) from a carcass's harvest inventory right after GenerateDrops populates it, but
-    /// only when Patch_ArrowToxicDoTHuntingRisk marked the carcass at death. Every other drop
-    /// (hide, fat, antlers, bones) is left untouched.
+    /// Handles meat-coded drops (redmeat/bushmeat/poultry, any variant - the game's only three meat
+    /// item bases) in a carcass's harvest inventory right after GenerateDrops populates it, but
+    /// only when Patch_ArrowToxicDoTHuntingRisk marked the carcass at death. Raw red meat becomes
+    /// discolored red meat, and raw bush meat becomes discolored bush meat when the
+    /// discoloredBushMeatEnabled server setting is on, and raw poultry is doubled; every other
+    /// meat drop is removed, as is any replaced drop whose discolored item is not registered.
+    /// Every other drop (hide, fat, antlers, bones) is left untouched.
     /// </summary>
     [HarmonyPatch(typeof(EntityBehaviorHarvestable), "GenerateDrops")]
     public static class Patch_ArrowToxicDoTMeatSuppression
@@ -295,7 +298,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
 
             if (!harvestedEntity.WatchedAttributes.GetBool(Patch_ArrowToxicDoTHuntingRisk.SuppressMeatDropsAttributeKey)) return;
 
-            bool anyRemoved = false;
+            bool anyChanged = false;
             foreach (ItemSlot slot in __instance.Inventory)
             {
                 string path = slot.Itemstack?.Collectible?.Code?.Path;
@@ -305,18 +308,18 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
                 {
                     if (path.StartsWith(prefix))
                     {
-                        slot.Itemstack = null;
-                        anyRemoved = true;
+                        slot.Itemstack = DiscoloredReplacement(harvestedEntity.World, slot.Itemstack, path);
+                        anyChanged = true;
                         break;
                     }
                 }
             }
 
-            if (!anyRemoved) return;
+            if (!anyChanged) return;
 
             // GenerateDrops already serialized and synced the pre-filter inventory to
             // "harvestableInv"/marked it dirty before this postfix ran - that snapshot has to be
-            // redone here, or the client keeps showing (and can still take) the removed meat. Must
+            // redone here, or the client keeps showing (and can still take) the original meat. Must
             // match GenerateDrops' own sync sequence exactly (same four calls, same order) -
             // "harvested" needs re-marking dirty too, and the chunk needs to be marked modified on
             // the server, or the entity's stored state and the chunk's persisted state disagree
@@ -330,6 +333,33 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
             {
                 harvestedEntity.World.BlockAccessor.GetChunkAtBlockPos(harvestedEntity.Pos.AsBlockPos).MarkModified();
             }
+        }
+
+        // Returns the discolored stack (same stack size) for a raw red meat drop, or for a raw bush
+        // meat drop when the setting allows it. A raw poultry drop is doubled (up to the stack
+        // limit): a poisoned chicken pays out double meat. Null removes the drop (other variants,
+        // bush meat when disabled, or a discolored item that is not registered).
+        private static ItemStack DiscoloredReplacement(IWorldAccessor world, ItemStack original, string path)
+        {
+            if (path == "poultry-raw")
+            {
+                original.StackSize = Math.Min(original.StackSize * 2, original.Collectible.MaxStackSize);
+                return original;
+            }
+
+            string discoloredPath = null;
+            if (path == "redmeat-raw")
+            {
+                discoloredPath = DiscoloredMeat.RedMeatRawTierPath;
+            }
+            else if (path == "bushmeat-raw" && (Remedy_And_RuinModSystem.Config?.discoloredBushMeatEnabled ?? false))
+            {
+                discoloredPath = DiscoloredMeat.BushMeatRawTierPath;
+            }
+            if (discoloredPath == null) return null;
+
+            Item discolored = world.GetItem(new AssetLocation("game", discoloredPath));
+            return discolored == null ? null : new ItemStack(discolored, original.StackSize);
         }
     }
 }

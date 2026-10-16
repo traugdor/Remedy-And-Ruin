@@ -1,0 +1,50 @@
+[
+  { "op": "add", "file": "game:recipes/cooking/soup.json", "path": "/ingredients/4/validStacks/-", "value": {
+      "type": "item", "code": "redmeat-discolored", "shapeElement": "bowl/meat/*", "textureMapping": ["meat", "group2discolored"]
+  }},
+  { "op": "add", "file": "game:recipes/cooking/soup.json", "path": "/ingredients/4/validStacks/-", "value": {
+      "type": "item", "code": "redmeat-cureddiscolored", "shapeElement": "bowl/meat/*", "textureMapping": ["meat", "group2discolored"]
+  }},
+  { "op": "add", "file": "game:recipes/cooking/meatystew.json", "path": "/ingredients/0/validStacks/-", "value": {
+      "type": "item", "code": "redmeat-discolored", "shapeElement": "bowl/meat stew/*", "textureMapping": ["meat", "group6discolored"]
+  }},
+  { "op": "add", "file": "game:recipes/cooking/meatystew.json", "path": "/ingredients/0/validStacks/-", "value": {
+      "type": "item", "code": "redmeat-cureddiscolored", "shapeElement": "bowl/meat stew/*", "textureMapping": ["meat", "group6discolored"]
+  }},
+  { "op": "add", "file": "game:recipes/cooking/meatystew.json", "path": "/ingredients/3/validStacks/-", "value": {
+      "type": "item", "code": "redmeat-discolored", "shapeElement": "bowl/red meat/*", "textureMapping": ["meat", "group2discolored"]
+  }},
+  { "op": "add", "file": "game:recipes/cooking/meatystew.json", "path": "/ingredients/3/validStacks/-", "value": {
+      "type": "item", "code": "redmeat-cureddiscolored", "shapeElement": "bowl/red meat/*", "textureMapping": ["meat", "group2discolored"]
+  }},
+  { "op": "add", "file": "game:recipes/cooking/meatystew.json", "path": "/ingredients/4/validStacks/-", "value": {
+      "type": "item", "code": "redmeat-discolored", "shapeElement": "bowl/red meat 2/*", "textureMapping": ["meat", "group2discolored"]
+  }},
+  { "op": "add", "file": "game:recipes/cooking/meatystew.json", "path": "/ingredients/4/validStacks/-", "value": {
+      "type": "item", "code": "redmeat-cureddiscolored", "shapeElement": "bowl/red meat 2/*", "textureMapping": ["meat", "group2discolored"]
+  }},
+  { "op": "add", "file": "game:blocktypes/clay/fired/pot.json", "path": "/textures/group2discolored", "value": { "base": "remedyandruin:block/food/meal/group2-discolored_generated" } },
+  { "op": "add", "file": "game:blocktypes/clay/fired/pot.json", "path": "/textures/group6discolored", "value": { "base": "remedyandruin:block/food/meal/group6-discolored_generated" } },
+  { "op": "add", "file": "game:blocktypes/clay/fired/pot.json", "path": "/attributesByType/claypot-blue-cooked/textureMapping/redmeat-discolored", "value": ["meat", "group6discolored"] },
+  { "op": "add", "file": "game:blocktypes/clay/fired/pot.json", "path": "/attributesByType/claypot-blue-cooked/textureMapping/redmeat-cureddiscolored", "value": ["meat", "group6discolored"] },
+
+  { "op": "add", "file": "game:recipes/cooking/fishingbait.json", "path": "/1/ingredients/2/validStacks/-", "value": { "type": "item", "code": "redmeat-discolored" } },
+  { "op": "add", "file": "game:recipes/cooking/fishingbait.json", "path": "/1/ingredients/2/validStacks/-", "value": { "type": "item", "code": "redmeat-cookeddiscolored" } },
+  { "op": "add", "file": "game:recipes/cooking/fishingbait.json", "path": "/2/ingredients/2/validStacks/-", "value": { "type": "item", "code": "bushmeat-discolored" } },
+  { "op": "add", "file": "game:recipes/cooking/fishingbait.json", "path": "/2/ingredients/2/validStacks/-", "value": { "type": "item", "code": "bushmeat-cookeddiscolored" } },
+
+  { "op": "add", "file": "game:recipes/grid/tool/bow.json", "path": "/-", "value": {
+      "ingredientPattern": "MFT\tBLT\tMFT",
+      "requiresTrait": "bowyer",
+      "ingredients": {
+        "B": { "type": "item", "code": "bowstave-recurve-dry" },
+        "T": { "type": "item", "code": "flaxtwine" },
+        "L": { "type": "item", "code": "leather-normal-plain" },
+        "F": { "type": "item", "code": "bone" },
+        "M": { "type": "item", "code": "bushmeat-discolored" }
+      },
+      "width": 3,
+      "height": 3,
+      "output": { "type": "item", "code": "bow-recurve", "quantity": 1 }
+  }}
+]
