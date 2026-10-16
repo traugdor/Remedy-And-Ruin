@@ -113,6 +113,15 @@ namespace Remedy_And_Ruin.RRBehaviors
     /// player (see Patch_ShieldBlockBreaksSplint). While ChestArms is splinted it has a
     /// ShieldBlockSplintBreakChance chance to break the splint without changing the tier, drop that
     /// shield and tell the player.
+    ///
+    /// Bell headache: a self-resolving condition, not a Skull tier, that never changes any tier or
+    /// health. BellProximity starts it after sustained exposure to a ringing bell (StartBellHeadache).
+    /// Its end day (BellHeadacheEndDayKey, in-game days, 0 = none) is stored in WatchedAttributes, so
+    /// it follows calendar speed and sleep and survives relogs. TickBellHeadache, called each
+    /// BellProximity tick, pushes the end day to BellHeadacheLingerDays after now while the player is
+    /// still exposed and sends the end message once when it runs out. IsBellHeadacheActive reads only
+    /// WatchedAttributes and the calendar, so it is valid on the client. ResumeAfterLogin reconciles an
+    /// already-expired headache silently; death clears it.
     /// </summary>
     public class EntityBehaviorBrokenBones : EntityBehavior
     {
@@ -141,7 +150,13 @@ namespace Remedy_And_Ruin.RRBehaviors
         private const string SkullMaxHealthKey = "remedyandruinBonesSkull";
         private const float SkullFractureMaxHealthPenalty = -10f;
 
+        private const string BellHeadacheEndDayKey = "remedyandruinBellHeadacheEndDay";
+        private const double BellHeadacheLingerDays = 1.0 / 24.0;
+
         private long tickListenerId;
+
+        // In memory only; true while the end message for the current headache is still owed.
+        private bool bellHeadacheAnnounced;
 
         public EntityBehaviorBrokenBones(Entity entity) : base(entity)
         {
@@ -401,9 +416,73 @@ namespace Remedy_And_Ruin.RRBehaviors
             return true;
         }
 
+        // True while the headache's end day is in the future. Valid on both sides.
+        public static bool IsBellHeadacheActive(Entity entity)
+        {
+            if (entity?.WatchedAttributes == null || entity.World?.Calendar == null) return false;
+
+            double endDay = entity.WatchedAttributes.GetDouble(BellHeadacheEndDayKey, 0.0);
+            return endDay > 0.0 && entity.World.Calendar.TotalDays < endDay;
+        }
+
+        // In-game days of headache left, or null when none. Server or client.
+        public static double? GetBellHeadacheDaysRemaining(Entity entity) =>
+            IsBellHeadacheActive(entity)
+                ? entity.WatchedAttributes.GetDouble(BellHeadacheEndDayKey, 0.0) - entity.World.Calendar.TotalDays
+                : null;
+
+        // Starts the headache for BellHeadacheLingerDays and tells the player, unless one is already active.
+        public void StartBellHeadache()
+        {
+            if (entity.World.Side != EnumAppSide.Server || !entity.Alive) return;
+            if (IsBellHeadacheActive(entity)) return;
+
+            SetBellHeadacheEndDay(entity.World.Calendar.TotalDays + BellHeadacheLingerDays);
+            bellHeadacheAnnounced = true;
+            SendBellMessage(Lang.Get("remedyandruin:bones-bell-headache"));
+        }
+
+        // Ends the headache without a message.
+        public void ClearBellHeadache()
+        {
+            if (entity.World.Side != EnumAppSide.Server) return;
+
+            bellHeadacheAnnounced = false;
+            if (entity.WatchedAttributes.GetDouble(BellHeadacheEndDayKey, 0.0) != 0.0) SetBellHeadacheEndDay(0.0);
+        }
+
+        // Per-tick upkeep: extends an active headache while exposed; once it has run out, clears it and
+        // sends the end message if the start message was sent this session.
+        public void TickBellHeadache(bool exposed)
+        {
+            if (entity.World.Side != EnumAppSide.Server) return;
+
+            if (IsBellHeadacheActive(entity))
+            {
+                if (exposed) SetBellHeadacheEndDay(entity.World.Calendar.TotalDays + BellHeadacheLingerDays);
+                return;
+            }
+
+            if (entity.WatchedAttributes.GetDouble(BellHeadacheEndDayKey, 0.0) == 0.0) return;
+
+            bool announce = bellHeadacheAnnounced;
+            ClearBellHeadache();
+            if (announce) SendBellMessage(Lang.Get("remedyandruin:bones-bell-headache-ended"));
+        }
+
+        private void SetBellHeadacheEndDay(double endDay)
+        {
+            entity.WatchedAttributes.SetDouble(BellHeadacheEndDayKey, endDay);
+            entity.WatchedAttributes.MarkPathDirty(BellHeadacheEndDayKey);
+        }
+
         public void ResumeAfterLogin(EntityAgent target)
         {
             if (entity.World.Side != EnumAppSide.Server) return;
+
+            bellHeadacheAnnounced = false;
+            if (!IsBellHeadacheActive(entity)) ClearBellHeadache();
+            else bellHeadacheAnnounced = true;
 
             foreach (BoneLocation limb in Enum.GetValues(typeof(BoneLocation)))
             {
@@ -512,6 +591,7 @@ namespace Remedy_And_Ruin.RRBehaviors
                 SetTier(limb, InjuryTier.None);
                 SetEndDay(limb, 0.0);
             }
+            ClearBellHeadache();
             UpdateTickListener();
             ApplyLegEffects();
             ApplyArmEffects();
@@ -702,11 +782,15 @@ namespace Remedy_And_Ruin.RRBehaviors
         private void NotifySplintBroken(BoneLocation limb) =>
             SendMessage(limb, Lang.Get("remedyandruin:bones-splint-broken", Lang.Get("remedyandruin:bones-limb-" + LimbName(limb))));
 
-        private void SendMessage(BoneLocation limb, string text)
+        private void SendMessage(BoneLocation limb, string text) => SendToPlayer("remedyandruinBones" + LimbName(limb), text);
+
+        private void SendBellMessage(string text) => SendToPlayer("remedyandruinBellHeadache", text);
+
+        private void SendToPlayer(string toastCode, string text)
         {
             if (entity is not EntityPlayer player || player.Player is not IServerPlayer serverPlayer) return;
 
-            serverPlayer.SendIngameError("remedyandruinBones" + LimbName(limb), text);
+            serverPlayer.SendIngameError(toastCode, text);
             if (Remedy_And_RuinModSystem.Config?.injuryChatMessagesEnabled ?? true)
             {
                 serverPlayer.SendMessage(GlobalConstants.InfoLogChatGroup, text, EnumChatType.Notification);

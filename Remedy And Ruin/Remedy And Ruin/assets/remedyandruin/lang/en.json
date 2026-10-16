@@ -152,5 +152,7 @@
   "bones-healed": "Your {0} has healed.",
   "bones-bow-blocked": "You cannot draw a bow with a broken arm.",
   "bones-offhand-dropped": "Your broken arm cannot hold that.",
-  "bones-splint-broken-shield": "Blocking with the shield breaks your splint and you drop it."
+  "bones-splint-broken-shield": "Blocking with the shield breaks your splint and you drop it.",
+  "bones-bell-headache": "The ringing of the bell fills your head.",
+  "bones-bell-headache-ended": "The ringing in your head fades."
 }

@@ -84,6 +84,7 @@ namespace Remedy_And_Ruin
             ChestColdContagionSystem.Start(api);
             SplintingInteraction.Start(api);
             BrokenBonesUseTriggers.Start(api);
+            BellProximity.Start(api);
 
             api.Event.PlayerNowPlaying += (IServerPlayer player) =>
             {
@@ -468,7 +469,7 @@ namespace Remedy_And_Ruin
                 });
 
             api.ChatCommands.Create("rrBones")
-                .WithDescription("Debug: show each limb's injury tier and splint (/rrBones), set a tier (/rrBones set followed by arms, legs or skull and a tier 0-4 or its name; skull maxes at 2), set a splint (/rrBones splint followed by a limb and on or off), roll a use escalation (/rrBones use followed by a limb), override the real use triggers' odds (/rrBones usetest followed by steps per leg roll and an optional chance percent, or reset),force a shield block to break a splinted arm's splint (/rrBones shieldblock arms), or set a healing limb's remaining time (/rrBones healin followed by a limb and a number of in-game days). Test hits with /rrDamage.")
+                .WithDescription("Debug: show each limb's injury tier and splint (/rrBones), set a tier (/rrBones set followed by arms, legs or skull and a tier 0-4 or its name; skull maxes at 2), set a splint (/rrBones splint followed by a limb and on or off), roll a use escalation (/rrBones use followed by a limb), override the real use triggers' odds (/rrBones usetest followed by steps per leg roll and an optional chance percent, or reset), start or clear the bell headache (/rrBones bellheadache followed by on or off), force a shield block to break a splinted arm's splint (/rrBones shieldblock arms), or set a healing limb's remaining time (/rrBones healin followed by a limb and a number of in-game days). Test hits with /rrDamage.")
                 .RequiresPrivilege(Privilege.root)
                 .RequiresPlayer()
                 .WithArgs(api.ChatCommands.Parsers.OptionalWord("action"), api.ChatCommands.Parsers.OptionalWord("limb"), api.ChatCommands.Parsers.OptionalWord("value"))
@@ -510,7 +511,54 @@ namespace Remedy_And_Ruin
                     string action = Word(0);
                     if (action == null)
                     {
-                        return TextCommandResult.Success(string.Join("\n", Enum.GetValues(typeof(BoneLocation)).Cast<BoneLocation>().Select(Describe)));
+                        return TextCommandResult.Success(string.Join("\n", Enum.GetValues(typeof(BoneLocation)).Cast<BoneLocation>().Select(Describe).Append(DescribeBellHeadache())));
+                    }
+
+                    string DescribeBellHeadache()
+                    {
+                        double? left = EntityBehaviorBrokenBones.GetBellHeadacheDaysRemaining(args.Caller.Entity);
+                        return left == null
+                            ? "Bell headache: none"
+                            : $"Bell headache: active, clears in {left.Value * 24.0:0.0} hours";
+                    }
+
+                    if (string.Equals(action, "bellheadache", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string state = Word(1);
+                        if (string.Equals(state, "on", StringComparison.OrdinalIgnoreCase))
+                        {
+                            bones.ClearBellHeadache();
+                            bones.StartBellHeadache();
+                        }
+                        else if (string.Equals(state, "off", StringComparison.OrdinalIgnoreCase))
+                        {
+                            bones.ClearBellHeadache();
+                        }
+                        else if (state != null)
+                        {
+                            return TextCommandResult.Error("Usage: /rrBones bellheadache [on|off]");
+                        }
+
+                        return TextCommandResult.Success(DescribeBellHeadache());
+                    }
+
+                    if (string.Equals(action, "bellwatch", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string state = Word(1);
+                        string uid = args.Caller.Player.PlayerUID;
+                        if (string.Equals(state, "off", StringComparison.OrdinalIgnoreCase))
+                        {
+                            BellProximity.SetWatch(uid, false);
+                            return TextCommandResult.Success("Bell watch is off.");
+                        }
+
+                        if (state != null && !string.Equals(state, "on", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return TextCommandResult.Error("Usage: /rrBones bellwatch [on|off]");
+                        }
+
+                        BellProximity.SetWatch(uid, true);
+                        return TextCommandResult.Success("Bell watch is on. It writes a line to the server log every 2 seconds and tells you in chat when the nearest bell's state changes.");
                     }
 
                     if (string.Equals(action, "usetest", StringComparison.OrdinalIgnoreCase))
@@ -822,6 +870,7 @@ namespace Remedy_And_Ruin
             ChestColdContagionSystem.Stop();
             SplintingInteraction.Stop();
             BrokenBonesUseTriggers.Stop();
+            BellProximity.Stop();
             EntityBehaviorBrokenBones.DebugStepsPerRoll = null;
             EntityBehaviorBrokenBones.DebugUseChancePercent = null;
             base.Dispose();
