@@ -78,8 +78,9 @@ no condition effect. What exists:
 - **Mind Tonic:** Temporal Fog, Hallucination and Concussion visuals exist, but there is no layer that
   halves or zeroes them, and the Skull-Strain headache (including the Bell headache) does not drive
   the Concussion visual yet.
-- **Antinausea:** the Upset Stomach condition (relapse chance, recovery window, triggers) does not
-  exist; only vomiting building blocks do.
+- **Antinausea:** the Upset Stomach condition (relapse chance, recovery window, triggers, and
+  spread by vomiting) does not exist; only vomiting building blocks do. Food poisoning from
+  Discolored Meat has its toxin accumulator and an empty `TriggerFoodPoisoning` hook for it.
 - Overdose: the toxicity counter exists and `TriggerOverdose` is an empty stub.
 
 ### A6. Antidote — PARTIAL, with one likely bug
@@ -520,7 +521,9 @@ in scope per D1/D11, so order here is about what unblocks what, not what matters
     the final wiring plan.
 16. **The 8 remedy-potion effects** (Analgesic, Antinausea, Antiseptic, Antiviral, Mind Tonic,
     Sedative, Tonic, Topical Ointment) — one plan per D4's "always max/immediate" simplification.
-    Antiseptic's topical half (antiseptic bandage and poultice) is already done. Cure targets exist
+    Antiseptic's topical half (antiseptic bandage and poultice) is already done, and so is Discolored
+    Meat (the items, drops, curing, and eating detection with its toxin accumulator), whose
+    food-poisoning consequence is a stub waiting on the Upset Stomach illness. Cure targets exist
     for Antiseptic, Antiviral, Topical Ointment, Sedative and Tonic. Still to build: the drink effects
     themselves; Topical Ointment's delivery (a treated bandage and a treated poultice, plus the
     drink backfire); the Upset Stomach condition that Antinausea cures; a halve/clear layer for

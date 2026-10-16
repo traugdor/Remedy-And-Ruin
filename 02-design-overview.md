@@ -1076,8 +1076,9 @@ A separate, later-onset condition from Bleeding, not the same thing.
   "any potion overdose" trigger (other potions have their own distinct overdose effects, not
   Upset Stomach); eating partially spoiled food (vanilla tracks food freshness as a continuous
   `TransitionState.TransitionLevel`, not a binary fresh/rotten flag, so "partially spoiled" maps
-  onto a mid-range value); contracting a GI tract illness (contagious, deferred, ties into
-  Immune/Tonic contagion below); and **drinking Antiseptic at a normal, non-overdose dose** —
+  onto a mid-range value); food poisoning from eating Discolored Meat (Part 3), which is the GI
+  tract illness and spreads to nearby players when the sick player vomits (Tonic protects
+  against catching it, below); and **drinking Antiseptic at a normal, non-overdose dose** —
   Antiseptic's baseline side effect is GI upset regardless of quantity, layered independently of
   its own overdose effect above. **This is a deliberate easter egg, not the potion's intended
   use** — Antiseptic is meant for crafting `bandage-antiseptic` or combining with a poultice, and
@@ -1128,7 +1129,7 @@ Not really a "cure" — a direct utility effect.
 
 - **Two triggers**: environmental exposure (prolonged low body temperature/wetness — reuses
   vanilla's existing `EntityBehaviorBodyTemperature`) and contagion from another player (same
-  deferred transmission mechanic as Immune/Tonic and the GI tract illness, now settled below).
+  room-based transmission mechanic described under Immune/Tonic, below).
 - A debuff (stamina/breath penalty, coughing interrupts actions). **Antiviral** (Part 1 cluster 4)
   treats all four stages of this family — Chest Cold, Bronchitis, Flu, and Pneumonia alike.
 - **Potency, now numbered**: regular Antiviral **reverses the illness by one stage** rather than
@@ -1210,8 +1211,9 @@ no distinction worth inventing for the mildest condition in the catalog.
   roughly 2-3 blocks of each other (a "social distancing" range) — both conditions must hold for
   a transmission chance to roll at all. Deliberate: makes quarantining a sick player in a
   separate room (or keeping distance within a shared large room) a real, mechanically effective
-  countermeasure, not just flavor. Applies to Chest Cold, the GI tract illness, and whatever else
-  ends up contagious. **Players-only** — NPCs and animals don't carry or transmit contagion (Chest
+  countermeasure, not just flavor. Applies to Chest Cold and whatever else ends up spreading this
+  way; food poisoning spreads by vomiting instead (Discolored Meat, Part 3), and Tonic's buff
+  protects against that too. **Players-only** — NPCs and animals don't carry or transmit contagion (Chest
   Cold is still independently catchable from cold/wet exposure regardless, per its own trigger
   above, that's just not this mechanism).
 - **Now fully numbered.** While both conditions hold, a transmission roll happens **every 30
@@ -1414,7 +1416,7 @@ needs no new shader work, just a new strength input.
 
 | Cluster | Product | Coated-arrow effect | Drinking effect |
 |---|---|---|---|
-| Deadly Hepatotoxic | **Toxic Poison** (= Liver Failure) | +1.5 HP flat bonus damage per hit, applied immediately, plus a **chance** to also inject a smaller version of the delayed DoT below. **Hunting risk**: if the smaller DoT is what finishes off a killed animal, it drops no meat at all — the poison ruins it, deliberately making poisoned-arrow hunting a real risk (faster potential kill vs. a wasted, meatless one) rather than a free efficiency upgrade | Delayed onset with a mild early warning (small `healingeffectivness` dip during the delay window), then **1.5 HP/sec continuous drain — no natural end, only stops via Antidote or death**. Two triggers: the deadly mushrooms directly, or a liver toxicity meter built up by eating cooked bushmeat (see Liver Disease, which uses a gentler, meter-bound version of this drain) |
+| Deadly Hepatotoxic | **Toxic Poison** (= Liver Failure) | +1.5 HP flat bonus damage per hit, applied immediately, plus a **chance** to also inject a smaller version of the delayed DoT below. **Hunting risk**: if the smaller DoT is what finishes off a killed animal, it drops Discolored Meat instead of its normal meat (Discolored Meat, below) — the poison taints it, deliberately making poisoned-arrow hunting a real risk (faster potential kill vs. a dangerous, tainted carcass) rather than a free efficiency upgrade | Delayed onset with a mild early warning (small `healingeffectivness` dip during the delay window), then **1.5 HP/sec continuous drain — no natural end, only stops via Antidote or death**. Two triggers: the deadly mushrooms directly, or a liver toxicity meter built up by eating cooked bushmeat (see Liver Disease, which uses a gentler, meter-bound version of this drain) |
 | GI-toxic / Emetic | **Noxious Poison** (= Food Poisoning) | High chance of the same as drinking | Fever + genuine psychedelic tripping (vanilla's own `psychedelic`-attribute mushroom effect, not the mod's Hallucination condition) + vomiting (via the same `ConsumeSaturation` mechanic as Upset Stomach), lasting 24h, ends via Antidote or death from other causes. **No DoT** — deliberately not lethal on its own; not every poison needs to be a death spiral, some should be annoying and disruptive but survivable on purpose |
 | Cardiac Glycoside | **Cardiac Poison** (= Cardiac Strain) | **25-35% chance** of cardiac arrest: -5 current *and* max HP (instant death if current HP is already below 5), heavy movement-speed debuff, considerably slowed tool use, 6h duration, may lead to death. Exertion stacking below applies the same way | **100% guaranteed** cardiac arrest, same effect. Trigger model changed from the original design: no longer gated behind exertion — it fires directly on drink/hit, with exertion now a *worsening* factor (both duration and severity) rather than the sole trigger, see below |
 | Neurotoxic / Alkaloid | **Neurotoxic Poison** (= Weakness/Paralysis) | **25-35% chance** per hit of contributing toxicity toward the escalation ladder — each successful proc adds **half a stage's worth** (two arrow procs ≈ one drunk dose) | The 3-stage escalation ladder (numbered below): Weakness → Paralysis → Cardiac Arrest. **Each drunk dose advances the ladder by exactly one full stage**, expressed as toxicity-per-dose on the same counter used for potion overdose (Part 2 §5), which is already weighted rather than a raw dose count, so this needs no new mechanic. **Also causes headache and dizziness** (mouse-sway via `TemporalVignetteRenderer.DrunkWobbleStrength`) throughout, at every stage. Confusion and mind-fog are *not* part of this poison — moved to Mind Poison below, since those specifically drive Hallucination/Temporal Fog rather than this ladder's physical debuffs |
@@ -1466,6 +1468,38 @@ of which window unlocked it. Hallucination's other two triggers (Mind Tonic over
 deprivation, both above) have no equivalent continuous effect value to scale from, since neither
 is a dose with its own tolerance-discounted magnitude — those two instead **roll one of the three
 windows at random** each time they trigger, rather than defaulting to a fixed tier.
+
+## Discolored Meat — the poisoned-kill hunting risk
+
+Meat from an animal finished off by Toxic Poison's arrow-delivered smaller DoT (Toxic's hunting
+risk, above) is tainted by the poison rather than lost.
+
+- **What drops.** Raw red meat drops as **Discolored Red Meat**; every other drop (hide, fat,
+  antlers, bones) is normal. Raw bush meat drops as **Discolored Bush Meat** when the
+  `discoloredBushMeatEnabled` server setting is on (default off), and is removed otherwise, since
+  bush meat already carries its own eating risk. Other meat drops are removed. There is no
+  discolored poultry or fish — chickens die to the arrow itself, and fish do not drop meat — but
+  a chicken that the poison does finish off pays out **double** normal poultry, an easter egg.
+- **The poison can't be cooked or cured out.** Discolored meat has three tiers — raw, cooked
+  (grilled in a fire) and cured (salt in a barrel, 480 in-game hours) — and each keeps the mark.
+  It is accepted wherever the vanilla equivalent is, and nowhere that would turn it into food
+  that can't carry the mark: cooking-pot soups and stews (raw and cured red meat, like vanilla),
+  stinkbait, the recurve bow recipe (bush meat), and the barrel cure. It is not accepted in
+  pies, and pemmican, which is disabled in the base game, would not accept it either.
+- **Spoilage.** The raw and cooked tiers last twice as long as vanilla's raw and cooked meat
+  (raw: 72 in-game hours fresh, then 48 to rot; cooked: 240, then 72); the cured tier matches
+  vanilla's.
+- **Eating it risks food poisoning.** Every eating action that involves discolored meat — one
+  plain piece, or one meal containing it, whatever its servings — adds a random amount between 0
+  and 1 to a toxin total stored on the player. When the total reaches 1 or more, the player gets
+  **food poisoning** and the total resets to 0, so the first meal or two may do nothing while the
+  toxins build up. The total is cleared on death. Food poisoning is the GI tract illness: its
+  symptom is Upset Stomach (Part 3), and it spreads to nearby players when the sick player
+  vomits. The range, the chance per vomit, how long the illness lasts and how it is cured are not
+  settled yet.
+- **Other interactions.** Cooked discolored bush meat counts toward Liver Disease's toxicity
+  meter like any cooked bush meat. A soup containing discolored red meat counts as containing
+  protein for the Antidote's restricted-diet window, like soup with raw red meat.
 
 ## Poison mitigation: Universal Antidote
 
