@@ -495,9 +495,13 @@ in scope per D1/D11, so order here is about what unblocks what, not what matters
     cough; Liver Disease's toxicity meter with Liver Failure; and Resurrection Sickness are live.
     Antiviral now has real cure targets (`ReverseOneStage`/`CureCurrentStage`) and Tonic has its
     `contagionresistance` hook for Plan 16.
-15. **Broken Bones (Part 4)** — its own large plan, buildable in isolation per your explicit note in
-    D12. Reordered ahead of remedy-potion effects: Analgesic needs Skull-Strain's pain (Part 4) as
-    part of its cure target, alongside Flu's fever from #14.
+15. **Broken Bones (Part 4)** — DONE (Plan 15, implemented, tested in-game, and committed). Hit
+    location classification shared by armor and injury, location-scoped armor, the post-armor
+    damage hook (Bleeding now reads damage after armor), the limb injury state machine with
+    hit- and use-triggered escalation, splinting, healing, the leg, arm, offhand, bow and skull
+    effects, and the Bell headache trigger are live. Analgesic's pain halving and Mind Tonic's
+    headache cure are hooks left for Plan 16; the headache's visual and stat effect is wired in
+    the final wiring plan.
 16. **The 8 remedy-potion effects** (Analgesic, Antinausea, Antiseptic, Antiviral, Mind Tonic,
     Sedative, Tonic, Topical Ointment) — one plan per D4's "always max/immediate" simplification.
     Moved here (was 13) so every cure target it needs (#13-15, plus Hallucination/Temporal Fog

@@ -1525,11 +1525,11 @@ Not a single-drink cure. The Antidote must be consumed twice in sequence to work
 
 # Part 4: Broken Bones
 
-Fully numbered now — Pain relief, the Hallucination/Temporal Fog split, and `EntityStats`/DoT/
+Fully numbered — Pain relief, the Hallucination/Temporal Fog split, and `EntityStats`/DoT/
 max-health-modifier machinery are all reused here rather than reinvented. **Splinting** (physical
-first aid — 4 sticks + a cloth bandage or 3 ropes, below) is a genuine remedy for broken bones,
-layered on top of Pain relief rather than replacing it — not tied to any potion, but still a
-treatment path in its own right.
+first aid — 4 sticks + a clean linen bandage or 3 ropes, below) is a genuine remedy for broken
+bones, layered on top of Pain relief rather than replacing it — not tied to any potion, but still
+a treatment path in its own right.
 
 **Reverse borrowing**: worsening, untreated Wound Infection (Part 3) can independently apply this
 same work-speed/offhand-lock (Chest/Arms) or movement-speed/immobilization (Legs) debuff shape on
@@ -1539,22 +1539,49 @@ symptom-similar to a broken one doesn't mean it's tracked as broken.
 
 ## Engine grounding
 
-- **Hit location data already exists on incoming damage.** `DamageSource` (the actual object
-  passed to `Entity.ReceiveDamage`) carries a `HitPosition` field. Its `DamageOverTimeType`
-  field's own doc comment even says *"This is used to look for specific types of DoT effects. For
-  example it can be used to stop bleeding with bandages"* — vanilla's own source comments
-  describe this mod's Bleeding mechanic almost exactly. Bucketing a hit into Skull/Chest-Arms/
-  Legs by `HitPosition`'s Y-offset relative to the target's own hitbox height is buildable without
-  new engine plumbing for the raw data — but which attack sources actually populate `HitPosition`
-  reliably is not yet verified per-source.
-- **Per-body-slot armor already exists.** `itemtypes/wearable/seraph/armor.json` defines a
-  `bodypart` variant group with states `head`/`body`/`legs` — armor is already equipped
-  per-location. This directly supports head armor (and only head armor) affecting skull-injury
-  odds, chest/leg armor affecting Chest-Arms/Legs-injury odds, and none cross-protecting.
+- **Hit height exists only for some attacks.** `DamageSource` (the object passed to
+  `Entity.ReceiveDamage`) carries a `HitPosition` field — the hit's height above the victim's
+  feet. Vanilla sets it only for player melee (and one cleaver item). It is not set for creature
+  attacks, projectiles and thrown items, falls, explosions, fire, and so on; lightning sets a zero
+  vector that carries no information. A player is 1.85 blocks tall (eye height 1.7). Attacks
+  without height data are located by the fallback rules under "Hit location", below.
+- **Vanilla armor picks its slot at random.** When a player is hit, vanilla armor protects with
+  *one* randomly chosen slot (20% head, 50% body, 30% legs), and only for Blunt, Piercing and
+  Slashing damage whose source is not Internal/Suicide — never for falls, fire or poison.
+  `itemtypes/wearable/seraph/armor.json` defines a `bodypart` variant group with states
+  `head`/`body`/`legs`, so armor is already equipped per location; this mod replaces the random
+  slot choice with the slot of the hit's location (below).
 - **`SetMaxHealthModifiers(string key, float value)`** (`EntityBehaviorHealth.cs`) is a keyed,
-  stackable max-health modifier — exactly what Fracture's -10 max health needs, keyed per-limb so
-  multiple simultaneous fractures don't stomp each other and each clears independently on
-  healing.
+  stackable max-health modifier — exactly what Skull Fracture's -10 max health needs. Vanilla does
+  not persist these modifiers, so the Skull Fracture modifier is re-applied at login and current
+  health is limited to the new maximum. When the modifier is removed while a player is at full
+  health, vanilla fills them to the new maximum.
+- **`DamageOverTimeType`** on `DamageSource` has a doc comment saying it is used to look for
+  specific types of DoT effects, for example to stop bleeding with bandages — the same shape this
+  mod's Bleeding mechanic uses.
+
+## Hit location
+
+Every hit is classified once into one of the 3 locations below, and that single classification is
+shared by armor and by bone injury.
+
+- **Height cutoffs** are fractions of the victim's *current* height: Legs below 0.9/1.85 of it,
+  Skull above 1.5/1.85, Chest/Arms in between — so a sneaking or sitting player still has a head.
+  A height within a hair of a cutoff picks randomly between the 2 neighbouring locations.
+- **Hits with no height data.** Creature melee uses an estimate of 0.6 × the attacker's
+  selection-box height above its feet (plus its vertical offset to the victim), clamped to the
+  victim's body. Projectiles and thrown objects use the point where their flight path enters the
+  victim's collision box (a ray from the projectile along its motion), falling back to the
+  projectile's own height.
+- **Fixed rules.** Falls, the Eidolon's ground slam, touch damage from sharp blocks and a mount's
+  saddle-break throw land on Legs. A falling block lands on Skull. Explosions land on a uniformly
+  random location and can injure. Hail is treated as hitting the head (for armor) but never
+  injures bones. Polar bears land randomly on Chest/Arms or Skull. Bowtorns (melee and arrows) and
+  Erel (swoop, dive and feathers) always land on Skull. Bees land randomly on Legs or Chest/Arms.
+  The Eidolon's 360-degree sweep lands on Chest/Arms. A hit with nothing usable lands on
+  Chest/Arms.
+- **Never injures a bone**: fire, poison, hunger, cold, lightning, drowning/suffocation, void,
+  bleeding and other damage-over-time ticks, and self-inflicted injury never roll a bone injury.
 
 ## The 3 locations and their tier ladders
 
@@ -1562,40 +1589,38 @@ symptom-similar to a broken one doesn't mean it's tracked as broken.
 |---|---|
 | Chest/Arms | Strain → Fracture → Break → Crush |
 | Legs | Strain → Fracture → Break → Crush |
-| Skull | Strain → Fracture → **(3rd escalation = death)** |
+| Skull | Strain → Fracture → **(any escalation past Fracture = death)** |
 
-Skull has no Break/Crush equivalent — a 3rd escalation past Fracture is fatal outright (brain
-injury), not a named injury tier.
+Skull has no Break/Crush equivalent — any escalation that would end above Fracture is fatal
+outright (brain injury), not a named injury tier. A healthy skull dies from a 3-tier jump, a
+Strained skull from a jump of 2 or more, and a Fractured skull from any successful escalation roll.
 
 ## Tier progression: escalation, not independent rolls
 
 **A limb's tier advances through repeated qualifying injury to that same limb, not a fresh
 independent severity roll per hit — and "injury" isn't only new hits.** 2 distinct sources can
 trigger an escalation event: **taking a new qualifying hit to that limb**, or **using an
-unsplinted injured limb at all** — swinging a tool with a Strained arm, walking on a Fractured
-leg, etc. **Splinting exists specifically to remove that second source**: a splinted limb can be
-used without risking a use-triggered escalation roll, though a fresh direct hit to it can still
-push it further regardless of splinting. **Leaving pain untreated does not, by itself, advance
-the tier** — Analgesic only manages the pain symptom, it was never the on-ramp.
+unsplinted injured limb** — swinging a tool with a Strained arm, walking on a Fractured leg, etc.
+**Splinting exists specifically to remove most of that second source**: a splinted limb takes no
+use risk apart from jumping and hard landings on an injured leg (below), though a fresh direct hit
+to it can still push it further regardless of splinting. **Leaving pain untreated does not, by
+itself, advance the tier** — Analgesic only manages the pain symptom, it was never the on-ramp.
 
-**Hit-triggered escalation, now numbered: 1 unified magnitude formula, no damage-type
-gating.** A qualifying hit's damage (after armor mitigation, same convention Bleeding's severity
-tiers already use) maps directly to how many tiers it can push a limb, applied against the
-limb's *current* tier — not gated behind needing to already be 1 tier below. A small hit can
-only ever manage +1 tier; a genuinely massive one can jump a healthy limb straight to Crush,
-skipping Fracture and Break entirely, the same way a nearly-fatal fall can. This is deliberately
-*not* split by damage type (`SlashingAttack` vs `BluntAttack` vs `Gravity`, etc.) even though
-vanilla's rust creatures only ever deal `SlashingAttack` — gating the jump-size formula on
-damage type was considered and explicitly deferred, not rejected: **vanilla's 1.23 combat update
-is expected to let enemies deal multiple damage types depending on how they attack, which is the
-natural point to revisit splitting this by type** (implementation note for whenever this is
-actually coded: leave a comment at the escalation-formula call site flagging this). Until then,
-magnitude alone decides the jump size for every damage source uniformly — melee still reads as
-mostly-sequential in practice simply because most hits are small relative to what a fall or a
-high-tier monster's claw can deal, not because of a hard rule forcing it.
+**Hit-triggered escalation: 1 unified magnitude formula, no damage-type gating.** A qualifying
+hit's damage (after armor mitigation, same convention Bleeding's severity tiers use) maps directly
+to how many tiers it can push a limb, applied against the limb's *current* tier — not gated behind
+needing to already be 1 tier below. A small hit can only ever manage +1 tier; a genuinely massive
+one can jump a healthy limb straight to Crush, skipping Fracture and Break entirely, the same way
+a nearly-fatal fall can. This is deliberately *not* split by damage type (`SlashingAttack` vs
+`BluntAttack` vs `Gravity`, etc.) even though vanilla's rust creatures only ever deal
+`SlashingAttack` — **vanilla's 1.23 combat update is expected to let enemies deal multiple damage
+types depending on how they attack, which is the natural point to revisit splitting this by
+type.** Until then, magnitude alone decides the jump size for every damage source uniformly —
+melee still reads as mostly-sequential in practice simply because most hits are small relative to
+what a fall or a high-tier monster's claw can deal, not because of a hard rule forcing it.
 
-**The exact formula, now numbered — reuses Bleeding's own damage-taken bands (Part 3) for
-consistency, plus 1 new band above Severe for genuinely catastrophic hits:**
+**The formula reuses Bleeding's own damage-taken bands (Part 3) for consistency, plus 1 band
+above Severe for genuinely catastrophic hits:**
 
 | Damage taken (post-armor) | Chance to escalate | Jump size on success |
 |---|---|---|
@@ -1609,12 +1634,34 @@ hit value (`drifter.json`, the same reference point Bleeding's tiers and Cardiac
 use), roughly 80% of base 15 max HP in 1 hit. This is a percentage-chance roll,
 not a guaranteed jump — armor's role is reducing how much damage reaches this formula in the
 first place (moving a hit down a band or out of qualifying range entirely), not a separate
-success roll layered on top.
+success roll layered on top. A fully absorbed hit rolls nothing.
 
-**Use-triggered escalation, now numbered: a flat 5% chance per qualifying use** (swinging a tool
-with a Strained arm, walking on a Fractured leg, etc.), unaffected by the hit-magnitude formula
-above — mirrors Minor's own hit-triggered chance for consistency. Always **+1 tier on success**,
-never a multi-tier jump — unlike a hit, "use" carries no magnitude to scale a bigger jump off of.
+**Post-armor damage is shared with Bleeding.** Bleeding and bone injury both read the damage
+*after* armor. Bone injury is evaluated before Bleeding converts half of the hit into a bleed, so
+it sees the full post-armor damage. Bleed ticks use a damage type that armor ignores, so armor and
+clothing are not worn down by every tick.
+
+**Splint and healing interaction.** A hit-triggered tier rise **breaks the splint** of a
+Chest/Arms or Legs limb — it must be splinted again, and its healing countdown starts over at the
+new tier's duration once it is. A Skull has no splint. A qualifying hit on a limb that does not
+escalate it (roll failed, or already at Crush) while it is healing sets its healing back by 10% of
+that tier's duration (Healing duration, below).
+
+**Use-triggered escalation: a flat 5% chance per qualifying event** (swinging a tool with a
+Strained arm, walking on a Fractured leg, etc.), unaffected by the hit-magnitude formula above —
+mirrors Minor's own hit-triggered chance for consistency. Always **+1 tier on success**, never a
+multi-tier jump — unlike a hit, "use" carries no magnitude to scale a bigger jump off of. It only
+applies while the limb is injured; creative and spectator players never roll, and neither do
+mounted players for leg use.
+
+- **Arms**: hitting a creature, breaking a block, or placing a block — only while the arm is
+  unsplinted.
+- **Legs, footsteps**: only while the leg is unsplinted, counted per N steps, where N is 10 for
+  Strain, 5 for Fracture, 3 for Break and 2 for Crush (halved while sprinting, doubled while
+  sneaking, never below 1).
+- **Legs, jumps and hard landings**: a jump (taken from the ground) and a hard landing (a fall
+  that deals fall damage — an extra roll on top of the fall's own hit roll) roll for any injured
+  leg, splinted or not.
 
 ## What each tier does
 
@@ -1623,79 +1670,99 @@ share the Strain/Fracture/Break/Crush tier *names* but each has its own penalty 
 carries its own distinct symptoms — headache/brain-fog/confusion and the -10 max health
 penalty (at Fracture) are Skull-only, not something Chest/Arms or Legs injuries ever cause.
 
+A tier raised to Fracture or higher plays the game's tool-break sound, and every tier rise shows
+a message (an on-screen warning plus an optional chat line, controlled by a server setting).
+
 ### Chest/Arms (4-tier track)
 
-**Strain**: Pain — a **-5% work speed penalty** (Analgesic halves it to -2.5%). Otherwise fully
-usable. **Analgesic manages the pain symptom only — it does not heal the injury.** Splinting is
-what actually lets a Strain heal; left unsplinted, using the limb risks the use-triggered
-escalation roll toward Fracture (above).
-
-**Fracture**: The same pain symptom, dialed up — a **-10% work speed penalty** (Analgesic halves
-it to -5%), not a new penalty type. Still fully usable, just more painful than Strain — "a
-fractured limb is still a working limb." Same deal as Strain: Analgesic only manages the pain,
-splinting is what heals it and what blocks the use-triggered escalation roll toward Break.
-
-**Break**: unsplinted, work speed is severely slowed and the offhand is locked entirely.
-Splinting restores a **floor of function, not full use**: capped at **-40% work speed**, offhand
-can hold light/passive items (a lantern, tools) but not a shield — a broken arm can carry
-something, it just can't brace or block with it. Splinting a Break is still required for it to
-actually heal. **No separate internal Break graduation** — the hit-magnitude formula above
-already decides Break vs. Crush directly, so there's nothing left for a "mild vs. severe Break"
-grade to represent.
-
-**Crush**: **a much longer healing duration is the entire distinction from Break — no worse
-functional lockout.** Unsplinted, Crush guarantees the same total offhand lock as Break's worst
-case; splinted, a Crush caps at the exact same floor as a splinted Break (-40% work speed,
-offhand can hold light/passive items but not a shield). **Settled: splinting is the only lever
-that eases this lockout** — nothing else (time alone, Analgesic, any other remedy) touches it,
-consistent with Analgesic only ever managing pain and splinting being the sole
-functional-restoration mechanic in this part.
-
-**Bow use, Break/Crush only.** Unsplinted, a Break or Crush blocks bow use entirely — a bow takes
-2 working arms to draw. Splinted, bow use is allowed but penalized: **draw time increased and
-arrow/bow damage reduced by the same config value, default 40%.** A separate config toggle lets
-players re-enable bow use even with an unsplinted Break or Crush (an easier-difficulty option) —
-the same damage/draw-time penalty still applies either way, splinted or not, once bow use is
-allowed at all. **Doesn't apply to spears** — thrown one-handed, unaffected by an arm injury.
-
-### Legs (4-tier track)
-
-**Strain**: Pain — a **-5% movement speed penalty** (Analgesic halves it to -2.5%; the same
-pain-linked walkSpeed component Part 3's Pain relief section already assumed existed). Otherwise
-fully usable. **Analgesic manages the pain symptom only — it does not heal the injury.**
-Splinting is what actually lets a Strain heal; left unsplinted, using the limb risks the
+**Strain**: Pain — digging speed and melee damage drop to **95%** (Analgesic halves the pain
+penalty). Otherwise fully usable. **Analgesic manages the pain symptom only — it does not heal the
+injury.** Splinting is what actually lets a Strain heal; left unsplinted, using the arm risks the
 use-triggered escalation roll toward Fracture (above).
 
-**Fracture**: The same pain symptom, dialed up — a **-10% movement speed penalty** (Analgesic
-halves it to -5%), not a new penalty type. Still fully usable, just more painful than Strain —
-"a fractured limb is still a working limb." Same deal as Strain: Analgesic only manages the
-pain, splinting is what heals it and what blocks the use-triggered escalation roll toward Break.
+**Fracture**: The same pain symptom, dialed up — digging speed and melee damage drop to **90%**
+(Analgesic halves the pain penalty), not a new penalty type. Still fully usable, just more painful
+than Strain — "a fractured limb is still a working limb." Same deal as Strain: Analgesic only
+manages the pain, splinting is what heals it and what blocks the use-triggered escalation roll
+toward Break.
 
-**Break**: unsplinted, movement is prevented entirely. Splinting restores a **floor of function,
-not full use**: capped at **-40% movement speed** even splinted (the slowest the game's own
-animations still read as intentional rather than broken, established in earlier testing).
+**Break**: a broken arm means everything is done one-handed. Digging speed and melee damage drop
+to **50% unsplinted** and **60% splinted**. Digging speed is computed on the client and scaled
+there; melee damage uses the player's melee damage stat. The offhand depends on the splint:
+
+- **Unsplinted**: the offhand is locked completely — nothing may enter it, and an item already
+  there is dropped. Sticks are the one exception and are always allowed, because they are the
+  splint material.
+- **Splinted**: the offhand is unrestricted. But each time a shield blocks a hit while the arm is
+  splinted, there is a **25% chance the splint breaks** and the shield is forced out of the hand
+  and dropped (the block does not raise the tier). A broken arm can carry something; it can't
+  safely brace or block with it.
+
 Splinting a Break is still required for it to actually heal. **No separate internal Break
 graduation** — the hit-magnitude formula above already decides Break vs. Crush directly, so
 there's nothing left for a "mild vs. severe Break" grade to represent.
 
 **Crush**: **a much longer healing duration is the entire distinction from Break — no worse
+functional lockout.** Unsplinted, Crush has the same 50% rate and total offhand lock as Break;
+splinted, the same 60% rate and unrestricted offhand with the same shield-block splint risk.
+**Settled: splinting is the only lever that eases this lockout** — nothing else (time alone,
+Analgesic, any other remedy) touches it, consistent with Analgesic only ever managing pain and
+splinting being the sole functional-restoration mechanic in this part.
+
+**Bow use, Break/Crush only.** Unsplinted, a Break or Crush blocks drawing a bow entirely — a bow
+takes 2 working arms to draw. Splinted, bow use is allowed but penalized: **draw time increased
+and arrow damage reduced by the same percentage, default 40%** (a server setting). A separate
+server setting lets players draw a bow even with an unsplinted Break or Crush (an
+easier-difficulty option) — the same damage/draw-time penalty still applies either way, splinted
+or not, once bow use is allowed at all. **Doesn't apply to spears** — thrown one-handed,
+unaffected by an arm injury.
+
+### Legs (4-tier track)
+
+**Strain**: Pain — a **-5% walk speed penalty** (Analgesic halves the pain penalty; the same
+pain-linked walkSpeed component Part 3's Pain relief section already assumed existed). Otherwise
+fully usable. **Analgesic manages the pain symptom only — it does not heal the injury.**
+Splinting is what actually lets a Strain heal; left unsplinted, using the leg risks the
+use-triggered escalation roll toward Fracture (above).
+
+**Fracture**: The same pain symptom, dialed up — a **-10% walk speed penalty** (Analgesic halves
+the pain penalty), not a new penalty type. Still fully usable, just more painful than Strain —
+"a fractured limb is still a working limb." Same deal as Strain: Analgesic only manages the pain,
+splinting is what heals it and what blocks the use-triggered escalation roll toward Break.
+
+**Break**: unsplinted, the player's own movement is prevented entirely — walking, sprinting,
+jumping and swimming. A locked player in deep water sinks and drowns; in water shallower than head
+height they cannot swim out. Sneaking is not blocked. Mounted players, and creative and spectator
+players, are never locked. Splinting restores a **floor of function, not full use**: **-40% walk
+speed** even splinted (the slowest the game's own animations still read as intentional rather
+than broken). Splinting a Break is still required for it to
+actually heal. **No separate internal Break graduation** — the hit-magnitude formula above already
+decides Break vs. Crush directly, so there's nothing left for a "mild vs. severe Break" grade to
+represent.
+
+**Crush**: **a much longer healing duration is the entire distinction from Break — no worse
 functional lockout.** Unsplinted, Crush guarantees the same total immobilization as Break's
-worst case; splinted, a Crush caps at the exact same -40% movement speed floor as a splinted
+worst case; splinted, a Crush caps at the exact same -40% walk speed floor as a splinted
 Break. **Settled: splinting is the only lever that eases this lockout** — nothing else (time
 alone, Analgesic, any other remedy) touches it, consistent with Analgesic only ever managing
 pain and splinting being the sole functional-restoration mechanic in this part.
 
 ### Skull (2-tier track, then death)
 
-**Strain**: Same headache/confusion + pain shape, treatable with Mind Tonic (headache/confusion)
-and Analgesic (pain). **Also where the
-Bell headache trigger lives** — a 2nd, unrelated, self-resolving cause of this same symptom,
-independent of any actual skull injury: prolonged proximity to an active (ringing) Bell enemy
-(`entities/lore/bell.json`, class `EntityBell`, tagged `mechanical` — same tag as Locust, **not**
-`rust-creature`, distinct from the drifter/bowtorn/shiver family used for Hallucination's
-apparition spawns). Its "ringing" is a real mechanic: a looping alarm sound with a 48-block range,
-toggled server-side. Being within range for long enough while it's active triggers the headache;
-unlike the injury-driven version, this one **self-resolves on its own with no treatment needed**.
+**Strain**: Same headache/confusion + pain shape, with no stat effect of its own, treatable with
+Mind Tonic (headache/confusion) and Analgesic (pain). A Skull has no splint and heals on its own
+(Healing duration, below). **Also where the Bell headache trigger lives** — a 2nd, unrelated,
+self-resolving cause of this same symptom, independent of any actual skull injury: prolonged
+proximity to a ringing Bell enemy (`entities/lore/bell.json`, class `EntityBell`, tagged
+`mechanical` — same tag as Locust, **not** `rust-creature`, distinct from the
+drifter/bowtorn/shiver family used for Hallucination's apparition spawns). The Bell's ringing is
+real: a ringing Bell is an `EntityBell` whose alarm task is active. Being within 15 blocks (the
+bell task's own seeking range; the 48-block figure is only how far the alarm is audible) of a
+ringing Bell for 5 continuous in-game minutes (about 10 real seconds at the default calendar speed
+of 24 hours = 48 real minutes) starts the headache. Interrupted exposure resets the count. The
+headache lasts until 1 in-game hour (about 2 real minutes at the default speed) after the player
+was last exposed, with **no treatment needed**. It is not a Skull injury tier and changes no tier
+or health. Creative and spectator players are not affected.
 
 - **Settled: this is its own standalone effect, not Hallucination or Temporal Fog.** The Bell is
   mechanical, not rust-creature or stability-linked, so its disorientation is purely sonic/
@@ -1713,68 +1780,76 @@ unlike the injury-driven version, this one **self-resolves on its own with no tr
   bellhead-shiver extension.
 
 **Fracture** (severity 2, last non-fatal tier): Everything Strain has, **plus a flat -10 max
-health** via `SetMaxHealthModifiers`, keyed per-limb — unique to Skull's Fracture. A 3rd
-escalation from here is death outright, not a named injury tier — Skull never reaches Break or
-Crush.
+health** via `SetMaxHealthModifiers` — unique to Skull's Fracture. Any further escalation is
+death outright, not a named injury tier — Skull never reaches Break or Crush.
 
-## Injury chance: 4 factors, location-scoped armor
+## Injury chance: location-scoped armor
 
-**Armor type, damage source, damage location, and damage type all factor into escalation odds.**
-Armor only affects the odds for the location it actually covers — chest and leg armor does not
-reduce skull-injury odds, only head armor does, and vice versa. Falls directly out of the
-already-existing per-`bodypart` armor slot system — the new work is reading the correct slot's
-armor value against the correct location's roll, not inventing per-slot armor.
+**Armor, damage location and damage amount all factor into escalation odds.** Vanilla armor
+protects with one randomly chosen slot per hit; this mod replaces that random choice with the slot
+of the hit's location (Hit location, above): Skull uses the head piece, Chest/Arms the body piece,
+Legs the legs piece. That applies to all damage vanilla armor already handles, so head armor
+protects only against head hits, and so on, and the clothing-wear fallback follows the same
+location. Falls remain unmitigated by armor. Armor reduces the post-armor damage that feeds both
+Bleeding and the escalation table above; it is not a separate success roll.
 
-## Splinting — the physical remedy, now numbered
+## Splinting — the physical remedy
 
-- **Application**: hold 4 sticks in the offhand and either a cloth bandage or 3 ropes in the
-  main hand, then use — consumes both, splinting the targeted limb. Grid-craft-free, a direct
-  use-interaction like bandaging a wound. **1 application per injury — a splint can't be
-  applied twice.**
-- **Not a symptom mask — it's what actually lets the limb heal, and it blocks the use-triggered
-  escalation risk (Tier progression, above).** An unsplinted injury doesn't heal on its own;
-  using it at all (working a tool, walking on it) risks pushing it up a tier. Splinting removes
-  that use-triggered risk and is the precondition for healing to happen — but a fresh direct hit
-  to the limb can still escalate it regardless of splinting.
+- **Application**: hold at least 4 sticks in the offhand and either a clean linen bandage (not the
+  alcohol or antiseptic bandage variants) or at least 3 ropes in the main hand, then use. It
+  consumes 4 sticks and the bandage or 3 ropes, and splints the player's worst unsplinted injured
+  Chest/Arms or Legs limb (higher tier first; ties go to Legs, then Chest/Arms). A Skull cannot be
+  splinted. A limb already splinted is not a candidate, and the item use is not intercepted when
+  nothing can be splinted. Grid-craft-free, a direct use-interaction like bandaging a wound.
+  **1 application per injury — a splint can't be applied twice.** The splint breaks when the limb
+  escalates or when a shield block breaks it (Chest/Arms, above).
+- **Not a symptom mask — it's what actually lets the limb heal, and it ends most use-triggered
+  escalation risk (Tier progression, above).** An unsplinted Chest/Arms or Legs injury doesn't
+  heal on its own; using it risks pushing it up a tier. Splinting removes that risk (for legs,
+  jumps and hard landings still roll) and is the precondition for healing to happen — but a fresh
+  direct hit to the limb can still escalate it regardless of splinting.
 - **Restores a floor of function, not full use, and only at Break/Crush** — Strain and Fracture
   are already fully usable unsplinted (just painful, above), so splinting there is purely about
   enabling healing and blocking use-triggered escalation, nothing to functionally restore.
-  Splinted Break or Crush caps at **-40% movement speed for Legs**, or **-40% work speed for
-  Chest/Arms with the offhand able to hold light/passive items (a lantern, tools) but not a
-  shield** — a real improvement over the unsplinted total lockout, but still obviously a broken
-  limb, not a cured one.
+  Splinted Break or Crush works at **-40% walk speed for Legs**, or **60% digging speed and melee
+  damage for Chest/Arms with the offhand unrestricted** — a real improvement over the unsplinted
+  lockout, but still obviously a broken limb, not a cured one.
 - **Does not touch pain at all.** The pain symptom (and its walkSpeed component, above) stays
   exactly as it is regardless of splinting. Analgesic is the only thing that dulls pain —
   splinting and Analgesic are complementary, not substitutes for each other.
 
-## Healing duration — config-driven, not a fixed day count
+## Healing duration — calendar-driven, not a fixed day count
 
-**Sample numbers only — not yet passed off for outside feedback, expect these to move.**
 Grounded in a real reference point: a broken bone typically takes about a month and a half to
 heal. Rather than hardcoding that as a fixed number of days, it's expressed in the game's own
 calendar unit and read live off `IGameCalendar.DaysPerMonth` (already a real, queryable,
-server-configurable property) — a server running shorter months heals bones faster in wall-clock
-terms, a server running longer months heals them slower, automatically, with no separate config
-of our own needed.
+server-configurable property; default 12) — a server running shorter months heals bones faster in
+wall-clock terms, a server running longer months heals them slower, automatically, with no
+separate config of our own needed.
 
-- **Fracture and Break, splinted: 1.5 months** (`DaysPerMonth * 1.5`) — the baseline "a broken
+A limb heals while it is injured and either splinted or the Skull.
+
+- **Fracture and Break: 1.5 months** (`DaysPerMonth * 1.5`) — the baseline "a broken
   bone" duration, same for both since they're both genuinely broken, just at different
   functional severity (above).
-- **Crush, splinted: 1.5 months + 50%** (`DaysPerMonth * 2.25`) — the actual number behind
+- **Crush: 2.25 months** (`DaysPerMonth * 2.25`, the baseline + 50%) — the actual number behind
   "Crush's real distinguishing trait is a much longer healing duration" (above).
-- **Strain, splinted: half the baseline** (`DaysPerMonth * 0.75`) — Strain isn't really a break,
-  just the on-ramp to one, so it heals faster than a genuine break does.
-- **Unsplinted**: doesn't heal at all, regardless of tier (Splinting, above) — these durations
-  only apply once splinted.
+- **Strain: 0.75 months** (`DaysPerMonth * 0.75`, half the baseline) — Strain isn't really a
+  break, just the on-ramp to one, so it heals faster than a genuine break does.
+- **Skull**: heals at its tier's duration above without needing a splint.
+- **Unsplinted Chest/Arms or Legs**: never heals, regardless of tier (Splinting, above) — these
+  durations only apply once splinted.
 
-**Recovery mechanics, now numbered.** A splinted limb runs 1 flat countdown at the tier's own
-duration above — it stays at full injury severity (and the -40% floor, if Break/Crush) the whole
-time, then clears entirely the moment the timer hits zero, rather than stepping back down through
-the named tiers on the way. **A fresh qualifying hit to a healing limb still rolls against the
-same magnitude table (above)**: a successful roll escalates the tier as normal and **resets the
-countdown to the new, worse tier's own full duration**; a roll that fails to escalate still
+**Recovery mechanics.** A healing limb runs 1 flat countdown at the tier's own duration above — it
+stays at full injury severity (and the splinted rates, if Break/Crush) the whole time, then clears
+entirely the moment the timer ends, rather than stepping back down through the named tiers on the
+way. The countdown is stored as calendar end days, so it follows calendar speed and sleep and
+survives relogs. **A fresh qualifying hit to a healing limb still rolls against the same magnitude
+table (above)**: a successful roll escalates the tier as normal, breaking the splint of a
+Chest/Arms or Legs limb so that the countdown starts over at the new, worse tier's own full
+duration once re-splinted; a roll that fails to escalate (or a limb already at Crush) still
 **docks a flat 10% of that tier's total healing duration** — reinjuring a healing bone sets it
-back even when it doesn't get objectively worse.
+back even when it doesn't get objectively worse. Death clears every injury.
 
 ---
 
@@ -1931,8 +2006,6 @@ concussion screen effects are implemented and confirmed working in-game
 sepia/desaturation color grade, Concussion applies a horizontal shear plus a contrast/brightness
 boost and a drunken camera sway (toggleable for accessibility via config). Both are driven by two
 debug chat commands (`.rrTempFog`, `.rrConcussion`) — not yet wired to any real gameplay trigger.
-Healing durations are sample numbers only, not yet passed off for outside feedback — expect them
-to move.
 
 **Part 5 (Renewable Cultivation)**: fully settled — no open items remain.
 
