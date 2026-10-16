@@ -60,11 +60,27 @@ All 5 `switch` cases in `ApplyEffect` carry detailed comments transcribing the d
 formulas (tolerance discount, DoT thresholds, etc.) but each is followed only by `poison = true;
 break;` — no `EntityStats` call, no DoT call, no actual computation.
 
-### A5. Remedy potions (Analgesic, Antinausea, Antiseptic, Antiviral, Mind Tonic, Sedative, Tonic, Topical Ointment) — NOT STARTED, except Antidote
+### A5. Remedy potions (Analgesic, Antinausea, Antiseptic, Antiviral, Mind Tonic, Sedative, Tonic, Topical Ointment) — drink effects NOT STARTED; Antiseptic's topical half and most cure targets exist
 
-All 8 non-Antidote cases are empty `break;` statements. No walkSpeed halving, no infection cure, no
-Chest Cold suppression, no sleep-bypass, no contagion/HP-restore, no skin-irritation salve — none
-of Part 3's per-condition mechanics exist for any of these.
+The 8 non-Antidote drink effects are still empty `break;` cases in `ApplyEffect`; drinking one applies
+no condition effect. What exists:
+- **Antiseptic, topical half: done.** `bandage-antiseptic` and `bandage-concentratedantiseptic`
+  variants, dip recipes, the antiseptic poultice, and `CureWoundInfection` (regular: infection cleared,
+  debuff tapers over 3 in-game hours; Concentrated: instant), wired through `Patch_HealingItemCures`.
+  Its drink effects (the Upset Stomach easter egg and overdose effect) are not built.
+- **Cure targets with nothing calling them yet:** `ClearSkinIrritation` (Skin Irritation),
+  `ReverseOneStage` / `CureCurrentStage` (Chest Cold family), the sedative-assisted sleep flag read by
+  `SleepCompletionEvents`, and the `contagionresistance` stat read by the contagion system.
+- **Topical Ointment has no delivery path:** no treated bandage, no treated poultice, no dip or grid
+  recipes, no hook in `Patch_HealingItemCures`, and no drink backfire.
+- **Analgesic:** the pain penalties exist as separate stat modifiers (Wound Infection, Flu's fever,
+  broken-bone pain), but nothing halves or clears them, and nothing holds back Flu's escalation.
+- **Mind Tonic:** Temporal Fog, Hallucination and Concussion visuals exist, but there is no layer that
+  halves or zeroes them, and the Skull-Strain headache (including the Bell headache) does not drive
+  the Concussion visual yet.
+- **Antinausea:** the Upset Stomach condition (relapse chance, recovery window, triggers) does not
+  exist; only vomiting building blocks do.
+- Overdose: the toxicity counter exists and `TriggerOverdose` is an empty stub.
 
 ### A6. Antidote — PARTIAL, with one likely bug
 
@@ -504,8 +520,12 @@ in scope per D1/D11, so order here is about what unblocks what, not what matters
     the final wiring plan.
 16. **The 8 remedy-potion effects** (Analgesic, Antinausea, Antiseptic, Antiviral, Mind Tonic,
     Sedative, Tonic, Topical Ointment) — one plan per D4's "always max/immediate" simplification.
-    Moved here (was 13) so every cure target it needs (#13-15, plus Hallucination/Temporal Fog
-    already partially built) actually exists first.
+    Antiseptic's topical half (antiseptic bandage and poultice) is already done. Cure targets exist
+    for Antiseptic, Antiviral, Topical Ointment, Sedative and Tonic. Still to build: the drink effects
+    themselves; Topical Ointment's delivery (a treated bandage and a treated poultice, plus the
+    drink backfire); the Upset Stomach condition that Antinausea cures; a halve/clear layer for
+    Analgesic's pain penalties and Flu's escalation hold; and a halve/clear layer for Mind Tonic over
+    Temporal Fog, Hallucination and the headache visual; plus the per-potion overdose effects.
 17. **Renewable Cultivation (Part 5)** — its own large plan, fully independent of the poison/remedy
     systems.
 18. **"R&R Ongoing Effects" UI tab** — standalone once there's real effect data to display.

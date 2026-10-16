@@ -169,8 +169,9 @@ neither is actually pain).
 ### 6. Skin / Topical Inflammation → produces **Topical Ointment**
 
 Primary use: applied to a bandage to produce a new `treated-bandage` item (same dip-craft pattern
-as `bandage-antiseptic`, Part 3, just with Topical Ointment as the liquid instead of Antiseptic).
-Used to fight skin irritations. **Flagged for a later pass**: worth revisiting to more fully
+as `bandage-antiseptic`, Part 3, just with Topical Ointment as the liquid instead of Antiseptic),
+or combined with a poultice to produce a treated poultice (same grid-craft pattern as the
+antiseptic poultice, from Topical Ointment Potion Base). Used to fight skin irritations. **Flagged for a later pass**: worth revisiting to more fully
 nail down the specific sources/causes of Skin Irritation beyond what's already listed
 (frostbite, sunburn, contact with an irritant plant, Part 3) — not blocking, just noted as
 incomplete.
@@ -1053,9 +1054,9 @@ A separate, later-onset condition from Bleeding, not the same thing.
     planned, not a second new system.
   - **Only Antiseptic and Topical Ointment potion bases have any bandage/poultice-crafting path
     at all** — the other 6 remedy potions are drink-only, no physical-application use case.
-    Topical Ointment's existing `treated-bandage` (Skin Irritation, below) is the bandage side of
-    that pair; whether it also gets a poultice-combination option symmetrically to Antiseptic is
-    not decided here.
+    Topical Ointment's `treated-bandage` and treated poultice (Skin Irritation, below) are the
+    bandage and poultice sides of that pair, symmetrical to Antiseptic's. Drinking Topical
+    Ointment instead of applying it has its own backfire (Part 2 §6).
   - This is Antiseptic's *intended* use — drinking it straight (Upset Stomach's fourth trigger,
     below) is a deliberate easter egg for curious players, not the primary use case.
   - **Potency, now numbered**: applying a bandage/poultice made with regular Antiseptic clears
@@ -1190,13 +1191,14 @@ punishes the player for feeling better.
 A minor topical debuff (frostbite, sunburn, contact with an irritant plant — flagged in Part 1
 cluster 6 as worth a deeper pass later to more fully nail down causes). Cleared by applying
 `treated-bandage` — Topical Ointment (Part 1 cluster 6) dipped onto a bandage, same craft pattern
-as `bandage-antiseptic`. Mechanically, a **-5% `healingeffectivness` penalty** via `EntityStats` —
+as `bandage-antiseptic`, or a treated poultice crafted from a poultice and Topical Ointment
+Potion Base, same craft pattern as the antiseptic poultice. Mechanically, a **-5% `healingeffectivness` penalty** via `EntityStats` —
 the same stat category used by Wound Infection and the Bronchitis/Pneumonia stages, just at a
 much smaller magnitude, consistent with this being the least severe condition in the catalog.
 **Self-resolves in 2-3 in-game days** if left untreated; Topical Ointment just clears it early.
-**Potency, now numbered**: applying `treated-bandage` clears the debuff instantly regardless of
-tier — regular and Concentrated Topical Ointment behave identically here, no distinction worth
-inventing for the mildest condition in the catalog.
+**Potency, now numbered**: applying a `treated-bandage` or a treated poultice clears the debuff
+instantly regardless of tier — regular and Concentrated Topical Ointment behave identically here,
+no distinction worth inventing for the mildest condition in the catalog.
 
 ### Immune / Tonic (preventive, not curative) → product: **Tonic**
 
