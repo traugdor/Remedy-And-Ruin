@@ -83,6 +83,7 @@ namespace Remedy_And_Ruin
 
             ChestColdContagionSystem.Start(api);
             SplintingInteraction.Start(api);
+            BrokenBonesUseTriggers.Start(api);
 
             api.Event.PlayerNowPlaying += (IServerPlayer player) =>
             {
@@ -467,7 +468,7 @@ namespace Remedy_And_Ruin
                 });
 
             api.ChatCommands.Create("rrBones")
-                .WithDescription("Debug: show each limb's injury tier and splint (/rrBones), set a tier (/rrBones set followed by arms, legs or skull and a tier 0-4 or its name; skull maxes at 2), set a splint (/rrBones splint followed by a limb and on or off), roll a use escalation (/rrBones use followed by a limb), force a shield block to break a splinted arm's splint (/rrBones shieldblock arms), or set a healing limb's remaining time (/rrBones healin followed by a limb and a number of in-game days). Test hits with /rrDamage.")
+                .WithDescription("Debug: show each limb's injury tier and splint (/rrBones), set a tier (/rrBones set followed by arms, legs or skull and a tier 0-4 or its name; skull maxes at 2), set a splint (/rrBones splint followed by a limb and on or off), roll a use escalation (/rrBones use followed by a limb), override the real use triggers' odds (/rrBones usetest followed by steps per leg roll and an optional chance percent, or reset),force a shield block to break a splinted arm's splint (/rrBones shieldblock arms), or set a healing limb's remaining time (/rrBones healin followed by a limb and a number of in-game days). Test hits with /rrDamage.")
                 .RequiresPrivilege(Privilege.root)
                 .RequiresPlayer()
                 .WithArgs(api.ChatCommands.Parsers.OptionalWord("action"), api.ChatCommands.Parsers.OptionalWord("limb"), api.ChatCommands.Parsers.OptionalWord("value"))
@@ -510,6 +511,33 @@ namespace Remedy_And_Ruin
                     if (action == null)
                     {
                         return TextCommandResult.Success(string.Join("\n", Enum.GetValues(typeof(BoneLocation)).Cast<BoneLocation>().Select(Describe)));
+                    }
+
+                    if (string.Equals(action, "usetest", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string stepsText = Word(1);
+                        string chanceText = Word(2);
+                        if (stepsText == null || string.Equals(stepsText, "reset", StringComparison.OrdinalIgnoreCase))
+                        {
+                            EntityBehaviorBrokenBones.DebugStepsPerRoll = null;
+                            EntityBehaviorBrokenBones.DebugUseChancePercent = null;
+                            return TextCommandResult.Success("Use roll overrides cleared: default steps per roll and 5% chance.");
+                        }
+
+                        if (!int.TryParse(stepsText, out int steps) || steps < 1)
+                        {
+                            return TextCommandResult.Error("Usage: /rrBones usetest [stepsPerRoll] [chancePercent], or /rrBones usetest reset");
+                        }
+
+                        float chance = 0f;
+                        if (chanceText != null && (!float.TryParse(chanceText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out chance) || chance < 0f || chance > 100f))
+                        {
+                            return TextCommandResult.Error("Usage: /rrBones usetest [stepsPerRoll] [chancePercent], or /rrBones usetest reset");
+                        }
+
+                        EntityBehaviorBrokenBones.DebugStepsPerRoll = steps;
+                        EntityBehaviorBrokenBones.DebugUseChancePercent = chanceText != null ? chance : null;
+                        return TextCommandResult.Success($"Use rolls: {steps} step(s) per leg roll, chance {(chanceText != null ? chance.ToString("0.##") + "%" : "default 5%")}. Applies until restart or /rrBones usetest reset.");
                     }
 
                     if (!TryLimb(Word(1), out BoneLocation target))
@@ -793,6 +821,9 @@ namespace Remedy_And_Ruin
             PostArmorDamagePipeline.Clear();
             ChestColdContagionSystem.Stop();
             SplintingInteraction.Stop();
+            BrokenBonesUseTriggers.Stop();
+            EntityBehaviorBrokenBones.DebugStepsPerRoll = null;
+            EntityBehaviorBrokenBones.DebugUseChancePercent = null;
             base.Dispose();
         }
 
