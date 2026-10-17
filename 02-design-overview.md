@@ -1086,7 +1086,9 @@ A separate, later-onset condition from Bleeding, not the same thing.
 - **Actually cured by Antinausea** (Part 1 cluster 2) — drinking it calms the GI irritation,
   reduces vomiting symptoms, and is what genuinely lets the player eat again, rather than the
   condition only ever clearing passively on its own. The self-resolving shape below still applies
-  if untreated; Antinausea is the active cure on top of that.
+  if untreated; Antinausea is the active cure on top of that. **Food poisoning is the exception:**
+  it has no cure and runs about 24 in-game hours, and Antinausea only reduces how often the
+  player vomits during it.
 - **Potency, now numbered**: regular Antinausea **zeros the 25% relapse chance outright** — the
   player is cured, but still has to sit out the 5-minute recovery window before eating normally
   again ("stomach's still touchy" even though the sickness itself is gone). **Concentrated
@@ -1495,8 +1497,10 @@ risk, above) is tainted by the poison rather than lost.
   **food poisoning** and the total resets to 0, so the first meal or two may do nothing while the
   toxins build up. The total is cleared on death. Food poisoning is the GI tract illness: its
   symptom is Upset Stomach (Part 3), and it spreads to nearby players when the sick player
-  vomits. The range, the chance per vomit, how long the illness lasts and how it is cured are not
-  settled yet.
+  vomits: each vomit rolls once against every other player in the same room and within the Chest
+  Cold's social-distancing range, at the Chest Cold's 5% chance, which Tonic halves. It lasts about
+  24 in-game hours and has no cure; the player waits it out. Antinausea only mitigates it, by
+  cutting how often the sick player vomits.
 - **Other interactions.** Cooked discolored bush meat counts toward Liver Disease's toxicity
   meter like any cooked bush meat. A soup containing discolored red meat counts as containing
   protein for the Antidote's restricted-diet window, like soup with raw red meat.
