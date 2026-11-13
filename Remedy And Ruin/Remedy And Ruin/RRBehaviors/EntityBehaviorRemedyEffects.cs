@@ -659,14 +659,17 @@ namespace Remedy_And_Ruin.RRBehaviors
             public float  toxicEffectMultiplier = 0.0f;  //used by dual-effect mushrooms
             public float  toxicOnsetMultiplier  = 0.0f;  //used by dual-effect mushrooms
             public float  ladderWeight          = 1.0f;  //Neurotoxic-only: how much this exposure counts toward its dose number - 1.0 for a drunk dose, 0.5 for an arrow hit
+            public int    doseCount             = 1;     //remedies only: how many 0.25 L doses this drink contained (a 1 L gulp is 4)
         }
 
         //============== EVENT HANDLERS ==============//
 
-        public void OnItemConsumed(ItemStack consumedStack, JsonObject effectData, float potencyScale = 1.0f)
+        public void OnItemConsumed(ItemStack consumedStack, JsonObject effectData, float potencyScale = 1.0f, int doseCount = 1)
         {
             // Convert effectData.cluster to uppercase for consistency and fill in defaults/parse data
             EffectStruct effect = new EffectStruct(effectData["cluster"].AsString().ToUpper().ToEnum<EffectCluster>());
+
+            effect.doseCount = Math.Max(1, doseCount);
 
             if (effectData.KeyExists("isPoison")) { effect.isPoison = effectData["isPoison"].AsBool(); }
             if (effectData.KeyExists("effectMultiplier"))
@@ -927,16 +930,16 @@ namespace Remedy_And_Ruin.RRBehaviors
                 }
                 else
                 {
-                    List<TreeAttribute> rrpotions = RRPotionEffects.value.ToList<TreeAttribute>();
                     neweffect.SetBool("isPoison", false);
                     // Read by PotionEffects (client and server) for expiry and by /rrPotion list for time remaining.
                     neweffect.SetDouble("absoluteEndTotalHours", effect.timestarted + effect.timeleft);
-                    rrpotions.Add(neweffect);
-                    RRPotionEffects = new TreeArrayAttribute(rrpotions.ToArray());
-
                     if (remedy)
                     {
-                        DispatchRemedyDose(effect.cluster, PotionEffects.LevelFromEffectMultiplier(effect.effectMultiplier));
+                        ApplyRemedyDose(effect, neweffect);
+                    }
+                    else
+                    {
+                        AddPotionRecord(neweffect);
                     }
                 }
             }
@@ -1121,6 +1124,90 @@ namespace Remedy_And_Ruin.RRBehaviors
                 case EffectCluster.TOPICALOINTMENT: OnTopicalOintmentDose(level); break;
             }
         }
+
+        /// <summary>
+        /// Applies one valid (neither Diluted nor voided) remedy drink. A cluster with no unexpired
+        /// record opens its dose window with a new record, and a drink of more than one 0.25 L
+        /// dose overdoses in that same event. A drink while the cluster's window is open is an
+        /// overdose, unless the cluster is already overdosed, which makes it a no-op. The Tonic
+        /// cannot overdose: another dose restarts its window.
+        /// </summary>
+        private void ApplyRemedyDose(EffectStruct effect, TreeAttribute newRecord)
+        {
+            PotionLevel level = PotionEffects.LevelFromEffectMultiplier(effect.effectMultiplier);
+            List<TreeAttribute> existing = PotionEffects.ActiveRecords(entity, effect.cluster)
+                .OrderBy(r => r.GetDouble("timestarted"))
+                .ToList();
+
+            if (effect.cluster == EffectCluster.TONIC)
+            {
+                if (existing.Count > 0)
+                {
+                    threadManager.EndPotionRecords(existing.Select(r => r.GetString("effectname")));
+                }
+                AddPotionRecord(newRecord);
+                DispatchRemedyDose(effect.cluster, level);
+                return;
+            }
+
+            if (existing.Count > 0)
+            {
+                if (existing.Any(r => r.GetBool(PotionEffects.OverdosedKey))) return;
+
+                existing[0].SetBool(PotionEffects.OverdosedKey, true);
+                RRPotionEffects = new TreeArrayAttribute(RRPotionEffects.value);
+                TriggerOverdose(effect.cluster, level);
+                return;
+            }
+
+            bool overdoseInOneGo = effect.doseCount > 1;
+            if (overdoseInOneGo)
+            {
+                newRecord.SetBool(PotionEffects.OverdosedKey, true);
+            }
+            AddPotionRecord(newRecord);
+            DispatchRemedyDose(effect.cluster, level);
+            if (overdoseInOneGo)
+            {
+                TriggerOverdose(effect.cluster, level);
+            }
+        }
+
+        private void AddPotionRecord(TreeAttribute record)
+        {
+            List<TreeAttribute> rrpotions = RRPotionEffects.value.ToList<TreeAttribute>();
+            rrpotions.Add(record);
+            RRPotionEffects = new TreeArrayAttribute(rrpotions.ToArray());
+        }
+
+        /// <summary>
+        /// Routes one overdose event to its cluster's handler. Called exactly once per overdose,
+        /// after the potion's record carries the overdosed flag, with the tier of the drink that
+        /// caused it. A multi-dose gulp is still one event.
+        /// </summary>
+        private void TriggerOverdose(EffectCluster cluster, PotionLevel level)
+        {
+            switch (cluster)
+            {
+                case EffectCluster.ANALGESIC: OnAnalgesicOverdose(level); break;
+                case EffectCluster.ANTINAUSEA: OnAntinauseaOverdose(level); break;
+                case EffectCluster.ANTISEPTIC: OnAntisepticOverdose(level); break;
+                case EffectCluster.ANTIVIRAL: OnAntiviralOverdose(level); break;
+                case EffectCluster.MINDTONIC: OnMindTonicOverdose(level); break;
+                case EffectCluster.SEDATIVE: OnSedativeOverdose(level); break;
+                case EffectCluster.TONIC: OnTonicOverdose(level); break;
+                case EffectCluster.TOPICALOINTMENT: OnTopicalOintmentOverdose(level); break;
+            }
+        }
+
+        private void OnAnalgesicOverdose(PotionLevel level) { }
+        private void OnAntinauseaOverdose(PotionLevel level) { }
+        private void OnAntisepticOverdose(PotionLevel level) { }
+        private void OnAntiviralOverdose(PotionLevel level) { }
+        private void OnMindTonicOverdose(PotionLevel level) { }
+        private void OnSedativeOverdose(PotionLevel level) { }
+        private void OnTonicOverdose(PotionLevel level) { }
+        private void OnTopicalOintmentOverdose(PotionLevel level) { }
 
         // Per-cluster dose handlers. Contract: called once per valid dose, after the dose's record
         // exists in rrpotions, with that dose's PotionLevel.

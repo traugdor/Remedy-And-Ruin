@@ -462,7 +462,7 @@ namespace Remedy_And_Ruin
                         if (!PotionEffects.IsRemedyCluster(cluster)) continue;
                         foreach (Vintagestory.API.Datastructures.TreeAttribute record in PotionEffects.ActiveRecords(args.Caller.Entity, cluster))
                         {
-                            lines.Add($"{cluster}: {PotionEffects.LevelOfRecord(record)}, {remedy.GetPotionRemainingHours(record):0.00} in-game hours remaining");
+                            lines.Add($"{cluster}: {PotionEffects.LevelOfRecord(record)}, {remedy.GetPotionRemainingHours(record):0.00} in-game hours remaining{(record.GetBool(PotionEffects.OverdosedKey) ? ", OVERDOSED" : "")}");
                         }
                     }
 

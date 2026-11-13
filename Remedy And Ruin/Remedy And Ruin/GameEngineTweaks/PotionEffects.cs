@@ -38,6 +38,22 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 : DoseDurationHours;
         }
 
+        /// <summary>Litres in one remedy dose; a drink of N times this many litres counts as N doses.</summary>
+        public const float LitresPerDose = 0.25f;
+
+        /// <summary>Record flag set on a potion's dose record while that potion is overdosed.</summary>
+        public const string OverdosedKey = "overdosed";
+
+        /// <summary>True while the cluster has an unexpired dose record flagged overdosed, which lasts until the original dose's window ends.</summary>
+        public static bool IsOverdosed(Entity entity, EntityBehaviorRemedyEffects.EffectCluster cluster)
+        {
+            foreach (TreeAttribute record in ActiveRecords(entity, cluster))
+            {
+                if (record.GetBool(OverdosedKey)) return true;
+            }
+            return false;
+        }
+
         /// <summary>A potion item whose effectMultiplier is at least this is the Concentrated tier.</summary>
         public const float ConcentratedEffectMultiplier = 2.0f;
 

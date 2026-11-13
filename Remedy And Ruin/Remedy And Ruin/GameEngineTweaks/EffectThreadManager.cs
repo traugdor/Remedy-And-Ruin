@@ -1141,6 +1141,23 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return false;
         }
 
+        /// <summary>
+        /// Ends the timers of the given potion records and removes the records, without the
+        /// poison and tolerance handling of a forced end. Names are the records' effectname values.
+        /// </summary>
+        internal void EndPotionRecords(IEnumerable<string> effectNames)
+        {
+            var guids = new List<Guid>();
+            foreach (string name in effectNames)
+            {
+                int separator = name?.IndexOf('|') ?? -1;
+                if (separator < 0 || !Guid.TryParse(name.Substring(separator + 1), out Guid parsed)) continue;
+                guids.Add(parsed);
+                if (threads.TryGetValue(parsed, out EffectTimerThread t)) t.RequestForcedEnd();
+            }
+            RemoveGuidsFromWatchedAttributes(guids);
+        }
+
         public bool HandleGameWorldSaving()
         {
             lock (saveLock)
@@ -1372,9 +1389,20 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             var illnesses = new List<TreeAttribute>();
             var potions = new List<TreeAttribute>();
 
+            // The overdosed flag lives only on the record, not on the timer, so it is carried over
+            // from the record being replaced.
+            var overdosedGuids = new HashSet<string>(
+                remedyEffects.RRPotionEffects.value
+                    .Where(r => r.GetBool(PotionEffects.OverdosedKey))
+                    .Select(ExtractGuid));
+
             foreach (ActiveEffectReport report in reports)
             {
                 TreeAttribute entry = BuildTreeAttribute(report, totalHoursNow, calendarAnchored);
+                if (report.Bucket == EffectBucket.Potion && overdosedGuids.Contains(report.Guid.ToString()))
+                {
+                    entry.SetBool(PotionEffects.OverdosedKey, true);
+                }
                 switch (report.Bucket)
                 {
                     case EffectBucket.Poison: poisons.Add(entry); break;

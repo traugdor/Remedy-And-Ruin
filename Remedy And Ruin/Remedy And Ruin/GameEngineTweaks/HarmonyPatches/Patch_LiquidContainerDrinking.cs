@@ -69,7 +69,19 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
                 return;
             }
 
-            remedyBehavior?.OnItemConsumed(contentBefore, effectData, potencyScale);
+            // One drink is the container's drink portion (1 L for a generic container, 0.25 L for a
+            // Vial), capped by what it held; each 0.25 L of it is one remedy dose.
+            int doseCount = 1;
+            float itemsPerLitre = BlockLiquidContainerBase.GetContainableProps(contentBefore)?.ItemsPerLitre ?? 0f;
+            if (itemsPerLitre > 0f)
+            {
+                float litresDrunk = System.Math.Min(
+                    System.Math.Max(1f / itemsPerLitre, __instance.DrinkPortionSize),
+                    contentBefore.StackSize / itemsPerLitre);
+                doseCount = System.Math.Max(1, (int)System.Math.Round(litresDrunk / PotionEffects.LitresPerDose));
+            }
+
+            remedyBehavior?.OnItemConsumed(contentBefore, effectData, potencyScale, doseCount);
         }
     }
 }
