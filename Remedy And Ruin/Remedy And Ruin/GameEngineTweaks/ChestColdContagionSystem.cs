@@ -14,7 +14,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
     /// creative or spectator mode neither catch nor spread it.
     ///
     /// One roll per RollIntervalSeconds of in-game time per eligible pair, at BaseChance scaled by
-    /// the target's "contagionresistance" stat (1.0 when unset). In-game time is read from the
+    /// the target's "contagionresistance" stat (1.0 when unset) and by
+    /// PotionEffects.ContagionChanceMultiplier (Tonic and Antiviral overdose). In-game time is read from the
     /// calendar delta each tick, so rolls follow calendar speed. At most MaxRollsPerTick rolls run
     /// per tick and the surplus is discarded, so a large calendar jump (sleeping) cannot make
     /// infection a certainty. Sources are snapshotted before rolling, so a player infected this
@@ -59,13 +60,13 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         /// Runs up to maxRolls transmission rolls against the target as if a sick player were in the
         /// same room within range, skipping the room and distance checks. Stops at the first
         /// success. Returns whether the target caught Chest Cold, how many rolls ran, and the
-        /// per-roll chance after the target's contagionresistance. A target who is already sick
+        /// per-roll chance after the target's contagionresistance and potion multiplier. A target who is already sick
         /// runs no rolls.
         /// </summary>
         public static (bool infected, int rollsRun, double chance) SimulateSickRoommate(EntityPlayer target, int maxRolls)
         {
             EntityBehaviorChestColdFamily behavior = target.GetBehavior<EntityBehaviorChestColdFamily>();
-            double chance = BaseChance * target.Stats.GetBlended(ResistanceStat);
+            double chance = BaseChance * target.Stats.GetBlended(ResistanceStat) * PotionEffects.ContagionChanceMultiplier(target);
             if (behavior == null || behavior.CurrentStage != EntityBehaviorChestColdFamily.Stage.None)
             {
                 return (false, 0, chance);
@@ -126,7 +127,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             foreach (IServerPlayer target in targets)
             {
                 EntityPlayer targetEntity = target.Entity;
-                double chance = BaseChance * targetEntity.Stats.GetBlended(ResistanceStat);
+                double chance = BaseChance * targetEntity.Stats.GetBlended(ResistanceStat) * PotionEffects.ContagionChanceMultiplier(targetEntity);
                 if (chance <= 0.0) continue;
 
                 Room targetRoom = null;

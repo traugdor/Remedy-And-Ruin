@@ -54,6 +54,32 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return false;
         }
 
+        /// <summary>Factor on the incoming Chest Cold contagion chance while a Tonic dose is active.</summary>
+        public const double TonicContagionFactor = 0.5;
+
+        /// <summary>Factor on the incoming Chest Cold contagion chance while the Antiviral is overdosed.</summary>
+        public const double AntiviralOverdoseContagionFactor = 1.5;
+
+        /// <summary>
+        /// Multiplier the remedy potions apply to the entity's incoming Chest Cold contagion chance:
+        /// 0.5 while a Tonic dose is unexpired, times 1.5 while the Antiviral is overdosed (0.75 with
+        /// both). Derived from the dose records on every call, so it ends with the dose window and
+        /// needs no stat to clear on death, relog or sleep.
+        /// </summary>
+        public static double ContagionChanceMultiplier(Entity entity)
+        {
+            double multiplier = 1.0;
+            if (ActivePotionLevel(entity, EntityBehaviorRemedyEffects.EffectCluster.TONIC) != PotionLevel.None)
+            {
+                multiplier *= TonicContagionFactor;
+            }
+            if (IsOverdosed(entity, EntityBehaviorRemedyEffects.EffectCluster.ANTIVIRAL))
+            {
+                multiplier *= AntiviralOverdoseContagionFactor;
+            }
+            return multiplier;
+        }
+
         /// <summary>A potion item whose effectMultiplier is at least this is the Concentrated tier.</summary>
         public const float ConcentratedEffectMultiplier = 2.0f;
 

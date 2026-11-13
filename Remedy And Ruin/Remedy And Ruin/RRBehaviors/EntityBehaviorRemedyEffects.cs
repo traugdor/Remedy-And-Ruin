@@ -1235,10 +1235,44 @@ namespace Remedy_And_Ruin.RRBehaviors
 
             entity.GetBehavior<EntityBehaviorUpsetStomach>()?.TriggerUpsetStomach();
         }
-        private void OnAntiviralDose(PotionLevel level) { }
+
+        // Regular reverses the Chest Cold family illness one stage; Concentrated cures the current
+        // stage outright. Either resets the morning-check exposure window (SetStage opens a new one).
+        private void OnAntiviralDose(PotionLevel level)
+        {
+            if (entity.World.Side != EnumAppSide.Server || !(entity is EntityAgent agent)) return;
+
+            EntityBehaviorChestColdFamily chestCold = entity.GetBehavior<EntityBehaviorChestColdFamily>();
+            if (chestCold == null || chestCold.CurrentStage == EntityBehaviorChestColdFamily.Stage.None) return;
+
+            if (level == PotionLevel.Concentrated) chestCold.CureCurrentStage(agent);
+            else chestCold.ReverseOneStage(agent);
+        }
+
         private void OnMindTonicDose(PotionLevel level) { }
         private void OnSedativeDose(PotionLevel level) { }
-        private void OnTonicDose(PotionLevel level) { }
+
+        /// <summary>HP a Regular Tonic dose heals; a Concentrated dose heals twice this.</summary>
+        private const float TonicHealPerTier = 4f;
+
+        // Heals through the same Heal damage path vanilla healing items use, scaled by the
+        // drinker's healingeffectivness (never below 0). Vanilla's heal clamps to max health. The
+        // contagion protection is derived from the dose record (PotionEffects.ContagionChanceMultiplier).
+        private void OnTonicDose(PotionLevel level)
+        {
+            if (entity.World.Side != EnumAppSide.Server || !entity.Alive) return;
+
+            float heal = level == PotionLevel.Concentrated ? TonicHealPerTier * 2f : TonicHealPerTier;
+            heal *= System.Math.Max(0f, entity.Stats.GetBlended("healingeffectivness"));
+            if (heal <= 0f) return;
+
+            entity.ReceiveDamage(new DamageSource
+            {
+                Source = EnumDamageSource.Internal,
+                Type = EnumDamageType.Heal
+            }, heal);
+        }
+
         private void OnTopicalOintmentDose(PotionLevel level) { }
 
         /// <summary>

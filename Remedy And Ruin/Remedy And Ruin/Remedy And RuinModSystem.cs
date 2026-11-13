@@ -364,13 +364,18 @@ namespace Remedy_And_Ruin
                 });
 
             api.ChatCommands.Create("rrChestCold")
-                .WithDescription("Debug: advance your Chest Cold family stage one step (None, Chest Cold, Bronchitis, Flu, Pneumonia, then cured).")
+                .WithDescription("Debug: advance your Chest Cold family stage one step (None, Chest Cold, Bronchitis, Flu, Pneumonia, then cured). '/rrChestCold status' only shows your current stage.")
                 .RequiresPrivilege(Privilege.root)
                 .RequiresPlayer()
+                .WithArgs(api.ChatCommands.Parsers.OptionalWord("action"))
                 .HandleWith(args =>
                 {
                     EntityBehaviorChestColdFamily chestCold = args.Caller.Entity.GetBehavior<EntityBehaviorChestColdFamily>();
                     EntityAgent agent = (EntityAgent)args.Caller.Entity;
+                    if (string.Equals(args[0] as string, "status", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return TextCommandResult.Success($"Chest Cold family stage: {chestCold.CurrentStage}.");
+                    }
                     switch (chestCold.CurrentStage)
                     {
                         case EntityBehaviorChestColdFamily.Stage.None:
@@ -475,6 +480,12 @@ namespace Remedy_And_Ruin
                         {
                             lines.Add($"{cluster}: {PotionEffects.LevelOfRecord(record)}, {remedy.GetPotionRemainingHours(record):0.00} in-game hours remaining{(record.GetBool(PotionEffects.OverdosedKey) ? ", OVERDOSED" : "")}");
                         }
+                    }
+
+                    double contagion = PotionEffects.ContagionChanceMultiplier(args.Caller.Entity);
+                    if (contagion != 1.0)
+                    {
+                        lines.Add($"Chest Cold contagion chance multiplier from potions: x{contagion:0.##}");
                     }
 
                     if (lines.Count == 0 || (lines.Count == 1 && (gameMode == EnumGameMode.Creative || gameMode == EnumGameMode.Spectator)))
