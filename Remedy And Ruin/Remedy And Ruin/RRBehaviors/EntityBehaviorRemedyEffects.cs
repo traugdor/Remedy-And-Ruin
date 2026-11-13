@@ -608,6 +608,7 @@ namespace Remedy_And_Ruin.RRBehaviors
             MarkDirty("rrillness");
             RREffects["rrpotions"] = new TreeArrayAttribute(Array.Empty<TreeAttribute>());
             MarkDirty("rrpotions");
+            entity.GetBehavior<EntityBehaviorUpsetStomach>()?.ClearAll();
             lastKnownEffectsAdvanceOffline = Remedy_And_RuinModSystem.Config.allowEffectsToExpireWhenOffline;
         }
 
@@ -1095,11 +1096,12 @@ namespace Remedy_And_Ruin.RRBehaviors
         }
 
         /// <summary>
-        /// Attachment point for the gastrointestinal illness (the Upset Stomach condition) that
-        /// discolored meat causes; intentionally empty until that condition exists.
+        /// Gives the player food poisoning, the 24 in-game hour gastrointestinal illness owned by
+        /// EntityBehaviorUpsetStomach. No effect while they already have it.
         /// </summary>
-        private void TriggerFoodPoisoning()
+        public void TriggerFoodPoisoning()
         {
+            entity.GetBehavior<EntityBehaviorUpsetStomach>()?.StartFoodPoisoning();
         }
 
         //============== REMEDY DOSE HANDLERS ==============//
@@ -1201,8 +1203,16 @@ namespace Remedy_And_Ruin.RRBehaviors
         }
 
         private void OnAnalgesicOverdose(PotionLevel level) { }
-        private void OnAntinauseaOverdose(PotionLevel level) { }
-        private void OnAntisepticOverdose(PotionLevel level) { }
+        private void OnAntinauseaOverdose(PotionLevel level)
+        {
+            entity.GetBehavior<EntityBehaviorUpsetStomach>()?.VoidCompletely();
+        }
+
+        private void OnAntisepticOverdose(PotionLevel level)
+        {
+            entity.GetBehavior<EntityBehaviorUpsetStomach>()?.TriggerUpsetStomach(completeVoid: true);
+        }
+
         private void OnAntiviralOverdose(PotionLevel level) { }
         private void OnMindTonicOverdose(PotionLevel level) { }
         private void OnSedativeOverdose(PotionLevel level) { }
@@ -1212,8 +1222,19 @@ namespace Remedy_And_Ruin.RRBehaviors
         // Per-cluster dose handlers. Contract: called once per valid dose, after the dose's record
         // exists in rrpotions, with that dose's PotionLevel.
         private void OnAnalgesicDose(PotionLevel level) { }
-        private void OnAntinauseaDose(PotionLevel level) { }
-        private void OnAntisepticDose(PotionLevel level) { }
+        private void OnAntinauseaDose(PotionLevel level)
+        {
+            entity.GetBehavior<EntityBehaviorUpsetStomach>()?.OnAntinauseaDrunk(level);
+        }
+
+        // A 1 L gulp reaches here with its record already flagged overdosed; the overdose handler
+        // then supplies the one complete-void episode, so the ordinary dose adds none.
+        private void OnAntisepticDose(PotionLevel level)
+        {
+            if (PotionEffects.IsOverdosed(entity, EffectCluster.ANTISEPTIC)) return;
+
+            entity.GetBehavior<EntityBehaviorUpsetStomach>()?.TriggerUpsetStomach();
+        }
         private void OnAntiviralDose(PotionLevel level) { }
         private void OnMindTonicDose(PotionLevel level) { }
         private void OnSedativeDose(PotionLevel level) { }
@@ -1265,23 +1286,53 @@ namespace Remedy_And_Ruin.RRBehaviors
 
         private void VoidStomachContents(double chance)
         {
-            float amountToDrain = 0.0f;
-            var hunger = entity.GetBehavior<EntityBehaviorHunger>();
-            if(hunger != null)
-            {
-                amountToDrain = hunger.Saturation;
-                var stomach = entity.GetBehavior("expandedstomach");
-                if (stomach != null)
-                {
-                    float? currentStomachAmount = stomach.GetType().GetProperty("ExpandedStomachMeter")?.GetValue(stomach) as float?;
-                    if (currentStomachAmount.HasValue)
-                    {
-                        stomach.GetType().GetProperty("ExpandedStomachMeter")?.SetValue(stomach, 0f); //drain stomach first so it doesn't intercept the next call
-                    }
-                }
-                hunger.Saturation -= amountToDrain; //ExpandedStomach will intercept this if it's not empty...
-            }
+            VoidStomach(1.0);
             //TODO: wire in chance for additional void events if not triggered by antidote
+        }
+
+        /// <summary>
+        /// Vomits: cancels the player's active hand action, then drains the given fraction (0 to 1)
+        /// of current saturation. A fraction of 1 is a complete void and also empties the Expanded
+        /// Stomach meter; a smaller fraction scales that meter down by the same share.
+        /// </summary>
+        public void VoidStomach(double fraction)
+        {
+            fraction = Math.Clamp(fraction, 0.0, 1.0);
+            InterruptActiveAction();
+
+            var hunger = entity.GetBehavior<EntityBehaviorHunger>();
+            if (hunger == null) return;
+
+            float amountToDrain = (float)(hunger.Saturation * fraction);
+            var stomach = entity.GetBehavior("expandedstomach");
+            var meterProperty = stomach?.GetType().GetProperty("ExpandedStomachMeter");
+            float? meterBefore = meterProperty?.GetValue(stomach) as float?;
+            if (meterBefore.HasValue)
+            {
+                meterProperty.SetValue(stomach, 0f); //drain stomach first so it doesn't intercept the next call
+            }
+            hunger.Saturation -= amountToDrain;
+            if (meterBefore.HasValue && fraction < 1.0)
+            {
+                meterProperty.SetValue(stomach, (float)(meterBefore.Value * (1.0 - fraction)));
+            }
+        }
+
+        // Cancels the held-item use in progress (eating, drawing a bow, a tool) without running its
+        // stop handler, so an interrupted meal is never completed.
+        private void InterruptActiveAction()
+        {
+            if (entity.World.Side != EnumAppSide.Server || entity is not EntityAgent agent) return;
+            if (agent.Controls.HandUse == EnumHandInteract.None) return;
+
+            ItemSlot slot = agent.RightHandItemSlot;
+            if (slot?.Itemstack != null)
+            {
+                float secondsUsed = (entity.World.ElapsedMilliseconds - agent.Controls.UsingBeginMS) / 1000f;
+                slot.Itemstack.Collectible.OnHeldUseCancel(secondsUsed, slot, agent, null, null, EnumItemUseCancelReason.MovedAway);
+            }
+            agent.Controls.HandUse = EnumHandInteract.None;
+            agent.AnimManager?.StopAnimation("eat");
         }
 
         private const double MaxVomitRollIntervalSeconds = 600.0;

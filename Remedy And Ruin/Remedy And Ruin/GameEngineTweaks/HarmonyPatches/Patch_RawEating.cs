@@ -24,7 +24,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
 
             // tryEatStop runs on every release of an interact with any held item; mirror vanilla's
             // own "completed eat of an actually-edible item" gate so only real meals are counted.
-            if (secondsUsed >= 0.95f && stack?.Collectible?.GetNutritionProperties(byEntity.World, stack, byEntity) != null)
+            FoodNutritionProperties nutritionProps = secondsUsed >= 0.95f
+                ? stack?.Collectible?.GetNutritionProperties(byEntity.World, stack, byEntity)
+                : null;
+            if (nutritionProps != null)
             {
                 EntityBehaviorLiverDisease liverDiseaseBehavior = byEntity.GetBehavior<EntityBehaviorLiverDisease>();
                 liverDiseaseBehavior?.OnFoodConsumed(stack, byEntity);
@@ -32,6 +35,13 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
                 if (byEntity.World.Side == EnumAppSide.Server && DiscoloredMeat.IsDiscolored(stack))
                 {
                     remedyBehavior?.OnDiscoloredMeatEaten();
+                }
+
+                if (byEntity.World.Side == EnumAppSide.Server && EntityBehaviorUpsetStomach.IsRealFood(nutritionProps))
+                {
+                    // The same Perish lookup vanilla's tryEatStop uses for its spoilage penalties.
+                    float spoilage = stack.Collectible.UpdateAndGetTransitionState(byEntity.World, slot, EnumTransitionType.Perish)?.TransitionLevel ?? 0f;
+                    byEntity.GetBehavior<EntityBehaviorUpsetStomach>()?.OnFoodConsumed(spoilage, nutritionProps.Intoxication > 0f);
                 }
             }
 

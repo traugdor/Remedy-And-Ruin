@@ -154,5 +154,8 @@
   "bones-offhand-dropped": "Your broken arm cannot hold that.",
   "bones-splint-broken-shield": "Blocking with the shield breaks your splint and you drop it.",
   "bones-bell-headache": "The ringing of the bell fills your head.",
-  "bones-bell-headache-ended": "The ringing in your head fades."
+  "bones-bell-headache-ended": "The ringing in your head fades.",
+  "stomach-vomit": "Your stomach heaves and you vomit.",
+  "stomach-foodpoisoning": "Something you ate does not agree with you.",
+  "stomach-foodpoisoning-ended": "The sickness in your stomach finally passes."
 }

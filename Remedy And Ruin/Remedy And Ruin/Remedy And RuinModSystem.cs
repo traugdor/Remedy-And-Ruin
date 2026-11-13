@@ -46,6 +46,7 @@ namespace Remedy_And_Ruin
             api.RegisterEntityBehaviorClass("remedyandruinResurrectionSickness", typeof(EntityBehaviorResurrectionSickness));
             api.RegisterEntityBehaviorClass("remedyandruinChestColdFamily", typeof(EntityBehaviorChestColdFamily));
             api.RegisterEntityBehaviorClass("remedyandruinBrokenBones", typeof(EntityBehaviorBrokenBones));
+            api.RegisterEntityBehaviorClass("remedyandruinUpsetStomach", typeof(EntityBehaviorUpsetStomach));
             api.RegisterCollectibleBehaviorClass("RemedyArrowPoisoning", typeof(CollectibleBehaviorArrowPoisoning));
             api.RegisterBlockClass("Remedy_And_Ruin.GameEngineTweaks.BlockVial", typeof(BlockVial));
             api.RegisterBlockClass("Remedy_And_Ruin.GameEngineTweaks.BlockVialRack", typeof(BlockVialRack));
@@ -119,6 +120,11 @@ namespace Remedy_And_Ruin
                 {
                     entity.AddBehavior(new EntityBehaviorBrokenBones(entity));
                 }
+                if (entity != null && entity.GetBehavior<EntityBehaviorUpsetStomach>() == null)
+                {
+                    entity.AddBehavior(new EntityBehaviorUpsetStomach(entity));
+                }
+                entity?.GetBehavior<EntityBehaviorUpsetStomach>()?.ResumeAfterLogin((EntityAgent)entity);
                 entity?.GetBehavior<EntityBehaviorLiverDisease>()?.ResumeAfterLogin((EntityAgent)entity);
                 entity?.GetBehavior<EntityBehaviorChestColdFamily>()?.ResumeAfterLogin((EntityAgent)entity);
                 entity?.GetBehavior<EntityBehaviorPlayerConditions>()?.ResumeAfterLogin((EntityAgent)entity);
@@ -171,6 +177,11 @@ namespace Remedy_And_Ruin
                 if (entity.GetBehavior<EntityBehaviorHealth>() != null && entity.GetBehavior<EntityBehaviorBrokenBones>() == null)
                 {
                     entity.AddBehavior(new EntityBehaviorBrokenBones(entity));
+                }
+
+                if (entity is EntityPlayer && entity.GetBehavior<EntityBehaviorUpsetStomach>() == null)
+                {
+                    entity.AddBehavior(new EntityBehaviorUpsetStomach(entity));
                 }
             };
 
@@ -470,6 +481,56 @@ namespace Remedy_And_Ruin
                     {
                         lines.Add("No active remedy potion doses.");
                     }
+                    return TextCommandResult.Success(string.Join("\n", lines));
+                });
+
+            api.ChatCommands.Create("rrStomach")
+                .WithDescription("Debug: Upset Stomach and food poisoning. /rrStomach shows the state (settling window, pending relapse, food poisoning, next vomit); /rrStomach episode starts an episode (partial void first); /rrStomach complete starts an episode whose void is complete; /rrStomach poison starts food poisoning; /rrStomach clear clears everything.")
+                .RequiresPrivilege(Privilege.root)
+                .RequiresPlayer()
+                .WithArgs(api.ChatCommands.Parsers.OptionalWord("action"))
+                .HandleWith(args =>
+                {
+                    EntityBehaviorUpsetStomach stomach = args.Caller.Entity.GetBehavior<EntityBehaviorUpsetStomach>();
+                    if (stomach == null) return TextCommandResult.Error("No EntityBehaviorUpsetStomach on this entity.");
+
+                    string action = args.Parsers[0].IsMissing ? "show" : ((string)args.Parsers[0].GetValue()).ToLowerInvariant();
+                    var lines = new List<string>();
+                    EnumGameMode gameMode = args.Caller.Player?.WorldData?.CurrentGameMode ?? EnumGameMode.Survival;
+                    if (gameMode == EnumGameMode.Creative || gameMode == EnumGameMode.Spectator)
+                    {
+                        lines.Add($"You are in {gameMode} mode: vanilla's hunger does not tick for you, so your saturation does not drain on its own. Voids still set it directly. The stomach state below is still tracked and ticks normally.");
+                    }
+
+                    switch (action)
+                    {
+                        case "show":
+                            break;
+                        case "episode":
+                            stomach.TriggerUpsetStomach();
+                            lines.Add("Upset Stomach episode started (partial void).");
+                            break;
+                        case "complete":
+                            stomach.TriggerUpsetStomach(completeVoid: true);
+                            lines.Add("Upset Stomach episode started (complete void).");
+                            break;
+                        case "poison":
+                            if (stomach.HasFoodPoisoning) lines.Add("You already have food poisoning; nothing changed.");
+                            else
+                            {
+                                stomach.StartFoodPoisoning();
+                                lines.Add("Food poisoning started.");
+                            }
+                            break;
+                        case "clear":
+                            stomach.ClearAll();
+                            lines.Add("Upset Stomach and food poisoning cleared.");
+                            break;
+                        default:
+                            return TextCommandResult.Error("Usage: /rrStomach, /rrStomach episode, /rrStomach complete, /rrStomach poison, /rrStomach clear");
+                    }
+
+                    lines.AddRange(stomach.Describe());
                     return TextCommandResult.Success(string.Join("\n", lines));
                 });
 

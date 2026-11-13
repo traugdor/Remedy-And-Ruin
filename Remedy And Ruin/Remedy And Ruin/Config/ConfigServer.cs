@@ -47,6 +47,15 @@ namespace Remedy_And_Ruin
         [JsonProperty(Order = 11)]
         public bool discoloredBushMeatEnabled { get; set; } = false;
 
+        // A food-poisoned player vomits at a random interval between these two bounds, in in-game
+        // minutes. Read server-side only; the minimum is floored at 1 and the maximum at the
+        // minimum when used.
+        [JsonProperty(Order = 12)]
+        public float foodPoisoningVomitMinIntervalMinutes { get; set; } = 20f;
+
+        [JsonProperty(Order = 13)]
+        public float foodPoisoningVomitMaxIntervalMinutes { get; set; } = 60f;
+
         // World config keys that publish the settings the client needs to read.
         public const string AllowBowWorldKey = "RemedyAndRuin.allowBowWithUnsplintedBrokenArm";
         public const string BowPenaltyWorldKey = "RemedyAndRuin.brokenArmBowPenaltyPercent";
@@ -75,6 +84,8 @@ namespace Remedy_And_Ruin
             allowBowWithUnsplintedBrokenArm = previousConfig.allowBowWithUnsplintedBrokenArm;
             brokenArmBowPenaltyPercent = previousConfig.brokenArmBowPenaltyPercent;
             discoloredBushMeatEnabled = previousConfig.discoloredBushMeatEnabled;
+            foodPoisoningVomitMinIntervalMinutes = previousConfig.foodPoisoningVomitMinIntervalMinutes;
+            foodPoisoningVomitMaxIntervalMinutes = previousConfig.foodPoisoningVomitMaxIntervalMinutes;
         }
     }
 }

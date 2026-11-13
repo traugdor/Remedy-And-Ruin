@@ -59,6 +59,17 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
             EntityBehaviorRemedyEffects remedyBehavior = byEntity.GetBehavior<EntityBehaviorRemedyEffects>();
             remedyBehavior?.OnAnyItemConsumed(contentBefore, byEntity.World);
 
+            if (byEntity.World.Side == EnumAppSide.Server)
+            {
+                FoodNutritionProperties drinkProps = BlockLiquidContainerBase.GetContainableProps(contentBefore)?.NutritionPropsPerLitre
+                    ?? contentBefore.Collectible?.GetNutritionProperties(byEntity.World, contentBefore, byEntity);
+                if (EntityBehaviorUpsetStomach.IsRealFood(drinkProps))
+                {
+                    float spoilage = contentBefore.Collectible.UpdateAndGetTransitionState(byEntity.World, new DummySlot(contentBefore), EnumTransitionType.Perish)?.TransitionLevel ?? 0f;
+                    byEntity.GetBehavior<EntityBehaviorUpsetStomach>()?.OnFoodConsumed(spoilage, drinkProps.Intoxication > 0f);
+                }
+            }
+
             JsonObject effectData = contentBefore.Collectible?.Attributes?["remedyandruinEffect"];
             if (effectData == null || !effectData.Exists)
             {

@@ -38,6 +38,16 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
                 behavior.OnDiscoloredMeatEaten();
             }
 
+            if (world.Side == EnumAppSide.Server && inSlot?.Itemstack != null)
+            {
+                EntityBehaviorHunger hunger = eatingPlayer.Entity.GetBehavior<EntityBehaviorHunger>();
+                // Vanilla's Consume eats nothing when the player has no room left to fill.
+                if (hunger != null && hunger.MaxSaturation - hunger.Saturation > 0f)
+                {
+                    eatingPlayer.Entity.GetBehavior<EntityBehaviorUpsetStomach>()?.OnFoodConsumed(WorstIngredientSpoilage(world, inSlot, contentStacks), isAlcohol: false);
+                }
+            }
+
             foreach (ItemStack stack in contentStacks)
             {
                 JsonObject effectData = stack?.Collectible?.Attributes?["remedyandruinEffect"];
@@ -52,6 +62,26 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
 
                 behavior.OnItemConsumed(stack, effectData);
             }
+        }
+
+        /// <summary>
+        /// The highest Perish level among the meal's ingredients, read the way BlockMeal.Consume
+        /// reads each ingredient for its own spoilage penalty. A meal whose time is frozen counts
+        /// as fresh. One badly spoiled ingredient spoils the whole meal.
+        /// </summary>
+        private static float WorstIngredientSpoilage(IWorldAccessor world, ItemSlot mealSlot, ItemStack[] contentStacks)
+        {
+            if (mealSlot.Itemstack.Attributes.GetBool("timeFrozen")) return 0f;
+
+            float worst = 0f;
+            foreach (ItemStack contentStack in contentStacks)
+            {
+                if (contentStack == null) continue;
+
+                float level = contentStack.Collectible.UpdateAndGetTransitionState(world, new DummySlot(contentStack, mealSlot.Inventory), EnumTransitionType.Perish)?.TransitionLevel ?? 0f;
+                if (level > worst) worst = level;
+            }
+            return worst;
         }
     }
 }
