@@ -585,7 +585,11 @@ namespace Remedy_And_Ruin.RRBehaviors
         public override void OnEntityDeath(DamageSource damageSourceForDeath)
         {
             base.OnEntityDeath(damageSourceForDeath);
-            threadManager.HandleForcefulEnd();
+            threadManager.HandleForcefulEnd(includePotions: true);
+            if (RRPotionEffects.value.Length > 0)
+            {
+                RRPotionEffects = new TreeArrayAttribute(Array.Empty<TreeAttribute>());
+            }
             entity.WatchedAttributes.SetDouble(DiscoloredMeatToxinsKey, 0.0);
             entity.WatchedAttributes.MarkPathDirty(DiscoloredMeatToxinsKey);
         }
@@ -647,8 +651,7 @@ namespace Remedy_And_Ruin.RRBehaviors
         public struct EffectStruct (EffectCluster inval)
         {
             public EffectCluster cluster = inval;
-            public bool   isConcentrated        = false; //base/potion or concentrate?
-            public bool   isPoison              = false; //poison or potion?
+            public bool   isPoison             = false; //poison or potion?
             public double timestarted          = 0.0;    //used by all effects with duration
             public double timeleft             = 0.0;    //used by all effects with duration
             public float  effectMultiplier      = 0.0f;  //used by all poisons
@@ -665,11 +668,12 @@ namespace Remedy_And_Ruin.RRBehaviors
             // Convert effectData.cluster to uppercase for consistency and fill in defaults/parse data
             EffectStruct effect = new EffectStruct(effectData["cluster"].AsString().ToUpper().ToEnum<EffectCluster>());
 
-            if (effectData.KeyExists("tier")) { effect.isConcentrated = effectData["isConcentrated"].AsBool(); }
             if (effectData.KeyExists("isPoison")) { effect.isPoison = effectData["isPoison"].AsBool(); }
             if (effectData.KeyExists("effectMultiplier"))
             {
-                effect.effectMultiplier = effectData["effectMultiplier"].AsFloat() * potencyScale;
+                // Vial charge scaling applies to poisons only; a remedy's effectMultiplier is its tier.
+                float scale = PotionEffects.IsRemedyCluster(effect.cluster) ? 1.0f : potencyScale;
+                effect.effectMultiplier = effectData["effectMultiplier"].AsFloat() * scale;
             }
             if (effectData.KeyExists("onsetMultiplier"))
             {
@@ -745,6 +749,12 @@ namespace Remedy_And_Ruin.RRBehaviors
         // only called when an item is eaten or an arrow lands so it can never apply an illness.
         public void ApplyEffect(EffectStruct effect, bool forceIneligibleForTolerance)
         {
+            // A Diluted remedy (effectMultiplier 0) is inert: no record and no side effects.
+            if (PotionEffects.IsRemedyCluster(effect.cluster) && effect.effectMultiplier <= 0f)
+            {
+                return;
+            }
+
             Guid uid = Guid.NewGuid();
             string effectname = effect.cluster.ToString() + "|" + uid.ToString();
             bool poison = false;
@@ -868,11 +878,17 @@ namespace Remedy_And_Ruin.RRBehaviors
                 case EffectCluster.TOPICALOINTMENT:
                     break;
             }
+            bool remedy = PotionEffects.IsRemedyCluster(effect.cluster);
+            if (remedy)
+            {
+                effect.timestarted = entity.World.Calendar.TotalHours;
+                effect.timeleft = PotionEffects.DoseDurationFor(effect.cluster);
+            }
+
             //write to treeArrayAttribute
             TreeAttribute neweffect = new TreeAttribute();
             neweffect.SetString("effectname", effectname);
             neweffect.SetString("cluster", effect.cluster.ToString());
-            neweffect.SetBool("isConcentrated", effect.isConcentrated);
             neweffect.SetDouble("timestarted", effect.timestarted);
             neweffect.SetDouble("timeleft", effect.timeleft);
             neweffect.SetFloat("effectMultiplier", effect.effectMultiplier);
@@ -913,8 +929,15 @@ namespace Remedy_And_Ruin.RRBehaviors
                 {
                     List<TreeAttribute> rrpotions = RRPotionEffects.value.ToList<TreeAttribute>();
                     neweffect.SetBool("isPoison", false);
+                    // Read by PotionEffects (client and server) for expiry and by /rrPotion list for time remaining.
+                    neweffect.SetDouble("absoluteEndTotalHours", effect.timestarted + effect.timeleft);
                     rrpotions.Add(neweffect);
                     RRPotionEffects = new TreeArrayAttribute(rrpotions.ToArray());
+
+                    if (remedy)
+                    {
+                        DispatchRemedyDose(effect.cluster, PotionEffects.LevelFromEffectMultiplier(effect.effectMultiplier));
+                    }
                 }
             }
             if (antidote)
@@ -1076,13 +1099,66 @@ namespace Remedy_And_Ruin.RRBehaviors
         {
         }
 
+        //============== REMEDY DOSE HANDLERS ==============//
+
+        /// <summary>
+        /// Routes one valid remedy dose to its cluster's handler. Every handler is called exactly
+        /// once per dose, after the dose's record already exists in rrpotions, with the dose's own
+        /// tier (Regular or Concentrated, never None). A Diluted dose and a dose voided by the
+        /// post-Antidote window never reach here.
+        /// </summary>
+        private void DispatchRemedyDose(EffectCluster cluster, PotionLevel level)
+        {
+            switch (cluster)
+            {
+                case EffectCluster.ANALGESIC: OnAnalgesicDose(level); break;
+                case EffectCluster.ANTINAUSEA: OnAntinauseaDose(level); break;
+                case EffectCluster.ANTISEPTIC: OnAntisepticDose(level); break;
+                case EffectCluster.ANTIVIRAL: OnAntiviralDose(level); break;
+                case EffectCluster.MINDTONIC: OnMindTonicDose(level); break;
+                case EffectCluster.SEDATIVE: OnSedativeDose(level); break;
+                case EffectCluster.TONIC: OnTonicDose(level); break;
+                case EffectCluster.TOPICALOINTMENT: OnTopicalOintmentDose(level); break;
+            }
+        }
+
+        // Per-cluster dose handlers. Contract: called once per valid dose, after the dose's record
+        // exists in rrpotions, with that dose's PotionLevel.
+        private void OnAnalgesicDose(PotionLevel level) { }
+        private void OnAntinauseaDose(PotionLevel level) { }
+        private void OnAntisepticDose(PotionLevel level) { }
+        private void OnAntiviralDose(PotionLevel level) { }
+        private void OnMindTonicDose(PotionLevel level) { }
+        private void OnSedativeDose(PotionLevel level) { }
+        private void OnTonicDose(PotionLevel level) { }
+        private void OnTopicalOintmentDose(PotionLevel level) { }
+
+        /// <summary>
+        /// In-game hours left on a potion dose record, read from its live timer when one exists and
+        /// otherwise from the record's own end hour or stored remainder. Never negative.
+        /// </summary>
+        public double GetPotionRemainingHours(TreeAttribute record)
+        {
+            double now = entity.World.Calendar.TotalHours;
+            string effectname = record.GetString("effectname");
+            string guid = effectname.Substring(effectname.IndexOf('|') + 1);
+
+            double end;
+            if (!threadManager.TryGetEndTotalHours(guid, out end))
+            {
+                end = record.HasAttribute("absoluteEndTotalHours")
+                    ? record.GetDouble("absoluteEndTotalHours")
+                    : now + record.GetDouble("timeleft");
+            }
+            return Math.Max(0.0, end - now);
+        }
+
         private void ApplyAntidoteAftermathEffect()
         {
             Guid uid = Guid.NewGuid();
             TreeAttribute neweffect = new TreeAttribute();
             neweffect.SetString("effectname", "ANTIDOTEAFTERMATH|" + uid.ToString());
             neweffect.SetString("cluster", "ANTIDOTEAFTERMATH");
-            neweffect.SetBool("isConcentrated", false);
             neweffect.SetBool("isPoison", false);
             neweffect.SetDouble("timestarted", 0.0);
             neweffect.SetDouble("timeleft", 2.0); // 2 in-game hours - the single shared window duration

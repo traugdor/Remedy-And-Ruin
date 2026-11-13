@@ -78,10 +78,10 @@ no condition effect. What exists:
 - **Mind Tonic:** Temporal Fog, Hallucination and Concussion visuals exist, but there is no layer that
   halves or zeroes them, and the Skull-Strain headache (including the Bell headache) does not drive
   the Concussion visual yet.
-- **Antinausea:** the Upset Stomach condition (relapse chance, recovery window, triggers, and
-  spread by vomiting) does not exist; only vomiting building blocks do. Food poisoning from
+- **Antinausea:** the Upset Stomach condition (relapse chance, recovery window, triggers, food
+  poisoning and the spoiled-food roll) does not exist; only vomiting building blocks do. Food poisoning from
   Discolored Meat has its toxin accumulator and an empty `TriggerFoodPoisoning` hook for it.
-- Overdose: the toxicity counter exists and `TriggerOverdose` is an empty stub.
+- Overdose: `TriggerOverdose` is an empty stub and the 8-hour dose window does not exist yet (A9).
 
 ### A6. Antidote — PARTIAL, with one likely bug
 
@@ -111,9 +111,11 @@ tolerance credit," no month-of-no-exposure decay. `EffectThreadManager.OnNatural
 `PLACEHOLDER` comment correctly noting tolerance should be awarded there (and never from
 `OnForcedEnd`) — the design intent is recorded, nothing is built.
 
-### A9. Toxicity/overdose counter (Part 2 §5-6) — NOT STARTED
+### A9. Remedy overdose (Part 2 §5-6) — NOT STARTED
 
-No counter, no threshold, no per-remedy-potion overdose dispatch exists anywhere.
+Remedy overdose is a second dose of the same potion inside the 8-hour dose window, not a counter.
+The window tracking, the generic-container overdose and the per-remedy-potion overdose dispatch do
+not exist yet. The decaying toxicity counter in `EntityBehaviorRemedyEffects` is not used by remedies.
 
 ### A10. Stacking (Part 3) — RESOLVED, no build needed
 
@@ -526,9 +528,11 @@ in scope per D1/D11, so order here is about what unblocks what, not what matters
     food-poisoning consequence is a stub waiting on the Upset Stomach illness. Cure targets exist
     for Antiseptic, Antiviral, Topical Ointment, Sedative and Tonic. Still to build: the drink effects
     themselves; Topical Ointment's delivery (a treated bandage and a treated poultice, plus the
-    drink backfire); the Upset Stomach condition that Antinausea cures; a halve/clear layer for
-    Analgesic's pain penalties and Flu's escalation hold; and a halve/clear layer for Mind Tonic over
-    Temporal Fog, Hallucination and the headache visual; plus the per-potion overdose effects.
+    drink effect); the Upset Stomach condition that Antinausea mitigates, with food poisoning and the
+    spoiled-food roll; a halve/clear layer for Analgesic's pain penalties and its hold on Chest Cold
+    advancement; and a halve/clear layer for Mind Tonic over Temporal Fog, Hallucination and the
+    headache visual, plus its outright cure of Mind Poison; plus the 8-hour overdose rule and the
+    per-potion overdose effects.
 17. **Renewable Cultivation (Part 5)** — its own large plan, fully independent of the poison/remedy
     systems.
 18. **"R&R Ongoing Effects" UI tab** — standalone once there's real effect data to display.
@@ -538,7 +542,13 @@ in scope per D1/D11, so order here is about what unblocks what, not what matters
     only makes sense once every piece exists.
 20. **Handbook pages and Creative menu tab** — last, per the doc's own note. Two parts: the
     in-game handbook entries, and a dedicated "Remedy and Ruin" tab in the Creative menu listing
-    every item and block this mod adds.
+    every item and block this mod adds. The tab also holds a Cure-All potion: a Creative-only item
+    with no recipe, usable by any player who holds it (no admin gate on use). Drinking it clears
+    every debuff this mod applies instantly, the same way death clears them, but leaves the player
+    alive and untouched in health. It bypasses the normal cure pathways, so it grants no tolerance
+    credit, no Antidote aftermath, no secondary Toxic exposure and no overdose. Each condition's
+    existing death-clearing path is reused, and any condition added later must hook into it. It
+    serves as a testing and admin reset.
 21. **Mod compatibility** — investigates how this mod behaves alongside others and adds soft
     integrations where worthwhile. First item: Temporal Symphony's bellhead shivers (how they
     ring, and whether they should trigger Skull-Strain's Bell headache alongside the vanilla Bell,

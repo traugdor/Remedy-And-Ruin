@@ -287,8 +287,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
     /// already read and wrote before any effect passed through here (effectname as
     /// "cluster|guid", cluster, isPoison, timestarted, timeleft, effectMultiplier,
     /// onsetMultiplier, toxicEffectMultiplier, toxicOnsetMultiplier) so a save/reload round-trip
-    /// stays readable by that code. isConcentrated has no source data in ApplyEffect's current
-    /// parameters and is always written as false.
+    /// stays readable by that code. A potion's tier is not stored separately: it is derived from
+    /// the stored effectMultiplier (see PotionEffects.LevelOfRecord).
     /// </summary>
     public sealed class EffectThreadManager
     {
@@ -1129,6 +1129,18 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         //============== WORLD SAVE ==============//
 
+        /// <summary>The live timer's absolute end hour for the effect guid, if a timer is running for it.</summary>
+        internal bool TryGetEndTotalHours(string guid, out double endTotalHours)
+        {
+            if (Guid.TryParse(guid, out Guid parsed) && threads.TryGetValue(parsed, out EffectTimerThread t))
+            {
+                endTotalHours = t.EndTotalHours;
+                return true;
+            }
+            endTotalHours = 0.0;
+            return false;
+        }
+
         public bool HandleGameWorldSaving()
         {
             lock (saveLock)
@@ -1158,13 +1170,16 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         //============== FORCED END (death / antidote) ==============//
 
-        public bool HandleForcefulEnd()
+        /// <summary>
+        /// Force-ends every poison and illness timer. Potion timers are left running unless
+        /// includePotions is set (death), because the Antidote cure clears poisons only.
+        /// </summary>
+        public bool HandleForcefulEnd(bool includePotions = false)
         {
             lock (forcedEndLock)
             {
-                // potions are not poisons/illnesses and are never force-ended by this path
                 List<EffectTimerThread> snapshot = threads.Values
-                    .Where(t => t.Bucket == EffectBucket.Poison || t.Bucket == EffectBucket.Illness)
+                    .Where(t => t.Bucket == EffectBucket.Poison || t.Bucket == EffectBucket.Illness || (includePotions && t.Bucket == EffectBucket.Potion))
                     .ToList();
                 if (snapshot.Count == 0) return true;
 
@@ -1406,7 +1421,6 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             t.SetString("effectname", report.Cluster + "|" + report.Guid);
             t.SetString("cluster", report.Cluster);
             t.SetBool("isPoison", report.Bucket == EffectBucket.Poison);
-            t.SetBool("isConcentrated", false); // no source data in ApplyEffect's current inputs
             t.SetBool("toleranceEligible", report.EligibleForTolerance);
             t.SetDouble("timestarted", report.StartTotalHours);
             if (calendarAnchored)

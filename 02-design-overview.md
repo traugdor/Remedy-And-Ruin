@@ -26,8 +26,8 @@ Part 1: Clusters — 9 remedy clusters + 6 poison clusters, each cluster IS a Co
 Part 2: Brewing Pipeline — Cookpot (1L water + 3 stacks, any mix of one cluster) → Potion
         Base (edible directly, ~2hr fresh) → Barrel (10L water, ~1wk steep) → Diluted
         Potion (non-functional) → Distillery (Boiler+Condenser) → Potion → Concentrated
-        Potion. Dosing via Vial (precise) or any liquid container (risky, 4x dose). Toxicity/
-        overdose counter. Poison track reuses the same pipeline. Arrow poisoning (dip + craft).
+        Potion. Dosing via Vial (precise) or any liquid container (risky, 4x dose). One-dose-
+        per-8-hours overdose rule. Poison track reuses the same pipeline. Arrow poisoning (dip + craft).
         │
         ▼
 Part 3: Conditions & Poison Effects — what everything actually does: Bleeding, Wound
@@ -168,10 +168,12 @@ neither is actually pain).
 
 ### 6. Skin / Topical Inflammation → produces **Topical Ointment**
 
-Primary use: applied to a bandage to produce a new `treated-bandage` item (same dip-craft pattern
+Primary use: applied to a bandage to produce a new `bandage-treated` item (same dip-craft pattern
 as `bandage-antiseptic`, Part 3, just with Topical Ointment as the liquid instead of Antiseptic),
-or combined with a poultice to produce a treated poultice (same grid-craft pattern as the
-antiseptic poultice, from Topical Ointment Potion Base). Used to fight skin irritations. **Flagged for a later pass**: worth revisiting to more fully
+or combined with a poultice to produce a treated poultice (`poultice-linen-treated` or
+`poultice-reed-treated`, same grid-craft pattern as the antiseptic poultice, from Topical Ointment
+Potion Base). Drinking it instead makes food taste horrible: all incoming satiety is reduced by
+25% for 2 in-game hours. Used to fight skin irritations. **Flagged for a later pass**: worth revisiting to more fully
 nail down the specific sources/causes of Skin Irritation beyond what's already listed
 (frostbite, sunburn, contact with an irritant plant, Part 3) — not blocking, just noted as
 incomplete.
@@ -215,8 +217,7 @@ headache/migraine — **Hallucination (apparition spawns), Temporal Fog (screen 
 and Skull-Strain's headache (same wobble/vignette mechanism as Temporal Fog, at a lighter
 strength), all three** (Part 3/4). Regular Mind Tonic halves the wobble/vignette strength on
 Temporal Fog or Skull-Strain's headache, whichever is active; Concentrated zeroes it entirely
-while active. Hallucination's own potency split is still deferred, pending its apparition-spawn
-mechanics being numbered.
+while active. Both tiers also cure Mind Poison outright (Part 3).
 
 | Ingredient | Block code | Note |
 |---|---|---|
@@ -493,7 +494,7 @@ bucket-like container.
   real primary effect, real (but modest) side-effect risk.
 - **Pass 2 (optional)**: re-boil the Potion output through the same boiler+condenser pair →
   **Concentrated Potion**. Volume drops further; strongest primary effect, strongest side
-  effects, and raises the toxicity counter (§5) faster per dose than Potion does.
+  effects. A Concentrated dose follows the same overdose rule (§5) as any other.
 - Each recipe defines its own `DistillationProps`-style ratio per pass, so different
   remedies/poisons can concentrate at different rates — same mechanism vanilla already uses to
   differentiate spirit types.
@@ -533,42 +534,42 @@ liquid. This mod adds one new container to exploit that:
   full 9/9.
 - **Generic containers** (bowl, jug, bucket, other mods' containers): use their own existing
   `drinkPortionSize`, vanilla default 1L. Drinking a potion straight from one of these consumes a
-  full 1L per gulp — **4 doses at once** — spiking the toxicity counter accordingly.
+  full 1L per gulp — **4 doses at once**, which for a remedy is an overdose on its own (§5).
 
 One dose = 0.25L, fixed regardless of tier — the tier changes *potency per dose*, not dose size.
 
-## §5. Overdose / toxicity
+## §5. Overdose
 
-- A decaying per-player toxicity counter, structurally modeled on
-  `EntityBehaviorHunger.detoxCounter` — a hidden float that rises on consumption and bleeds off
-  over time rather than resetting on a hard cooldown.
-- Each dose consumed raises the counter by an amount defined per recipe/tier: Potion dose =
-  baseline increase; Concentrated Potion dose = larger increase (exact multiplier a tuning
-  value).
-- Drinking from a generic container (1L = 4 doses at once) raises the counter by 4x a single
-  dose's worth in one action, independent of decay — this is what makes the Vial the safer choice
-  for anything with meaningful toxicity per dose.
-- **Crossing the threshold triggers an overdose effect specific to which potion was overdosed
-  on** — see §6.
+- **Every remedy dose lasts 8 in-game hours, except the Sedative's, which lasts 9**, regular and
+  Concentrated alike, tracked on the game calendar so it follows calendar speed and sleep.
+- **A second dose of the same remedy inside its dose window is an overdose** — a regular dose
+  followed by a Concentrated one counts too, and a different remedy taken meanwhile does not. A
+  dose voided by the post-Antidote window (Part 3) never counts.
+- **Drinking from a generic container (1L = 4 doses at once) is an overdose in one gulp**, which
+  is what makes the Vial the safer choice.
+- **Drinking more while overdosed does nothing.** It does not extend the overdose or add a second
+  one.
+- **Tonic is the exception: it cannot overdose.** Another dose restores its HP again and restarts
+  its 8 hours.
+- **The overdose effect is specific to which potion was overdosed on** — see §6. Unless an effect
+  is a single event, it lasts until the 8 hours of the original dose end.
 
 ## §6. Overdose effects
 
-Every potion carries overdose risk via §5's toxicity counter, and **which overdose effect
-triggers depends on which potion type was overdosed on**, not a single universal symptom. This
-is a genuinely new piece of content per potion (not free reuse), and several of these
-deliberately reuse the effect their own potion normally treats or causes, as an ironic backfire.
-Draft mapping, explicitly adjustable later, not final balance:
+Every remedy but Tonic has an overdose effect. Each is a genuinely new piece of content per potion
+(not free reuse), and several deliberately reuse the effect their own potion normally treats or
+causes, as an ironic backfire.
 
 | Potion | Overdose effect | Why |
 |---|---|---|
-| Antiseptic | Severe/guaranteed-complete Upset Stomach (skips the partial-void-first rule) | Already causes GI upset at normal dose (the easter egg, Part 3); overdose removes the "starts mild" mercy |
-| Antinausea | Drowsiness/lethargy — a temporary `walkSpeed`/stamina penalty | Real anti-nausea medication commonly causes drowsiness at high doses |
-| Sedative | Forces an extended, uncontrollable sleep — can't voluntarily wake early for a while | Over-sedation, the utility effect turning against the player |
-| Antiviral | Temporarily *weakens* Immune/Tonic's contagion resistance — the opposite of what Antiviral does at normal dose | Ironic immune-overcorrection backfire |
-| Analgesic | Numbs perception of your own condition — temporarily hides/dulls the Bleeding severity readout or low-health warning | Mirrors real analgesic-overdose risk: masking symptoms you need to notice, not just more pain relief |
-| Topical Ointment | Internal skin-irritation-shaped backfire (a rash) if drunk rather than applied | Mirrors Antiseptic's own "drink the topical-use one and get punished" pattern |
-| Tonic | Triggers Liver Disease directly | Consistent with Liver Disease's existing "excessive potion consumption" trigger (Part 3) — this is a concrete instance of it |
-| Mind Tonic | Triggers Temporal Fog or Hallucination — the very things it cures | Overdosing on the cognitive-support cure causing overstimulation, a tight ironic fit |
+| Antiseptic | One severe, guaranteed-complete Upset Stomach (skips the partial-void-first rule) | Already causes GI upset at normal dose (the easter egg, Part 3); overdose removes the "starts mild" mercy |
+| Antinausea | One complete void of the stomach at once | The anti-nausea medicine causing the nausea |
+| Sedative | The player cannot wake early, and when they would wake normally they stay in bed until the 9-hour dose wears off | Over-sedation, the utility effect turning against the player |
+| Antiviral | Incoming contagion chance is 1.5x instead of 1x until the 8 hours end | Ironic immune-overcorrection backfire |
+| Analgesic | Liver Disease (Part 3) | Real analgesic overdose is hepatotoxic |
+| Topical Ointment | Incoming satiety is cut by 50% instead of 25% until the 8 hours end | Mirrors Antiseptic's own "drink the topical-use one and get punished" pattern |
+| Tonic | None | Cannot overdose |
+| Mind Tonic | When the 8 hours end, a Hallucination starts and lasts 1 in-game hour, its strength window (Part 3) chosen at random | The cure runs out and the effect it was holding back arrives |
 
 Poison overdose is unaffected by this — poisons already have their own distinct per-cluster
 effects and escalation ladders (Part 3), this table is specific to the 8 remedy potions.
@@ -579,7 +580,7 @@ effects and escalation ladders (Part 3), this table is specific to the 8 remedy 
 - A poison recipe is a Cookpot recipe like any other, just tagged as producing a harmful output
   instead of a beneficial one, carrying a harmful "primary effect" instead of a curative one.
 - Concentrated Poison is the strongest/most dangerous tier, mirroring Concentrated Potion.
-- Poison doses interact with the toxicity/overdose system when drunk, same as remedy potions.
+- A poison dose has only its cluster's own effects (Part 3); the remedy overdose rule (§5) does not apply to it.
 
 ## §8. Arrow poisoning
 
@@ -687,8 +688,7 @@ Not a final schema — illustrates the shape implied by the decisions above:
 // Effect + overdose profile (attached to the finished Potion / Concentrated Potion item)
 {
   "primaryEffect": { /* Part 3 hook data */ },
-  "overdoseEffect": { "code": "antiseptic-overdose" }, // keyed per potion TYPE, see §6's table
-  "toxicityPerDose": { "potion": 1.0, "concentrated": 2.5 } // illustrative
+  "overdoseEffect": { "code": "antiseptic-overdose" } // keyed per potion TYPE, see §6's table
 }
 ```
 
@@ -702,9 +702,8 @@ Not a final schema — illustrates the shape implied by the decisions above:
 - Generic "drink from any container" — `BlockLiquidContainerBase.cs`.
 - Buff/debuff stacking — `EntityStats.cs`.
 - Damage-over-time — `EntityBehaviorHealth.cs`.
-- Decaying counter precedent — `EntityBehaviorHunger.cs` (`detoxCounter`).
 
-New C# is only needed for: the toxicity/overdose counter itself, the `ApplyEffect` hook point,
+New C# is only needed for: the 8-hour dose-window tracking, the `ApplyEffect` hook point,
 the per-potion-type overdose effect dispatch (§6), and the Vial item/block (likely no new class
 at all beyond JSON, per `01-engine-hooks.md`'s note that content is JSON-driven).
 
@@ -857,8 +856,8 @@ before it advances. Full progression is 9 tiers × 3 exposures = **27 total expo
 - **Eating something for its primary effect still builds tolerance toward that primary cluster**
   even when an incidental secondary Toxic sliver rides along uninvited (e.g. eating Fly Agaric
   for the trip) — the secondary risk is real and unmanaged unless separately trained.
-- **No interaction with the potion toxicity/overdose counter** (§5/§6 above) — that system stays
-  scoped to brewed potions only. The only consequences of eating poison are the stacked effects
+- **No interaction with the remedy overdose rule** (§5/§6 above) — that system stays scoped to
+  brewed remedy potions only. The only consequences of eating poison are the stacked effects
   themselves, resolved by surviving, curing via Antidote, or dying.
 - **A poison's effect must fade completely, on its own, before another exposure counts toward
   tolerance.** Stacking (above) still applies for danger — a second exposure taken while the
@@ -1054,7 +1053,7 @@ A separate, later-onset condition from Bleeding, not the same thing.
     planned, not a second new system.
   - **Only Antiseptic and Topical Ointment potion bases have any bandage/poultice-crafting path
     at all** — the other 6 remedy potions are drink-only, no physical-application use case.
-    Topical Ointment's `treated-bandage` and treated poultice (Skin Irritation, below) are the
+    Topical Ointment's `bandage-treated` and treated poultice (Skin Irritation, below) are the
     bandage and poultice sides of that pair, symmetrical to Antiseptic's. Drinking Topical
     Ointment instead of applying it has its own backfire (Part 2 §6).
   - This is Antiseptic's *intended* use — drinking it straight (Upset Stomach's fourth trigger,
@@ -1074,11 +1073,8 @@ A separate, later-onset condition from Bleeding, not the same thing.
 - **Four independent triggers**: **overdosing on Antiseptic specifically** — its overdose effect
   (Part 2 §6) is a severe/guaranteed-complete version of this same condition, not a generic
   "any potion overdose" trigger (other potions have their own distinct overdose effects, not
-  Upset Stomach); eating partially spoiled food (vanilla tracks food freshness as a continuous
-  `TransitionState.TransitionLevel`, not a binary fresh/rotten flag, so "partially spoiled" maps
-  onto a mid-range value); food poisoning from eating Discolored Meat (Part 3), which is the GI
-  tract illness and spreads to nearby players when the sick player vomits (Tonic protects
-  against catching it, below); and **drinking Antiseptic at a normal, non-overdose dose** —
+  Upset Stomach); eating food that has begun to spoil (Spoiled food, below); food poisoning from
+  eating Discolored Meat (Part 3), the GI tract illness described below; and **drinking Antiseptic at a normal, non-overdose dose** —
   Antiseptic's baseline side effect is GI upset regardless of quantity, layered independently of
   its own overdose effect above. **This is a deliberate easter egg, not the potion's intended
   use** — Antiseptic is meant for crafting `bandage-antiseptic` or combining with a poultice, and
@@ -1089,6 +1085,20 @@ A separate, later-onset condition from Bleeding, not the same thing.
   if untreated; Antinausea is the active cure on top of that. **Food poisoning is the exception:**
   it has no cure and runs about 24 in-game hours, and Antinausea only reduces how often the
   player vomits during it.
+- **Spoiled food.** Eating any food or meal that has begun to spoil can make the player sick;
+  alcohol is exempt. Vanilla tracks freshness as a continuous spoilage level
+  (`TransitionState.TransitionLevel`), not a binary fresh/rotten flag, and that level is the chance
+  the food makes the player sick at all. When it does, a second weighted flip, skewed toward food
+  poisoning as the level rises, picks between a single vomit (one Upset Stomach episode) and food
+  poisoning.
+- **Food poisoning.** The GI tract illness. It is caught only by eating contaminated food —
+  Discolored Meat (Part 3) or the spoiled-food roll above — and never spreads from one player to
+  another, so vomiting contaminates nothing. It lasts about 24 in-game hours and has no cure. The
+  sick player vomits at a random interval between a configurable minimum and maximum, 20 and 60
+  in-game minutes by default, and each vomit is a partial void that can relapse into a complete
+  one, as below. Antinausea only mitigates it: for the 8 hours of the dose a regular dose doubles
+  the interval and a Concentrated dose stops the vomiting, and the illness runs on to its own end
+  either way.
 - **Potency, now numbered**: regular Antinausea **zeros the 25% relapse chance outright** — the
   player is cured, but still has to sit out the 5-minute recovery window before eating normally
   again ("stomach's still touchy" even though the sickness itself is gone). **Concentrated
@@ -1116,16 +1126,19 @@ Not really a "cure" — a direct utility effect.
 - `BlockBed.cs:67` gates sleeping on `EntityBehaviorTiredness.Tiredness <= 8f`, throwing the
   `"not-tired-enough"` error otherwise. `Tiredness` is a plain public settable float.
 - A sedative dose sets `Tiredness` above that threshold directly — no workaround needed.
-- Framed as "drink this to be able to sleep now, for up to 9 hours" rather than curing an
-  "Insomnia" illness.
-- **The sedative sets a ceiling, it doesn't replace bed quality.** Its job is bypassing the
-  `Tiredness` gate so sleep can be attempted at all — how many hours are actually granted still
-  comes from the bed's own `sleepEfficiency` (already vanilla, already scales hours by bed tier),
-  just capped at 9. A better bed still matters even with the sedative in hand.
-- **Potency, now numbered**: regular Sedative works, but the player wakes up dizzy — a minor
-  `DrunkPerceptionEffect` (Part 2 §9's existing perception-effect reuse) lasting **5-10 in-game
-  minutes** after waking. **Concentrated has no wake-up side effect** — the clean version, worth
-  the extra distillation pass if the player expects to need to act right after getting up.
+- Framed as "drink this to be able to sleep now, for the 9 hours the dose lasts" rather than
+  curing an "Insomnia" illness.
+- **The sedative doesn't replace bed quality.** It raises `Tiredness` to 12, the vanilla
+  maximum, which bypasses the gate so sleep can be attempted at all while the dose lasts. How
+  long the player then sleeps still comes from the bed's own `sleepEfficiency`: from a full 12,
+  7.5 hours in a wood bed, 6 in a hay bed and 8.5 in an aged-wood bed. A better bed still matters
+  even with the sedative in hand, and no further cap is added.
+- **Potency, now numbered**: regular Sedative makes the player groggy — a minor
+  `DrunkPerceptionEffect` (Part 2 §9's existing perception-effect reuse) — from the moment they
+  drink it until the 9-hour dose ends, which includes the time after waking: a 6-hour sleep in a
+  hay bed leaves 3 hours of grogginess. **Concentrated has no groggy effect** — the clean
+  version, worth the extra distillation pass if the player expects to need to act right after
+  getting up; it only lets the player sleep.
 
 ### Chest Cold (with escalation)
 
@@ -1167,46 +1180,47 @@ Not really a "cure" — a direct utility effect.
 Not a standalone condition — a symptom-severity modifier layered onto Bleeding, Wound Infection,
 and fever/broken-bone pain specifically — Flu's fever and Skull-Strain's pain (not its
 headache/confusion, that's Mind Tonic's — Part 1 cluster 5's stated primary use) — and
-broken-bone pain generally (Part 4, Strain/Fracture on all locations, and pain from infection
+broken-bone pain generally (Part 4, every tier on all locations, and pain from infection
 generally) — rather than its own illness with its own cure/cause. **Hallucination and Temporal
 Fog are not part of Analgesic's coverage** — both moved to Mind Tonic below, since neither is
 actually pain.
 
 **Potency, now numbered (walkSpeed component only, so far)**: regular Analgesic **halves the
 walkSpeed penalty** on any condition that carries one — Wound Infection's -10% becomes -5%, and
-the same applies at whatever stage Chest Cold's fever or broken-bone pain layer one in.
-**Concentrated Analgesic clears the walkSpeed penalty entirely** while active. **Does not touch
+Flu's fever is halved the same way. **Concentrated Analgesic clears the walkSpeed penalty
+entirely** on Wound Infection and Flu's fever while active. **Broken-bone penalties are never
+removed, by either tier: both soften them by 50%** — Strain and Fracture directly, and Break and
+Crush only while the limb is splinted, since an unsplinted Break or Crush stays fully locked.
+**Does not touch
 Skin Irritation** — its debuff is healingeffectivness-only, with no walkSpeed component for
 Analgesic to act on, so it's simply unaffected. The healingeffectivness side of any condition
 (Wound Infection's -15%, Skin Irritation's -5%, etc.) is likewise untouched by Analgesic — that's
-a separate axis this remedy doesn't reach. Headache/fever/broken-bone-pain magnitude numbers are
-deferred until Part 4 gets its own numbering pass.
+a separate axis this remedy doesn't reach.
 
-**Genuinely buys time, not just a symptom mask.** While a painkiller is active on
-Hallucination/Temporal Fog/Flu's fever, it also pauses or slows the underlying illness's actual
-progression — a painkiller suppressing Flu's fever doesn't just hide how bad it feels while
-Flu→Pneumonia keeps advancing underneath; taking it genuinely holds the escalation back for as
-long as it's active. A real stopgap while a proper cure is being brewed, not a trap that quietly
-punishes the player for feeling better.
+**Holds the Chest Cold family in place.** While an Analgesic is active at the 6:00 check, an
+advancement that the night's cold-and-wet exposure would have caused does not happen, and the
+illness's recovery is pushed back one day instead. Analgesic does not speed recovery: the player
+still needs proper care to get better. This holds every advancement in the family, not only
+Flu to Pneumonia — a real stopgap while a proper cure is being brewed.
 
 ### Skin Irritation
 
 A minor topical debuff (frostbite, sunburn, contact with an irritant plant — flagged in Part 1
 cluster 6 as worth a deeper pass later to more fully nail down causes). Cleared by applying
-`treated-bandage` — Topical Ointment (Part 1 cluster 6) dipped onto a bandage, same craft pattern
+`bandage-treated` — Topical Ointment (Part 1 cluster 6) dipped onto a bandage, same craft pattern
 as `bandage-antiseptic`, or a treated poultice crafted from a poultice and Topical Ointment
 Potion Base, same craft pattern as the antiseptic poultice. Mechanically, a **-5% `healingeffectivness` penalty** via `EntityStats` —
 the same stat category used by Wound Infection and the Bronchitis/Pneumonia stages, just at a
 much smaller magnitude, consistent with this being the least severe condition in the catalog.
 **Self-resolves in 2-3 in-game days** if left untreated; Topical Ointment just clears it early.
-**Potency, now numbered**: applying a `treated-bandage` or a treated poultice clears the debuff
+**Potency, now numbered**: applying a `bandage-treated` or a treated poultice clears the debuff
 instantly regardless of tier — regular and Concentrated Topical Ointment behave identically here,
 no distinction worth inventing for the mildest condition in the catalog.
 
 ### Immune / Tonic (preventive, not curative) → product: **Tonic**
 
 - Not a cure for an active condition — a temporary buff that reduces the chance of *catching*
-  Chest Cold or Upset Stomach from another player.
+  Chest Cold from another player.
 - **Contagion mechanism: room-based, not raw proximity.** Reuses `RoomRegistry.GetRoomForPosition`
   (already used for cellar/greenhouse detection — no new room-detection code needed) to check
   whether two players are in the same logical enclosed room, and if so, whether they're within
@@ -1214,14 +1228,14 @@ no distinction worth inventing for the mildest condition in the catalog.
   a transmission chance to roll at all. Deliberate: makes quarantining a sick player in a
   separate room (or keeping distance within a shared large room) a real, mechanically effective
   countermeasure, not just flavor. Applies to Chest Cold and whatever else ends up spreading this
-  way; food poisoning spreads by vomiting instead (Discolored Meat, Part 3), and Tonic's buff
-  protects against that too. **Players-only** — NPCs and animals don't carry or transmit contagion (Chest
+  way; food poisoning does not spread between players at all (Upset Stomach, above).
+  **Players-only** — NPCs and animals don't carry or transmit contagion (Chest
   Cold is still independently catchable from cold/wet exposure regardless, per its own trigger
   above, that's just not this mechanism).
 - **Now fully numbered.** While both conditions hold, a transmission roll happens **every 30
-  in-game seconds at a 5% chance per roll**. **Tonic's buff halves that chance (-50%) for 1
-  in-game hour per dose** — worth drinking before a caretaking session, not a standing buff to
-  keep topped off indefinitely.
+  in-game seconds at a 5% chance per roll**. **Tonic's buff halves that chance (-50%) for the
+  8 hours of the dose** — worth drinking before a caretaking session. **Tonic cannot overdose:**
+  another dose restores its HP again and restarts the 8 hours.
 - **Secondary HP-restore potency, now numbered**: checked against vanilla's own healing items for
   scale — bandages heal 3-7 HP and poultices 2-7 HP depending on variant, topping out at 7 HP for
   the best of either. **Regular Tonic restores 4 HP**, sitting mid-pack with vanilla's options;
@@ -1240,19 +1254,24 @@ headache is a subtle horizontal shear of the scene itself instead, no veins — 
 as the world briefly swimming sideways, not as tendrils, so the two symptoms have visibly
 different presentations despite sharing the same underlying gradient/throb.
 
-**Potency, now numbered**: regular Mind Tonic **halves the base vignette strength** on whichever
+**Potency, now numbered**: Mind Tonic lessens every mental-fog condition for the 8 hours of the
+dose — Temporal Fog, Hallucination, Skull-Strain's headache and Mind Poison's own fog, wobble and
+apparitions. Regular Mind Tonic **halves the base vignette strength** on whichever
 condition is active — Temporal Fog (0.5→0.25) or Skull-Strain's headache (0.25→0.125);
 **Concentrated Mind Tonic zeroes it entirely while active**, which also stops each one's own
 sub-effect (veins or shear) since both scale off the same base strength/pulse envelope. Against
 Hallucination's apparitions
 (below), regular Mind Tonic **halves the max visible count (5→2-3) and doubles the roll interval
 (20-30s→40-60s)**; **Concentrated stops spawns entirely while active** — the full, clean cure,
-consistent with the halve/zero pattern used everywhere else Mind Tonic reaches.
+consistent with the halve/zero pattern used everywhere else Mind Tonic reaches. **Both tiers also
+cure Mind Poison outright**, ending every active instance at once; the cure earns no tolerance
+credit, like the Antidote, and leaves alone the incidental Toxic Poison a mushroom may carry.
 
 **Hallucination**
 
-- **Triggers**: **overdosing on Mind Tonic specifically** (its defined overdose effect, Part 2
-  §6 — not a generic "any potion overdose" trigger), lack of sleep, *and* directly from Mind
+- **Triggers**: **the end of a Mind Tonic overdose specifically** (Part 2 §6 — when the
+  overdosed dose's 8 hours run out, a Hallucination starts and lasts 1 in-game hour; not a generic
+  "any potion overdose" trigger), lack of sleep, *and* directly from Mind
   Poison (drunk or via a poisoned arrow, Part 3's poison effects table) — the same effect
   regardless of which trigger caused it, not separate mechanics that happen to look alike.
 - **Effect: real wander/pathfind/attack AI, but no actual combat impact.** Drifter and Shiver
@@ -1301,12 +1320,9 @@ consistent with the halve/zero pattern used everywhere else Mind Tonic reaches.
   effect instead of a cosmetic-lie display trick.
 - **Triggers**: *prolonged* exposure to low Temporal Stability (duration matters, not just the
   instantaneous value), using a Temporal Gear to restore stability (which itself carries a
-  Temporal Fog risk as a side effect of the cure), **overdosing on Mind Tonic** (Part 2 §6 lists
-  this as an either/or with Hallucination for Mind Tonic's overdose — which of the two triggers
-  is a balance/randomization detail, not decided here), and **Mind Poison** (drunk or via a
+  Temporal Fog risk as a side effect of the cure), and **Mind Poison** (drunk or via a
   poisoned arrow) — Mind Poison's confusion/mind-fog drives both Temporal Fog's screen
-  wobble/vignette and Hallucination's apparition spawns together, not a choice between them the
-  way Mind Tonic overdose is.
+  wobble/vignette and Hallucination's apparition spawns together.
 - Only the client/server sync channel and a per-position stability read have been verified against
   source so far - the specific tiered-threshold structure this document wants to mirror has not
   been confirmed and needs its own read of `TemporalStabilityEffects.cs` (past its sync-channel
@@ -1350,11 +1366,10 @@ consistent with the halve/zero pattern used everywhere else Mind Tonic reaches.
   (decayed against the game calendar, so it follows calendar speed and keeps draining across
   saves and relogs). Liver Disease starts once the meter reaches **3**; Liver Failure starts once
   it reaches **6**.
-- **Trigger 2: overdosing on Tonic specifically** — Tonic's defined overdose effect (Part 2 §6)
-  *is* Liver Disease directly, not a generic "any potion overdose" outcome; overdosing on other
-  potions produces their own distinct effect instead (§6), not Liver Disease. Reuses the
-  *existing* toxicity/overdose counter (Part 2 §5) directly, and Concentrated Tonic doses push
-  that counter faster than regular Tonic doses, same as every other potion.
+- **Trigger 2: overdosing on Analgesic specifically** — Analgesic's defined overdose effect
+  (Part 2 §6) *is* Liver Disease directly, not a generic "any potion overdose" outcome;
+  overdosing on other potions produces their own distinct effect instead (§6), not Liver Disease.
+  The meter is set to its Liver Disease threshold of 3, not to Liver Failure's.
 - **Deliberately not the same effect as Liver Failure at onset** — Liver Failure stays reserved
   for the deadly amatoxin mushrooms as its primary trigger. This starts as a separate, milder,
   chronic-overconsumption condition.
@@ -1496,11 +1511,9 @@ risk, above) is tainted by the poison rather than lost.
   and 1 to a toxin total stored on the player. When the total reaches 1 or more, the player gets
   **food poisoning** and the total resets to 0, so the first meal or two may do nothing while the
   toxins build up. The total is cleared on death. Food poisoning is the GI tract illness: its
-  symptom is Upset Stomach (Part 3), and it spreads to nearby players when the sick player
-  vomits: each vomit rolls once against every other player in the same room and within the Chest
-  Cold's social-distancing range, at the Chest Cold's 5% chance, which Tonic halves. It lasts about
-  24 in-game hours and has no cure; the player waits it out. Antinausea only mitigates it, by
-  cutting how often the sick player vomits.
+  symptom is Upset Stomach (Part 3). It is caught only by eating contaminated food, never from
+  another player; its vomit interval, 24-hour length and Antinausea mitigation are described under
+  Upset Stomach.
 - **Other interactions.** Cooked discolored bush meat counts toward Liver Disease's toxicity
   meter like any cooked bush meat. A soup containing discolored red meat counts as containing
   protein for the Antidote's restricted-diet window, like soup with raw red meat.
@@ -1745,9 +1758,8 @@ there's nothing left for a "mild vs. severe Break" grade to represent.
 **Crush**: **a much longer healing duration is the entire distinction from Break — no worse
 functional lockout.** Unsplinted, Crush has the same 50% rate and total offhand lock as Break;
 splinted, the same 60% rate and unrestricted offhand with the same shield-block splint risk.
-**Settled: splinting is the only lever that eases this lockout** — nothing else (time alone,
-Analgesic, any other remedy) touches it, consistent with Analgesic only ever managing pain and
-splinting being the sole functional-restoration mechanic in this part.
+**Settled: splinting is the only lever that lifts this lockout** — nothing else (time alone, any
+remedy) does. Once the arm is splinted, Analgesic softens the remaining penalty by 50%.
 
 **Bow use, Break/Crush only.** Unsplinted, a Break or Crush blocks drawing a bow entirely — a bow
 takes 2 working arms to draw. Splinted, bow use is allowed but penalized: **draw time increased
@@ -1783,9 +1795,8 @@ represent.
 **Crush**: **a much longer healing duration is the entire distinction from Break — no worse
 functional lockout.** Unsplinted, Crush guarantees the same total immobilization as Break's
 worst case; splinted, a Crush caps at the exact same -40% walk speed floor as a splinted
-Break. **Settled: splinting is the only lever that eases this lockout** — nothing else (time
-alone, Analgesic, any other remedy) touches it, consistent with Analgesic only ever managing
-pain and splinting being the sole functional-restoration mechanic in this part.
+Break. **Settled: splinting is the only lever that lifts this lockout** — nothing else (time
+alone, any remedy) does. Once the leg is splinted, Analgesic softens the remaining -40% by 50%.
 
 ### Skull (2-tier track, then death)
 
@@ -1978,14 +1989,14 @@ No new detection code, just a new consumer of `RoomRegistry`:
 Connections that span multiple parts, not obvious from reading any single part in isolation:
 
 - **Pain relief (Analgesic)** covers: Bleeding, Wound Infection, Flu's fever, and broken-bone
-  pain (Strain/Fracture, all locations) — **not** Skin Irritation (no walkSpeed component) and
+  pain (every tier, all locations) — **not** Skin Irritation (no walkSpeed component) and
   **not** Hallucination or Temporal Fog, both of which moved to Mind Tonic since neither is pain.
-  Painkillers genuinely pause/slow the underlying progression while active for the escalating
-  conditions, not just mask the symptom.
-- **The toxicity/overdose counter** (Part 2 §5) is reused by: potion overdose itself (now
-  dispatching to a distinct effect per potion type, §6 — Mind Tonic overdose → Hallucination/
-  Temporal Fog, Tonic overdose → Liver Disease, etc.), and the Weakness→Paralysis→Cardiac Arrest
-  escalation ladder. One counter, many consumers.
+  While active, a painkiller also holds the Chest Cold family from advancing, at the cost of a
+  day's delay to recovery.
+- **The 8-hour dose window** (Part 2 §5) decides remedy overdose, which dispatches to a distinct
+  effect per potion type (§6 — Analgesic overdose → Liver Disease, Mind Tonic overdose →
+  Hallucination, etc.). Poisons do not use it; the Weakness→Paralysis→Cardiac Arrest escalation
+  ladder counts its own doses.
 - **Escalation-via-continued-cause-while-untreated** is the catalog's recurring shape: Chest Cold
   (→ Flu or Bronchitis → Pneumonia, branching/reconverging), Liver Disease (→ Liver Failure), and
   broken bones' tier ladders. Not a named, system-wide architecture — each is its own concrete

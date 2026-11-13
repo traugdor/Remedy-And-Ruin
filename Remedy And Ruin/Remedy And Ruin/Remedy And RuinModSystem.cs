@@ -434,6 +434,45 @@ namespace Remedy_And_Ruin
                     return TextCommandResult.Success("Gave " + count + " x game:" + path + ".");
                 });
 
+            api.ChatCommands.Create("rrPotion")
+                .WithDescription("Debug: list your active remedy potion doses (/rrPotion list), showing each potion's cluster, tier and in-game hours remaining.")
+                .RequiresPrivilege(Privilege.root)
+                .RequiresPlayer()
+                .WithArgs(api.ChatCommands.Parsers.OptionalWord("action"))
+                .HandleWith(args =>
+                {
+                    string action = args.Parsers[0].IsMissing ? null : ((string)args.Parsers[0].GetValue()).ToLowerInvariant();
+                    if (action != "list")
+                    {
+                        return TextCommandResult.Error("Usage: /rrPotion list");
+                    }
+
+                    EntityBehaviorRemedyEffects remedy = args.Caller.Entity.GetBehavior<EntityBehaviorRemedyEffects>();
+                    if (remedy == null) return TextCommandResult.Error("No EntityBehaviorRemedyEffects on this entity.");
+
+                    var lines = new List<string>();
+                    EnumGameMode gameMode = args.Caller.Player?.WorldData?.CurrentGameMode ?? EnumGameMode.Survival;
+                    if (gameMode == EnumGameMode.Creative || gameMode == EnumGameMode.Spectator)
+                    {
+                        lines.Add($"You are in {gameMode} mode, so the damage pipeline does not run for you and potion effects that act through it will not apply. Doses are still recorded and listed.");
+                    }
+
+                    foreach (EntityBehaviorRemedyEffects.EffectCluster cluster in Enum.GetValues(typeof(EntityBehaviorRemedyEffects.EffectCluster)))
+                    {
+                        if (!PotionEffects.IsRemedyCluster(cluster)) continue;
+                        foreach (Vintagestory.API.Datastructures.TreeAttribute record in PotionEffects.ActiveRecords(args.Caller.Entity, cluster))
+                        {
+                            lines.Add($"{cluster}: {PotionEffects.LevelOfRecord(record)}, {remedy.GetPotionRemainingHours(record):0.00} in-game hours remaining");
+                        }
+                    }
+
+                    if (lines.Count == 0 || (lines.Count == 1 && (gameMode == EnumGameMode.Creative || gameMode == EnumGameMode.Spectator)))
+                    {
+                        lines.Add("No active remedy potion doses.");
+                    }
+                    return TextCommandResult.Success(string.Join("\n", lines));
+                });
+
             api.ChatCommands.Create("rrHitLocation")
                 .WithDescription("Debug: classify a hit height against your current height (/rrHitLocation followed by a number), or a creature's estimated melee hit (/rrHitLocation creature followed by an entity code such as wolf-eurasian-adult-male; a partial code lists matches), or an arrow flying at you (/rrHitLocation arrow followed by optional origin height, drop per block and distance).")
                 .RequiresPrivilege(Privilege.root)
