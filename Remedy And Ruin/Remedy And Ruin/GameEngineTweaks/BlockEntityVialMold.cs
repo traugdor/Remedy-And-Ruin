@@ -54,6 +54,20 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return CanReceive(metal);
         }
 
+        /// <summary>
+        /// Points the fill-surface renderer at the glass texture. The base class always builds the
+        /// path "block/metal/ingot/{last code part}.png", which does not exist for glass and draws
+        /// black. Called after every BlockEntityToolMold.UpdateRenderer.
+        /// </summary>
+        internal void ApplyGlassTexture()
+        {
+            if (renderer == null || MetalContent?.Collectible == null)
+            {
+                return;
+            }
+            renderer.TextureName = new AssetLocation("block/glass/" + MetalContent.Collectible.LastCodePart() + ".png");
+        }
+
         public override void GetBlockInfo(IPlayer forPlayer, StringBuilder dsc)
         {
             if (Shattered)
