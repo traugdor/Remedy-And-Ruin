@@ -80,6 +80,43 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return multiplier;
         }
 
+        /// <summary>Factor on a pain penalty while any Analgesic dose is active.</summary>
+        public const float AnalgesicPainFactor = 0.5f;
+
+        /// <summary>
+        /// Multiplier for pain penalties that an Analgesic only softens: the broken-bone walk and
+        /// work-speed penalties. 0.5 while an Analgesic dose of either tier is unexpired, otherwise
+        /// 1. Never reaches 0, so the Concentrated tier softens no further than the regular one.
+        /// Derived from the dose records on every call.
+        /// </summary>
+        public static float PainScale(Entity entity)
+        {
+            return ActivePotionLevel(entity, EntityBehaviorRemedyEffects.EffectCluster.ANALGESIC) != PotionLevel.None
+                ? AnalgesicPainFactor
+                : 1f;
+        }
+
+        /// <summary>
+        /// Multiplier for the walk-speed penalty of Wound Infection and Flu's fever: 1 with no
+        /// unexpired Analgesic dose, 0.5 with a regular dose, 0 with a Concentrated dose, which
+        /// clears the penalty entirely. Derived from the dose records on every call.
+        /// </summary>
+        public static float WalkPenaltyScale(Entity entity)
+        {
+            switch (ActivePotionLevel(entity, EntityBehaviorRemedyEffects.EffectCluster.ANALGESIC))
+            {
+                case PotionLevel.Regular: return AnalgesicPainFactor;
+                case PotionLevel.Concentrated: return 0f;
+                default: return 1f;
+            }
+        }
+
+        /// <summary>True while an Analgesic dose of either tier is unexpired.</summary>
+        public static bool HasAnalgesic(Entity entity)
+        {
+            return ActivePotionLevel(entity, EntityBehaviorRemedyEffects.EffectCluster.ANALGESIC) != PotionLevel.None;
+        }
+
         /// <summary>A potion item whose effectMultiplier is at least this is the Concentrated tier.</summary>
         public const float ConcentratedEffectMultiplier = 2.0f;
 

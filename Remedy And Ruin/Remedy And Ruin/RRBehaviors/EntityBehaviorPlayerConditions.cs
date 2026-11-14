@@ -326,7 +326,7 @@ namespace Remedy_And_Ruin.RRBehaviors
 
             target.WatchedAttributes.SetBool("remedyandruinWoundInfection", true);
             target.Stats.Set("healingeffectivness", WoundInfectionHealStatKey, WoundInfectionHealingEffectivnessPenalty, persistent: true);
-            target.Stats.Set("walkspeed", WoundInfectionWalkStatKey, WoundInfectionWalkSpeedPenalty, persistent: true);
+            target.Stats.Set("walkspeed", WoundInfectionWalkStatKey, WoundInfectionWalkSpeedPenalty * PotionEffects.WalkPenaltyScale(target), persistent: true);
 
             // Reuses EffectThreadManager's own "runs until explicitly stopped" DoT builder (1000 real days,
             // sized so the per-tick math reproduces an exact damage-per-second rate) rather than re-deriving
@@ -335,6 +335,19 @@ namespace Remedy_And_Ruin.RRBehaviors
             DoTSpec spec = EffectThreadManager.BuildEffectivelyForeverDoT(EnumDamageSource.Internal, EnumDamageType.Injury, 0, damagePerSecond);
             EntityBehaviorHealth health = target.GetBehavior<EntityBehaviorHealth>();
             health?.ApplyDoTEffect(spec.DamageSource, spec.DamageType, spec.DamageTier, spec.TotalDamage, spec.TotalTime, spec.TicksNumber, WoundInfectionDoTEffectType);
+        }
+
+        /// <summary>
+        /// Re-applies the walk-speed penalty at the current Analgesic scale while the infection or
+        /// its post-cure taper is active (see PotionEffects.WalkPenaltyScale). Called when the
+        /// scale changes; does nothing when neither is active.
+        /// </summary>
+        public void RefreshWoundInfectionWalk(EntityAgent target)
+        {
+            if (target.World.Side != EnumAppSide.Server) return;
+            if (!HasWoundInfection && !target.WatchedAttributes.GetBool("remedyandruinWoundInfectionTapering", false)) return;
+
+            target.Stats.Set("walkspeed", WoundInfectionWalkStatKey, WoundInfectionWalkSpeedPenalty * PotionEffects.WalkPenaltyScale(target), persistent: true);
         }
 
         /// <summary>

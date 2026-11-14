@@ -85,6 +85,11 @@ namespace Remedy_And_Ruin.RRBehaviors
     /// Remedy_And_RuinModSystem), and the server backstop sets the modifier so the blended walkspeed
     /// is 0.
     ///
+    /// Analgesic: PotionEffects.PainScale halves the numeric pain penalties of both Legs and ChestArms
+    /// (Strain and Fracture, and Break or Crush only while splinted); an unsplinted Break or Crush is
+    /// unchanged. EntityBehaviorRemedyEffects re-runs ApplyLegEffects and ApplyArmEffects when the
+    /// scale changes.
+    ///
     /// Arm effects: WorkSpeedMultiplier maps the ChestArms state to a work-speed factor: Strain 0.95,
     /// Fracture 0.90, Break or Crush 0.60 splinted and 0.50 unsplinted (one injured arm means
     /// everything is done one-handed). It reads only WatchedAttributes, so it is valid on the client
@@ -207,6 +212,10 @@ namespace Remedy_And_Ruin.RRBehaviors
             }
         }
 
+        // Shrinks a work-speed factor's shortfall from 1 by PotionEffects.PainScale.
+        private static float SoftenedByAnalgesic(Entity entity, float factor) =>
+            1f - (1f - factor) * PotionEffects.PainScale(entity);
+
         // Work-speed factor for digging and melee damage from the entity's ChestArms state; 1 when
         // uninjured. Independent of game mode.
         public static float WorkSpeedMultiplier(Entity entity)
@@ -215,11 +224,11 @@ namespace Remedy_And_Ruin.RRBehaviors
 
             switch (ReadTier(entity, BoneLocation.ChestArms))
             {
-                case InjuryTier.Strain: return 0.95f;
-                case InjuryTier.Fracture: return 0.90f;
+                case InjuryTier.Strain: return SoftenedByAnalgesic(entity, 0.95f);
+                case InjuryTier.Fracture: return SoftenedByAnalgesic(entity, 0.90f);
                 case InjuryTier.Break:
                 case InjuryTier.Crush:
-                    return ReadSplinted(entity, BoneLocation.ChestArms) ? 0.60f : 0.50f;
+                    return ReadSplinted(entity, BoneLocation.ChestArms) ? SoftenedByAnalgesic(entity, 0.60f) : 0.50f;
                 default: return 1f;
             }
         }
@@ -313,19 +322,21 @@ namespace Remedy_And_Ruin.RRBehaviors
             return !entity.WatchedAttributes.GetBool(SplintedKey(BoneLocation.Legs), false);
         }
 
-        // Sets, updates or removes the Legs walkspeed modifier. The modifier is the Legs penalty,
+        // Sets, updates or removes the Legs walkspeed modifier. The modifier is the Legs penalty, with
+        // pain penalties scaled by PotionEffects.PainScale (an unsplinted Break or Crush is not),
         // limited so the blended walkspeed stays at or above 0; while locked it is the negative of
         // the other modifiers' blended sum (floored at 0), which makes the blended walkspeed 0.
         public void ApplyLegEffects()
         {
             if (entity.World.Side != EnumAppSide.Server) return;
 
+            float painScale = PotionEffects.PainScale(entity);
+            bool splinted = IsSplinted(BoneLocation.Legs);
             float penalty = GetTier(BoneLocation.Legs) switch
             {
-                InjuryTier.Strain => LegStrainWalkPenalty,
-                InjuryTier.Fracture => LegFractureWalkPenalty,
-                InjuryTier.Break => LegBrokenWalkPenalty,
-                InjuryTier.Crush => LegBrokenWalkPenalty,
+                InjuryTier.Strain => LegStrainWalkPenalty * painScale,
+                InjuryTier.Fracture => LegFractureWalkPenalty * painScale,
+                InjuryTier.Break or InjuryTier.Crush => splinted ? LegBrokenWalkPenalty * painScale : LegBrokenWalkPenalty,
                 _ => 0f
             };
 

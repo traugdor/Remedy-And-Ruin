@@ -21,7 +21,7 @@ namespace Remedy_And_Ruin.RRBehaviors
     public class EntityBehaviorLiverDisease : EntityBehavior
     {
         private const float ToxicityPerBushmeat = 0.25f;
-        private const double LiverDiseaseThreshold = 3.0;
+        public const double LiverDiseaseThreshold = 3.0;
         private const double LiverFailureThreshold = 6.0;
         private const double ToxicityDecayPerGameDay = 1.0;
         private const int ClearCheckIntervalMs = 5000;
@@ -82,6 +82,18 @@ namespace Remedy_And_Ruin.RRBehaviors
         public void AddToxicity(EntityAgent target, double amount)
         {
             SetToxicity(target, CurrentToxicity + amount);
+        }
+
+        /// <summary>
+        /// Raises the meter to at least the given value and re-evaluates the thresholds; a meter
+        /// already at or above it is left alone, so this never lowers it.
+        /// </summary>
+        public void RaiseMeterTo(EntityAgent target, double minimum)
+        {
+            if (target.World.Side != EnumAppSide.Server) return;
+            if (CurrentToxicity >= minimum) return;
+
+            SetToxicity(target, minimum);
         }
 
         /// <summary>

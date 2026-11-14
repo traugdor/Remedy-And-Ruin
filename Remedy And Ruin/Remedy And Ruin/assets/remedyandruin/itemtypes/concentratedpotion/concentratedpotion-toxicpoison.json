@@ -68,5 +68,28 @@
 			"y": -1,
 			"z": -1.4
 		}
-	}
+	},
+	"creativeinventoryStacks": [
+		{
+			"tabs": [
+				"general",
+				"liquids"
+			],
+			"stacks": [
+				{
+					"type": "block",
+					"code": "remedyandruin:vial-plain",
+					"attributes": {
+						"ucontents": [
+							{
+								"type": "item",
+								"code": "remedyandruin:concentratedpotion-toxicpoison",
+								"makefull": true
+							}
+						]
+					}
+				}
+			]
+		}
+	]
 }

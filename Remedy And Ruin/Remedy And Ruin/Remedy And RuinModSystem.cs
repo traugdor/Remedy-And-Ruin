@@ -488,6 +488,18 @@ namespace Remedy_And_Ruin
                         lines.Add($"Chest Cold contagion chance multiplier from potions: x{contagion:0.##}");
                     }
 
+                    float painScale = PotionEffects.PainScale(args.Caller.Entity);
+                    if (painScale != 1f)
+                    {
+                        lines.Add($"Broken-bone pain penalty scale from potions: x{painScale:0.##}");
+                    }
+
+                    float walkScale = PotionEffects.WalkPenaltyScale(args.Caller.Entity);
+                    if (walkScale != 1f)
+                    {
+                        lines.Add($"Wound Infection and Flu walk penalty scale from potions: x{walkScale:0.##}");
+                    }
+
                     if (lines.Count == 0 || (lines.Count == 1 && (gameMode == EnumGameMode.Creative || gameMode == EnumGameMode.Spectator)))
                     {
                         lines.Add("No active remedy potion doses.");

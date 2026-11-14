@@ -1,3 +1,4 @@
+using Remedy_And_Ruin.GameEngineTweaks;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.GameContent;
@@ -17,6 +18,12 @@ namespace Remedy_And_Ruin.RRBehaviors
     /// Bronchitis at 2h or more, and otherwise stays put; Bronchitis and Flu become Pneumonia at 1h
     /// or more. Each check closes the window and opens the next one. Pneumonia does not escalate
     /// further. The accumulator and the next check time are persisted.
+    ///
+    /// Analgesic: a Flu's fever walk penalty is scaled by PotionEffects.WalkPenaltyScale (RefreshWalkPenalty
+    /// re-applies it when the scale changes). At the morning check, an active Analgesic dose of
+    /// either tier stops an advancement that the exposure would have caused: the stage stays, its
+    /// self-resolve end day moves out by one in-game day, and the exposure window closes and
+    /// reopens as for any check. It never shortens recovery.
     ///
     /// Self-resolve: ChestCold 3 in-game days, Bronchitis 7, Flu 3, Pneumonia never. The end day is
     /// stored on the calendar in WatchedAttributes and checked from the tick listener, so it follows
@@ -51,6 +58,8 @@ namespace Remedy_And_Ruin.RRBehaviors
         private const string EndDayKey = "remedyandruinChestColdEndDay";
         private const string HealStatKey = "remedyandruinChestColdHeal";
         private const string WalkStatKey = "remedyandruinChestColdWalk";
+        private const float FluWalkPenalty = -0.05f;
+        private const double AnalgesicRecoveryDelayDays = 1.0;
         private const string FreezingKey = "freezingEffectStrength";
 
         private const string ExposureKey = "remedyandruinChestColdExposureHours";
@@ -200,6 +209,14 @@ namespace Remedy_And_Ruin.RRBehaviors
             }
         }
 
+        /// <summary>Re-applies Flu's walk penalty at the current Analgesic scale. No-op in any other stage.</summary>
+        public void RefreshWalkPenalty(EntityAgent target)
+        {
+            if (target.World.Side != EnumAppSide.Server || CurrentStage != Stage.Flu) return;
+
+            target.Stats.Set("walkspeed", WalkStatKey, FluWalkPenalty * PotionEffects.WalkPenaltyScale(target), persistent: true);
+        }
+
         private static void RemoveDebuffs(EntityAgent target)
         {
             target.Stats.Remove("healingeffectivness", HealStatKey);
@@ -217,7 +234,7 @@ namespace Remedy_And_Ruin.RRBehaviors
                     break;
                 case Stage.Flu:
                     target.Stats.Set("healingeffectivness", HealStatKey, -0.10f, persistent: true);
-                    target.Stats.Set("walkspeed", WalkStatKey, -0.05f, persistent: true);
+                    target.Stats.Set("walkspeed", WalkStatKey, FluWalkPenalty * PotionEffects.WalkPenaltyScale(target), persistent: true);
                     break;
                 case Stage.Pneumonia:
                     target.Stats.Set("healingeffectivness", HealStatKey, -0.20f, persistent: true);
@@ -286,7 +303,17 @@ namespace Remedy_And_Ruin.RRBehaviors
                     break;
             }
 
-            if (next != stage) SetStage(target, next);
+            if (next != stage && PotionEffects.HasAnalgesic(target))
+            {
+                double recoveryEnd = target.WatchedAttributes.GetDouble(EndDayKey, 0.0);
+                if (recoveryEnd > 0.0)
+                {
+                    target.WatchedAttributes.SetDouble(EndDayKey, recoveryEnd + AnalgesicRecoveryDelayDays);
+                    target.WatchedAttributes.MarkPathDirty(EndDayKey);
+                }
+                OpenWindow(target);
+            }
+            else if (next != stage) SetStage(target, next);
             else OpenWindow(target);
         }
 

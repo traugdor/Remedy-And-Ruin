@@ -514,6 +514,7 @@ namespace Remedy_And_Ruin.RRBehaviors
         }
 
         private long toxicityDecayListenerId;
+        private long analgesicRefreshListenerId;
 
         private void DecayToxicity(float dt)
         {
@@ -566,7 +567,38 @@ namespace Remedy_And_Ruin.RRBehaviors
             toxicityDecayListenerId = entity.World.RegisterGameTickListener(DecayToxicity, 1000);
             lastToleranceDecayCheckDay = (int)Math.Floor(entity.World.Calendar.TotalDays);
             toleranceDecayListenerId = entity.World.RegisterGameTickListener(DecayTolerances, 60000);
+            if (entity.World.Side == EnumAppSide.Server)
+            {
+                analgesicRefreshListenerId = entity.World.RegisterGameTickListener(dt => RefreshAnalgesicScales(), 1000);
+            }
             lastKnownEffectsAdvanceOffline = Remedy_And_RuinModSystem.Config.allowEffectsToExpireWhenOffline;
+        }
+
+        private float appliedPainScale = float.NaN;
+        private float appliedWalkPenaltyScale = float.NaN;
+
+        /// <summary>
+        /// Re-applies every stat modifier that depends on the Analgesic scales (Wound Infection and
+        /// Flu walk penalties, broken-bone leg and arm penalties) when either scale differs from
+        /// the one last applied. Runs every second, so a dose starting or its window ending
+        /// (including through sleep, relog and death) takes effect within a second. Server only.
+        /// </summary>
+        private void RefreshAnalgesicScales(bool force = false)
+        {
+            if (entity.World.Side != EnumAppSide.Server || !(entity is EntityAgent agent)) return;
+
+            float pain = PotionEffects.PainScale(entity);
+            float walk = PotionEffects.WalkPenaltyScale(entity);
+            if (!force && pain == appliedPainScale && walk == appliedWalkPenaltyScale) return;
+
+            appliedPainScale = pain;
+            appliedWalkPenaltyScale = walk;
+
+            entity.GetBehavior<EntityBehaviorPlayerConditions>()?.RefreshWoundInfectionWalk(agent);
+            entity.GetBehavior<EntityBehaviorChestColdFamily>()?.RefreshWalkPenalty(agent);
+            EntityBehaviorBrokenBones bones = entity.GetBehavior<EntityBehaviorBrokenBones>();
+            bones?.ApplyLegEffects();
+            bones?.ApplyArmEffects();
         }
 
         public override void OnEntityDespawn(EntityDespawnData despawn)
@@ -579,6 +611,10 @@ namespace Remedy_And_Ruin.RRBehaviors
             if (toleranceDecayListenerId != 0)
             {
                 entity.World.UnregisterGameTickListener(toleranceDecayListenerId);
+            }
+            if (analgesicRefreshListenerId != 0)
+            {
+                entity.World.UnregisterGameTickListener(analgesicRefreshListenerId);
             }
         }
 
@@ -1202,7 +1238,13 @@ namespace Remedy_And_Ruin.RRBehaviors
             }
         }
 
-        private void OnAnalgesicOverdose(PotionLevel level) { }
+        // Sets the liver toxicity meter to Liver Disease's threshold unless it is already higher.
+        private void OnAnalgesicOverdose(PotionLevel level)
+        {
+            if (entity.World.Side != EnumAppSide.Server || !(entity is EntityAgent agent)) return;
+
+            entity.GetBehavior<EntityBehaviorLiverDisease>()?.RaiseMeterTo(agent, EntityBehaviorLiverDisease.LiverDiseaseThreshold);
+        }
         private void OnAntinauseaOverdose(PotionLevel level)
         {
             entity.GetBehavior<EntityBehaviorUpsetStomach>()?.VoidCompletely();
@@ -1221,7 +1263,12 @@ namespace Remedy_And_Ruin.RRBehaviors
 
         // Per-cluster dose handlers. Contract: called once per valid dose, after the dose's record
         // exists in rrpotions, with that dose's PotionLevel.
-        private void OnAnalgesicDose(PotionLevel level) { }
+        // The Analgesic's effects are derived from its dose record (PotionEffects.PainScale and
+        // WalkPenaltyScale); this only re-applies the stat modifiers that depend on them at once.
+        private void OnAnalgesicDose(PotionLevel level)
+        {
+            RefreshAnalgesicScales(force: true);
+        }
         private void OnAntinauseaDose(PotionLevel level)
         {
             entity.GetBehavior<EntityBehaviorUpsetStomach>()?.OnAntinauseaDrunk(level);
