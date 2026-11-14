@@ -7,11 +7,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks
     /// had reached 0 (a full, uninterrupted sleep completed) and false for any early exit (sneak-key
     /// dismount, bed destroyed, temporal storm interruption) - see BlockEntityBed.RestPlayer/
     /// DidUnmount for the exact conditions this mirrors. sedativeAssisted is true only if
-    /// SedativeAssistedSleepAttributeKey was set on the entity before this sleep started - nothing
-    /// sets that attribute yet (Sedative's own potion effect is a later plan), so it always reads
-    /// false today; a future Sedative effect must set it at the moment it raises Tiredness above the
-    /// sleep gate, so a listener can tell an ordinary night's sleep apart from a Sedative-induced one
-    /// (e.g. before applying a "woke up dizzy" side effect that should only follow the latter).
+    /// SedativeAssistedSleepAttributeKey was set on the entity before this sleep started: a valid
+    /// Sedative drink sets it as it raises Tiredness above the sleep gate, and it is cleared here,
+    /// or by the remedy behavior once the dose has expired with no sleep in progress. A listener
+    /// can use it to tell an ordinary night's sleep apart from a Sedative-induced one.
     /// </summary>
     public static class SleepCompletionEvents
     {

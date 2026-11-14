@@ -1,0 +1,12 @@
+[
+  { "op": "add", "file": "game:itemtypes/bandage.json", "path": "/variantgroups/0/states/-", "value": "treated" },
+  { "op": "add", "file": "game:itemtypes/bandage.json", "path": "/behaviors/0/propertiesByType/*-treated", "value": {
+      "health": 3, "applicationtimesec": 3, "maxapplicationtimesec": 10, "effectdurationsec": 10,
+      "ticks": 4, "cancelinair": false, "cancelwhileswimming": false, "delaytocancelsec": 0.5
+  }},
+  { "op": "add", "file": "game:itemtypes/bandage.json", "path": "/transitionablePropsByType/*-treated", "value": [{
+      "type": "Dry", "freshHours": { "avg": 0 }, "transitionHours": { "avg": 1 },
+      "transitionedStack": { "type": "item", "code": "bandage-clean" }, "transitionRatio": 1
+  }]},
+  { "op": "add", "file": "game:itemtypes/bandage.json", "path": "/texturesbyType/*-treated", "value": { "normal1": { "base": "item/bag/linensack/linen" } } }
+]

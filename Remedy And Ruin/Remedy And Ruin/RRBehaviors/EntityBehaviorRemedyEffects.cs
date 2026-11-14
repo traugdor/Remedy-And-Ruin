@@ -515,6 +515,7 @@ namespace Remedy_And_Ruin.RRBehaviors
 
         private long toxicityDecayListenerId;
         private long analgesicRefreshListenerId;
+        private long hallucinationPollListenerId;
 
         private void DecayToxicity(float dt)
         {
@@ -570,6 +571,11 @@ namespace Remedy_And_Ruin.RRBehaviors
             if (entity.World.Side == EnumAppSide.Server)
             {
                 analgesicRefreshListenerId = entity.World.RegisterGameTickListener(dt => RefreshAnalgesicScales(), 1000);
+                hallucinationPollListenerId = entity.World.RegisterGameTickListener(dt =>
+                {
+                    PollOverdoseHallucination();
+                    ClearStaleSedativeAssistedFlag();
+                }, 1000);
             }
             lastKnownEffectsAdvanceOffline = Remedy_And_RuinModSystem.Config.allowEffectsToExpireWhenOffline;
         }
@@ -616,6 +622,10 @@ namespace Remedy_And_Ruin.RRBehaviors
             {
                 entity.World.UnregisterGameTickListener(analgesicRefreshListenerId);
             }
+            if (hallucinationPollListenerId != 0)
+            {
+                entity.World.UnregisterGameTickListener(hallucinationPollListenerId);
+            }
         }
 
         public override void OnEntityDeath(DamageSource damageSourceForDeath)
@@ -628,6 +638,27 @@ namespace Remedy_And_Ruin.RRBehaviors
             }
             entity.WatchedAttributes.SetDouble(DiscoloredMeatToxinsKey, 0.0);
             entity.WatchedAttributes.MarkPathDirty(DiscoloredMeatToxinsKey);
+            ClearOverdoseHallucination();
+            entity.WatchedAttributes.RemoveAttribute(PotionEffects.TopicalSatietyCutEndKey);
+        }
+
+        /// <summary>
+        /// Removes every active remedy dose record and the state derived from them: the overdose
+        /// Hallucination (pending and running), the Topical Ointment satiety cut and the
+        /// sedative-assisted sleep flag. Poisons and illnesses are untouched. Server only.
+        /// </summary>
+        public void ClearRemedyDoses()
+        {
+            if (entity.World.Side != EnumAppSide.Server) return;
+
+            threadManager.HandleForcefulEnd(potionsOnly: true);
+            if (RRPotionEffects.value.Length > 0)
+            {
+                RRPotionEffects = new TreeArrayAttribute(Array.Empty<TreeAttribute>());
+            }
+            ClearOverdoseHallucination();
+            entity.WatchedAttributes.RemoveAttribute(PotionEffects.TopicalSatietyCutEndKey);
+            entity.WatchedAttributes.RemoveAttribute(SleepCompletionEvents.SedativeAssistedSleepAttributeKey);
         }
 
         public void DestroyProgress()
@@ -645,6 +676,7 @@ namespace Remedy_And_Ruin.RRBehaviors
             RREffects["rrpotions"] = new TreeArrayAttribute(Array.Empty<TreeAttribute>());
             MarkDirty("rrpotions");
             entity.GetBehavior<EntityBehaviorUpsetStomach>()?.ClearAll();
+            ClearOverdoseHallucination();
             lastKnownEffectsAdvanceOffline = Remedy_And_RuinModSystem.Config.allowEffectsToExpireWhenOffline;
         }
 
@@ -1256,9 +1288,76 @@ namespace Remedy_And_Ruin.RRBehaviors
         }
 
         private void OnAntiviralOverdose(PotionLevel level) { }
-        private void OnMindTonicOverdose(PotionLevel level) { }
+        // Nothing happens while the dose lasts. The Hallucination is due the moment the overdosed
+        // record's window ends: the due hour is recorded here and PollOverdoseHallucination starts
+        // the episode once the calendar passes it.
+        private void OnMindTonicOverdose(PotionLevel level)
+        {
+            if (entity.World.Side != EnumAppSide.Server) return;
+
+            SyncPendingHallucinationToOverdoseEnd();
+        }
+
+        // Points the pending Hallucination at the end hour of the active overdosed Mind Tonic
+        // record. Re-run every second while that record exists, so a record whose end hour is
+        // recomputed (effects that pause while offline) keeps the pending hour matched to it.
+        private void SyncPendingHallucinationToOverdoseEnd()
+        {
+            TreeAttribute overdosed = PotionEffects.ActiveRecords(entity, EffectCluster.MINDTONIC)
+                .FirstOrDefault(r => r.GetBool(PotionEffects.OverdosedKey) && r.HasAttribute("absoluteEndTotalHours"));
+            if (overdosed == null) return;
+
+            double dueHours = overdosed.GetDouble("absoluteEndTotalHours");
+            if (PotionEffects.PendingHallucinationHours(entity) == dueHours) return;
+
+            entity.WatchedAttributes.SetDouble(PotionEffects.PendingHallucinationKey, dueHours);
+        }
+
+        // Representative severities for the three Hallucination windows (Drifter only, plus Shiver,
+        // plus Bowtorn); one is rolled per episode.
+        private static readonly float[] HallucinationWindowSeverities = { 0.2f, 0.5f, 0.85f };
+
+        // Starts the pending overdose Hallucination once its due hour has passed and the player is
+        // awake and alive: a full in-game hour from that moment, with a randomly rolled window. A
+        // player asleep or offline at the due hour gets it on waking or on the first tick after
+        // login. The pending hour is cleared as the episode starts, so it starts exactly once.
+        private void PollOverdoseHallucination()
+        {
+            if (entity.World.Side != EnumAppSide.Server || !entity.Alive) return;
+
+            SyncPendingHallucinationToOverdoseEnd();
+
+            double? due = PotionEffects.PendingHallucinationHours(entity);
+            if (!due.HasValue) return;
+
+            double now = entity.World.Calendar.TotalHours;
+            if (now < due.Value) return;
+            if (entity.GetBehavior<EntityBehaviorTiredness>()?.IsSleeping == true) return;
+
+            entity.WatchedAttributes.RemoveAttribute(PotionEffects.PendingHallucinationKey);
+            entity.WatchedAttributes.SetFloat(PotionEffects.HallucinationEpisodeSeverityKey, HallucinationWindowSeverities[entity.World.Rand.Next(HallucinationWindowSeverities.Length)]);
+            entity.WatchedAttributes.SetDouble(PotionEffects.HallucinationEpisodeEndKey, now + PotionEffects.HallucinationEpisodeHours);
+        }
+
+        // Drops the pending and running overdose Hallucination (death, progress reset).
+        private void ClearOverdoseHallucination()
+        {
+            if (entity.World.Side != EnumAppSide.Server) return;
+
+            entity.WatchedAttributes.RemoveAttribute(PotionEffects.PendingHallucinationKey);
+            if (entity.WatchedAttributes.HasAttribute(PotionEffects.HallucinationEpisodeEndKey))
+            {
+                // Zeroed rather than removed so the change reaches the client.
+                entity.WatchedAttributes.SetFloat(PotionEffects.HallucinationEpisodeSeverityKey, 0f);
+                entity.WatchedAttributes.SetDouble(PotionEffects.HallucinationEpisodeEndKey, 0.0);
+            }
+        }
+
+        // The bed hold is derived from the overdosed record (Patch_SedativeBedHold), so there is
+        // nothing to apply here.
         private void OnSedativeOverdose(PotionLevel level) { }
         private void OnTonicOverdose(PotionLevel level) { }
+        // The 50% satiety cut is derived from the overdosed record (PotionEffects.TopicalSatietyMultiplier).
         private void OnTopicalOintmentOverdose(PotionLevel level) { }
 
         // Per-cluster dose handlers. Contract: called once per valid dose, after the dose's record
@@ -1296,8 +1395,48 @@ namespace Remedy_And_Ruin.RRBehaviors
             else chestCold.ReverseOneStage(agent);
         }
 
-        private void OnMindTonicDose(PotionLevel level) { }
-        private void OnSedativeDose(PotionLevel level) { }
+        // Both tiers cure Mind Poison outright: every Mind Poison timer is force-ended with no
+        // tolerance credit, which also tears down its fog/sway severity, psychedelic hold, hunger
+        // modifier and vomit watcher. Other poisons (including the Toxic Poison a mushroom may
+        // carry) and all potion records are untouched. The Mind Tonic's scale on mental fog is
+        // derived from its dose record (PotionEffects.MindScale).
+        private void OnMindTonicDose(PotionLevel level)
+        {
+            if (entity.World.Side != EnumAppSide.Server) return;
+
+            const string mindPoisonCluster = "MINDPOISON";
+            threadManager.HandleForcefulEnd(poisonCluster: mindPoisonCluster);
+            if (RRPoisonEffects.value.Any(r => r.GetString("cluster") == mindPoisonCluster))
+            {
+                RRPoisonEffects = new TreeArrayAttribute(RRPoisonEffects.value.Where(r => r.GetString("cluster") != mindPoisonCluster).ToArray());
+            }
+        }
+        // Either tier raises Tiredness to its maximum so the bed accepts the player at once, and
+        // marks the coming sleep as sedative-assisted. Grogginess (regular tier only) and the
+        // overdose bed hold are derived from the dose record (PotionEffects.IsGroggy,
+        // Patch_SedativeBedHold).
+        private void OnSedativeDose(PotionLevel level)
+        {
+            if (entity.World.Side != EnumAppSide.Server || !entity.Alive) return;
+
+            EntityBehaviorTiredness tiredness = entity.GetBehavior<EntityBehaviorTiredness>();
+            if (tiredness == null) return;
+
+            tiredness.Tiredness = entity.World.Calendar.HoursPerDay / 2f;
+            entity.WatchedAttributes.SetBool(SleepCompletionEvents.SedativeAssistedSleepAttributeKey, true);
+        }
+
+        // The sedative-assisted flag is consumed when the sleep it set up ends. A flag whose dose
+        // has expired with no sleep in progress belongs to a sleep that never happened, so it is
+        // dropped to keep a later ordinary sleep from reading as sedative-assisted.
+        private void ClearStaleSedativeAssistedFlag()
+        {
+            if (!entity.WatchedAttributes.HasAttribute(SleepCompletionEvents.SedativeAssistedSleepAttributeKey)) return;
+            if (entity.GetBehavior<EntityBehaviorTiredness>()?.IsSleeping == true) return;
+            if (PotionEffects.ActivePotionLevel(entity, EffectCluster.SEDATIVE) != PotionLevel.None) return;
+
+            entity.WatchedAttributes.RemoveAttribute(SleepCompletionEvents.SedativeAssistedSleepAttributeKey);
+        }
 
         /// <summary>HP a Regular Tonic dose heals; a Concentrated dose heals twice this.</summary>
         private const float TonicHealPerTier = 4f;
@@ -1320,7 +1459,14 @@ namespace Remedy_And_Ruin.RRBehaviors
             }, heal);
         }
 
-        private void OnTopicalOintmentDose(PotionLevel level) { }
+        // Starts the drunk satiety cut: its own end hour, kept apart from the dose window.
+        // Patch_LiverDiseaseSaturationPenalty derives the multiplier from it.
+        private void OnTopicalOintmentDose(PotionLevel level)
+        {
+            if (entity.World.Side != EnumAppSide.Server || !entity.Alive) return;
+
+            entity.WatchedAttributes.SetDouble(PotionEffects.TopicalSatietyCutEndKey, entity.World.Calendar.TotalHours + PotionEffects.TopicalSatietyCutHours);
+        }
 
         /// <summary>
         /// In-game hours left on a potion dose record, read from its live timer when one exists and

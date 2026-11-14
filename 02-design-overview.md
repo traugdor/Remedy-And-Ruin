@@ -1261,7 +1261,7 @@ condition is active — Temporal Fog (0.5→0.25) or Skull-Strain's headache (0.
 **Concentrated Mind Tonic zeroes it entirely while active**, which also stops each one's own
 sub-effect (veins or shear) since both scale off the same base strength/pulse envelope. Against
 Hallucination's apparitions
-(below), regular Mind Tonic **halves the max visible count (5→2-3) and doubles the roll interval
+(below), regular Mind Tonic **halves the max visible count (5→2) and doubles the roll interval
 (20-30s→40-60s)**; **Concentrated stops spawns entirely while active** — the full, clean cure,
 consistent with the halve/zero pattern used everywhere else Mind Tonic reaches. **Both tiers also
 cure Mind Poison outright**, ending every active instance at once; the cure earns no tolerance

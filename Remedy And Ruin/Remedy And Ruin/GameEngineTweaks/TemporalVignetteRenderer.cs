@@ -66,6 +66,9 @@ namespace Remedy_And_Ruin
         private readonly EffectState concussion = new EffectState();
         private readonly EffectState drunkWobble = new EffectState();
 
+        /// <summary>Sway from a regular Sedative dose, read off the local player's dose records every frame (PotionEffects.GroggyStrength).</summary>
+        private readonly EffectState groggyWobble = new EffectState();
+
         /// <summary>
         /// Neurotoxic Poison's own dizziness sway, read directly off the local player's
         /// WatchedAttributes every frame (EntityBehaviorRemedyEffects.NeurotoxicDrunkWobbleAttributeKey,
@@ -241,9 +244,9 @@ namespace Remedy_And_Ruin
         /// instead of a bounded oscillation. Tracking and subtracting the previous
         /// applied offset keeps the sway centered on the player's actual look direction.
         /// </summary>
-        private void ApplyWobble(EffectState state, float deltaTime)
+        private void ApplyWobble(EffectState state, float deltaTime, float strengthScale = 1f)
         {
-            state.CurrentWobbleStrength += (state.Strength - state.CurrentWobbleStrength) * Math.Min(deltaTime, 1f);
+            state.CurrentWobbleStrength += (state.Strength * strengthScale - state.CurrentWobbleStrength) * Math.Min(deltaTime, 1f);
 
             bool active = state.CurrentWobbleStrength > 0.01f
                 && capi.World.Player.CameraMode == EnumCameraMode.FirstPerson
@@ -284,18 +287,24 @@ namespace Remedy_And_Ruin
             // Poison's drunkWobble sway - drunkWobble shares ApplyWobble's curve but has no
             // draw pass of its own, so it never picks up Concussion's shear/contrast-boost look.
             EntityPlayer localPlayer = capi.World?.Player?.Entity;
+            float mindScale = 1f;
             if (localPlayer != null)
             {
                 neurotoxicWobble.Strength = localPlayer.WatchedAttributes.GetFloat(EntityBehaviorRemedyEffects.NeurotoxicDrunkWobbleAttributeKey);
                 mindPoisonSeverity.Strength = localPlayer.WatchedAttributes.GetFloat(EntityBehaviorRemedyEffects.MindPoisonSeverityAttributeKey);
+                mindScale = PotionEffects.MindScale(localPlayer);
             }
+            groggyWobble.Strength = localPlayer != null ? PotionEffects.GroggyStrength(localPlayer) : 0f;
 
+            // Mind Tonic scales the mental-fog sources (Temporal Fog, Mind Poison's fog and sway).
+            // Concussion and Neurotoxic Poison's dizziness are not scaled here.
             if (!capi.IsGamePaused)
             {
                 ApplyWobble(concussion, deltaTime);
-                ApplyWobble(drunkWobble, deltaTime);
+                ApplyWobble(drunkWobble, deltaTime, mindScale);
                 ApplyWobble(neurotoxicWobble, deltaTime);
-                ApplyWobble(mindPoisonSeverity, deltaTime);
+                ApplyWobble(groggyWobble, deltaTime);
+                ApplyWobble(mindPoisonSeverity, deltaTime, mindScale);
             }
 
             // TempFogStrength, MindPoisonFogStrength, and Mind Poison's real server-driven
@@ -306,7 +315,7 @@ namespace Remedy_And_Ruin
             float mindPoisonCombined = Math.Max(mindPoisonFog.Strength, mindPoisonSeverity.Strength);
             EffectState dominantMindPoison = mindPoisonFog.Strength >= mindPoisonSeverity.Strength ? mindPoisonFog : mindPoisonSeverity;
             EffectState dominantFog = tempFog.Strength >= mindPoisonCombined ? tempFog : dominantMindPoison;
-            float fogStrength = Math.Max(tempFog.Strength, mindPoisonCombined);
+            float fogStrength = Math.Max(tempFog.Strength, mindPoisonCombined) * mindScale;
 
             bool tempFogActive = fogStrength > 0.0001f;
             bool concussionActive = concussion.Strength > 0.0001f;

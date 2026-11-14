@@ -451,24 +451,75 @@ namespace Remedy_And_Ruin
                 });
 
             api.ChatCommands.Create("rrPotion")
-                .WithDescription("Debug: list your active remedy potion doses (/rrPotion list), showing each potion's cluster, tier and in-game hours remaining.")
+                .WithDescription("Debug: remedy potion doses. /rrPotion list shows your active doses (cluster, tier, in-game hours remaining, OVERDOSED) and the effects derived from them. /rrPotion followed by a cluster (analgesic, antinausea, antiseptic, antiviral, mindtonic, sedative, tonic, topicalointment), an optional tier (diluted, regular or concentrated; default regular) and an optional dose count (default 1; each dose is 0.25 L, so 4 is a 1 L gulp) drinks that potion through the real pipeline. /rrPotion clear removes all your remedy doses.")
                 .RequiresPrivilege(Privilege.root)
                 .RequiresPlayer()
-                .WithArgs(api.ChatCommands.Parsers.OptionalWord("action"))
+                .WithArgs(api.ChatCommands.Parsers.OptionalWord("actionOrCluster"), api.ChatCommands.Parsers.OptionalWord("tier"), api.ChatCommands.Parsers.OptionalInt("doses", 1))
                 .HandleWith(args =>
                 {
-                    string action = args.Parsers[0].IsMissing ? null : ((string)args.Parsers[0].GetValue()).ToLowerInvariant();
-                    if (action != "list")
-                    {
-                        return TextCommandResult.Error("Usage: /rrPotion list");
-                    }
+                    const string usage = "Usage: /rrPotion list, /rrPotion clear, or /rrPotion followed by a cluster, an optional tier (diluted, regular, concentrated) and an optional dose count.";
+                    if (args.Parsers[0].IsMissing) return TextCommandResult.Error(usage);
 
+                    string action = ((string)args.Parsers[0].GetValue()).ToLowerInvariant();
                     EntityBehaviorRemedyEffects remedy = args.Caller.Entity.GetBehavior<EntityBehaviorRemedyEffects>();
                     if (remedy == null) return TextCommandResult.Error("No EntityBehaviorRemedyEffects on this entity.");
 
-                    var lines = new List<string>();
                     EnumGameMode gameMode = args.Caller.Player?.WorldData?.CurrentGameMode ?? EnumGameMode.Survival;
-                    if (gameMode == EnumGameMode.Creative || gameMode == EnumGameMode.Spectator)
+                    bool creativeOrSpectator = gameMode == EnumGameMode.Creative || gameMode == EnumGameMode.Spectator;
+
+                    if (action == "clear")
+                    {
+                        remedy.ClearRemedyDoses();
+                        return TextCommandResult.Success("All remedy potion doses cleared.");
+                    }
+
+                    if (action != "list")
+                    {
+                        // Accepts a cluster name or a potion item code such as potion-mindtonic.
+                        string clusterName = action.Substring(action.LastIndexOf('-') + 1);
+                        if (int.TryParse(clusterName, out _) || !Enum.TryParse(clusterName, true, out EntityBehaviorRemedyEffects.EffectCluster applyCluster))
+                        {
+                            return TextCommandResult.Error("Unknown cluster '" + action + "'. " + usage);
+                        }
+                        if (!PotionEffects.IsRemedyCluster(applyCluster))
+                        {
+                            return TextCommandResult.Error(applyCluster + " is not a remedy potion; /rrPotion applies remedy potions only (analgesic, antinausea, antiseptic, antiviral, mindtonic, sedative, tonic, topicalointment).");
+                        }
+
+                        int doses = (int)args[2];
+                        string tierName = args.Parsers[1].IsMissing ? "regular" : ((string)args.Parsers[1].GetValue()).ToLowerInvariant();
+                        if (int.TryParse(tierName, out int tierAsDoses) && args.Parsers[2].IsMissing)
+                        {
+                            doses = tierAsDoses;
+                            tierName = "regular";
+                        }
+
+                        float multiplier;
+                        switch (tierName)
+                        {
+                            case "diluted": multiplier = 0f; break;
+                            case "regular": multiplier = 1f; break;
+                            case "concentrated": multiplier = 2f; break;
+                            default: return TextCommandResult.Error("Unknown tier '" + tierName + "'. Use diluted, regular or concentrated.");
+                        }
+                        if (doses < 1) return TextCommandResult.Error("The dose count must be at least 1.");
+
+                        var applyLines = new List<string>();
+                        if (creativeOrSpectator)
+                        {
+                            applyLines.Add($"You are in {gameMode} mode, so hunger, health and bed effects behave differently for you and some potion effects will not show. The dose is still applied and recorded.");
+                        }
+
+                        Vintagestory.API.Datastructures.JsonObject effectData = Vintagestory.API.Datastructures.JsonObject.FromJson("{\"cluster\":\"" + applyCluster + "\",\"effectMultiplier\":" + multiplier.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "}");
+                        remedy.OnItemConsumed(null, effectData, 1f, doses);
+                        applyLines.Add(multiplier <= 0f
+                            ? $"Drank {doses} dose(s) of Diluted {applyCluster}: a Diluted potion does nothing."
+                            : $"Drank {doses} dose(s) of {tierName} {applyCluster}. Use /rrPotion list to see the result.");
+                        return TextCommandResult.Success(string.Join("\n", applyLines));
+                    }
+
+                    var lines = new List<string>();
+                    if (creativeOrSpectator)
                     {
                         lines.Add($"You are in {gameMode} mode, so the damage pipeline does not run for you and potion effects that act through it will not apply. Doses are still recorded and listed.");
                     }
@@ -498,6 +549,40 @@ namespace Remedy_And_Ruin
                     if (walkScale != 1f)
                     {
                         lines.Add($"Wound Infection and Flu walk penalty scale from potions: x{walkScale:0.##}");
+                    }
+
+                    float mindScale = PotionEffects.MindScale(args.Caller.Entity);
+                    if (mindScale != 1f)
+                    {
+                        lines.Add($"Mental-fog strength scale from potions: x{mindScale:0.##}");
+                    }
+
+                    double? pendingHallucination = PotionEffects.PendingHallucinationHours(args.Caller.Entity);
+                    if (pendingHallucination.HasValue)
+                    {
+                        double hoursUntil = Math.Max(0.0, pendingHallucination.Value - args.Caller.Entity.World.Calendar.TotalHours);
+                        lines.Add($"Hallucination pending in {hoursUntil:0.00} in-game hours");
+                    }
+
+                    float satietyScale = PotionEffects.TopicalSatietyMultiplier(args.Caller.Entity);
+                    if (satietyScale != 1f)
+                    {
+                        lines.Add($"Incoming satiety multiplier from Topical Ointment: x{satietyScale:0.##}");
+                    }
+
+                    if (PotionEffects.IsGroggy(args.Caller.Entity))
+                    {
+                        lines.Add("Sedative: groggy until the dose wears off");
+                    }
+
+                    if (PotionEffects.IsOverdosed(args.Caller.Entity, EntityBehaviorRemedyEffects.EffectCluster.SEDATIVE))
+                    {
+                        foreach (Vintagestory.API.Datastructures.TreeAttribute record in PotionEffects.ActiveRecords(args.Caller.Entity, EntityBehaviorRemedyEffects.EffectCluster.SEDATIVE))
+                        {
+                            if (!record.GetBool(PotionEffects.OverdosedKey)) continue;
+                            lines.Add($"Sedative: held in bed until the dose wears off in {remedy.GetPotionRemainingHours(record):0.00} in-game hours");
+                            break;
+                        }
                     }
 
                     if (lines.Count == 0 || (lines.Count == 1 && (gameMode == EnumGameMode.Creative || gameMode == EnumGameMode.Spectator)))
@@ -844,8 +929,11 @@ namespace Remedy_And_Ruin
 
             temporalVignetteRenderer = new TemporalVignetteRenderer(api);
             // Combines the .rrbrainrot debug command's manual sample with Mind Poison's real,
-            // server-driven severity so either can independently trigger Hallucination spawns.
-            hallucinationManager = new HallucinationManager(api, () => Math.Max(temporalVignetteRenderer.MindPoisonFogStrength, temporalVignetteRenderer.MindPoisonServerSeverity));
+            // server-driven severity so either can independently trigger Hallucination spawns; a Mind
+            // Tonic overdose's Hallucination episode is a third independent source.
+            hallucinationManager = new HallucinationManager(api, () => Math.Max(
+                Math.Max(temporalVignetteRenderer.MindPoisonFogStrength, temporalVignetteRenderer.MindPoisonServerSeverity),
+                PotionEffects.HallucinationEpisodeSeverity(api.World.Player?.Entity)));
 
             api.ChatCommands.Create("rrTempFog")
                 .WithDescription("Debug: set Temporal Fog's sepia/desaturation strength (0-1) for visual tuning.")

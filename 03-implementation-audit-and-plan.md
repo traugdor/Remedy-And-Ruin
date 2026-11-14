@@ -60,28 +60,34 @@ All 5 `switch` cases in `ApplyEffect` carry detailed comments transcribing the d
 formulas (tolerance discount, DoT thresholds, etc.) but each is followed only by `poison = true;
 break;` — no `EntityStats` call, no DoT call, no actual computation.
 
-### A5. Remedy potions (Analgesic, Antinausea, Antiseptic, Antiviral, Mind Tonic, Sedative, Tonic, Topical Ointment) — drink effects NOT STARTED; Antiseptic's topical half and most cure targets exist
+### A5. Remedy potions (Analgesic, Antinausea, Antiseptic, Antiviral, Mind Tonic, Sedative, Tonic, Topical Ointment) — BUILT (Plan 16), awaiting in-game verification
 
-The 8 non-Antidote drink effects are still empty `break;` cases in `ApplyEffect`; drinking one applies
-no condition effect. What exists:
-- **Antiseptic, topical half: done.** `bandage-antiseptic` and `bandage-concentratedantiseptic`
-  variants, dip recipes, the antiseptic poultice, and `CureWoundInfection` (regular: infection cleared,
-  debuff tapers over 3 in-game hours; Concentrated: instant), wired through `Patch_HealingItemCures`.
-  Its drink effects (the Upset Stomach easter egg and overdose effect) are not built.
-- **Cure targets with nothing calling them yet:** `ClearSkinIrritation` (Skin Irritation),
-  `ReverseOneStage` / `CureCurrentStage` (Chest Cold family), the sedative-assisted sleep flag read by
-  `SleepCompletionEvents`, and the `contagionresistance` stat read by the contagion system.
-- **Topical Ointment has no delivery path:** no treated bandage, no treated poultice, no dip or grid
-  recipes, no hook in `Patch_HealingItemCures`, and no drink backfire.
-- **Analgesic:** the pain penalties exist as separate stat modifiers (Wound Infection, Flu's fever,
-  broken-bone pain), but nothing halves or clears them, and nothing holds back Flu's escalation.
-- **Mind Tonic:** Temporal Fog, Hallucination and Concussion visuals exist, but there is no layer that
-  halves or zeroes them, and the Skull-Strain headache (including the Bell headache) does not drive
-  the Concussion visual yet.
-- **Antinausea:** the Upset Stomach condition (relapse chance, recovery window, triggers, food
-  poisoning and the spoiled-food roll) does not exist; only vomiting building blocks do. Food poisoning from
-  Discolored Meat has its toxin accumulator and an empty `TriggerFoodPoisoning` hook for it.
-- Overdose: `TriggerOverdose` is an empty stub and the 8-hour dose window does not exist yet (A9).
+All eight drink effects are live, each dispatched from `ApplyEffect` through the dose record and
+read by derived accessors in `PotionEffects`:
+- **Dose window:** every dose lasts 8 in-game hours (the Sedative 9). A Diluted potion does nothing;
+  Regular and Concentrated differ in strength, not length.
+- **Analgesic:** halves (Regular) or zeroes (Concentrated) the Wound Infection, Flu and broken-bone
+  pain penalties and holds Chest Cold advancement.
+- **Antinausea:** mitigates Upset Stomach; the Upset Stomach condition (episodes, relapse chance,
+  settling window), food poisoning from Discolored Meat and the spoiled-food roll are built.
+- **Antiseptic:** the topical half (bandage, poultice, `CureWoundInfection`) plus the drink effect.
+- **Antiviral:** reverses a Chest Cold stage (Regular) or cures the family (Concentrated).
+- **Mind Tonic:** scales Temporal Fog, Mind Poison's fog and wobble, and the apparition count and
+  roll rate (`MindScale`), and cures Mind Poison outright.
+- **Sedative:** raises Tiredness so the bed accepts the player, marks the sleep sedative-assisted,
+  and makes a Regular dose groggy.
+- **Tonic:** heals and lowers Chest Cold contagion chance for the window; it cannot overdose.
+- **Topical Ointment:** the treated bandage and treated poultice (patches and grid recipes), the
+  `Patch_HealingItemCures` hook, Skin Irritation clearing, and the drunk satiety backfire.
+- **Creative items:** vials and buckets of every potion liquid.
+- **Debug commands:** `/rrPotion list` (doses, hours remaining, OVERDOSED, derived effect lines),
+  `/rrPotion <cluster> [tier] [doses]` (drinks through the real pipeline), `/rrPotion clear`,
+  `/rrStomach`, `/rrChestCold`.
+
+Still open: the Skull-Strain/Bell headache visual does not read `MindScale` (Plan 19); the lack-of-sleep
+Hallucination trigger does not exist in code (Plan 19); the Antidote does not clear remedy doses; the
+Creative-menu Cure-All potion and the handbook pages are Plan 20; the client's hand state after a
+vomit interrupt and teleporting while held in bed by a Sedative overdose are untreated edge cases.
 
 ### A6. Antidote — PARTIAL, with one likely bug
 
@@ -111,11 +117,14 @@ tolerance credit," no month-of-no-exposure decay. `EffectThreadManager.OnNatural
 `PLACEHOLDER` comment correctly noting tolerance should be awarded there (and never from
 `OnForcedEnd`) — the design intent is recorded, nothing is built.
 
-### A9. Remedy overdose (Part 2 §5-6) — NOT STARTED
+### A9. Remedy overdose (Part 2 §5-6) — BUILT (Plan 16), awaiting in-game verification
 
-Remedy overdose is a second dose of the same potion inside the 8-hour dose window, not a counter.
-The window tracking, the generic-container overdose and the per-remedy-potion overdose dispatch do
-not exist yet. The decaying toxicity counter in `EntityBehaviorRemedyEffects` is not used by remedies.
+Remedy overdose is a second dose of the same potion inside the 8-hour dose window (the Sedative's is
+9), not a counter; a single 1 L gulp (four 0.25 L doses) overdoses in one event, and the overdosed
+flag lives on the dose record. Each potion has its own overdose effect, dispatched from
+`ApplyEffect`: Tonic cannot overdose and instead restarts its window. The decaying toxicity counter
+in `EntityBehaviorRemedyEffects` is not used by remedies. `/rrPotion` applies and inspects doses for
+testing.
 
 ### A10. Stacking (Part 3) — RESOLVED, no build needed
 
@@ -522,17 +531,15 @@ in scope per D1/D11, so order here is about what unblocks what, not what matters
     headache cure are hooks left for Plan 16; the headache's visual and stat effect is wired in
     the final wiring plan.
 16. **The 8 remedy-potion effects** (Analgesic, Antinausea, Antiseptic, Antiviral, Mind Tonic,
-    Sedative, Tonic, Topical Ointment) — one plan per D4's "always max/immediate" simplification.
-    Antiseptic's topical half (antiseptic bandage and poultice) is already done, and so is Discolored
-    Meat (the items, drops, curing, and eating detection with its toxin accumulator), whose
-    food-poisoning consequence is a stub waiting on the Upset Stomach illness. Cure targets exist
-    for Antiseptic, Antiviral, Topical Ointment, Sedative and Tonic. Still to build: the drink effects
-    themselves; Topical Ointment's delivery (a treated bandage and a treated poultice, plus the
-    drink effect); the Upset Stomach condition that Antinausea mitigates, with food poisoning and the
-    spoiled-food roll; a halve/clear layer for Analgesic's pain penalties and its hold on Chest Cold
-    advancement; and a halve/clear layer for Mind Tonic over Temporal Fog, Hallucination and the
-    headache visual, plus its outright cure of Mind Poison; plus the 8-hour overdose rule and the
-    per-potion overdose effects.
+    Sedative, Tonic, Topical Ointment) — BUILT (Plan 16, all nine tasks implemented, awaiting
+    in-game verification). The eight drink effects, the 8-hour dose window (Sedative 9 hours) and
+    the per-potion overdose, the Upset Stomach condition with food poisoning, the spoiled-food roll
+    and Antinausea's mitigation, Topical Ointment's treated bandage and poultice, creative vials and
+    buckets of every potion liquid, and the `/rrPotion`, `/rrStomach` and `/rrChestCold` debug
+    commands are live. Still open: the headache visual reading Mind Tonic's scale and the
+    lack-of-sleep Hallucination trigger (both Plan 19), the Antidote clearing remedy doses, the
+    Creative-tab Cure-All potion and handbook pages (Plan 20), the client hand state after a vomit
+    interrupt, and teleporting while held in bed.
 17. **Renewable Cultivation (Part 5)** — its own large plan, fully independent of the poison/remedy
     systems.
 18. **"R&R Ongoing Effects" UI tab** — standalone once there's real effect data to display.

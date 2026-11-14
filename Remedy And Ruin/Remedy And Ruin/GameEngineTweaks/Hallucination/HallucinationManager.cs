@@ -5,6 +5,7 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.MathTools;
 using Remedy_And_Ruin.RRBehaviors;
+using Remedy_And_Ruin.GameEngineTweaks;
 
 namespace Remedy_And_Ruin.GameEngineTweaks.Hallucination
 {
@@ -18,7 +19,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks.Hallucination
     /// (the .rrbrainrot debug command's manual sample) and MindPoisonServerSeverity (the real,
     /// tolerance-discounted severity a live MINDPOISON exposure drives via
     /// EntityBehaviorRemedyEffects.StartMindPoisonSeverityContribution's synced bridge) - either
-    /// source can trigger spawns independently. No rolling at all while severity is 0; which
+    /// source can trigger spawns independently, as can a Mind Tonic overdose's Hallucination episode
+    /// (PotionEffects.HallucinationEpisodeSeverity). No rolling at all while severity is 0; which
     /// families are eligible scales with severity per the design doc's three windows (see
     /// PickFamilyForSeverity).
     ///
@@ -87,9 +89,15 @@ namespace Remedy_And_Ruin.GameEngineTweaks.Hallucination
                 return;
             }
 
-            if (active.Count < MaxConcurrent)
+            // Mind Tonic: the roll countdown advances at mindScale times real speed (a regular dose
+            // doubles the interval, Concentrated stops it) and the concurrent cap is
+            // floor(MaxConcurrent * mindScale), at least 1 while any spawning is possible.
+            // Apparitions already alive finish their lifetime.
+            float mindScale = PotionEffects.MindScale(capi.World.Player.Entity);
+            int maxConcurrent = mindScale >= 1f ? MaxConcurrent : Math.Max(1, (int)Math.Floor(MaxConcurrent * mindScale));
+            if (mindScale > 0f && active.Count < maxConcurrent)
             {
-                secondsToNextRoll -= deltaTime;
+                secondsToNextRoll -= deltaTime * mindScale;
                 if (secondsToNextRoll <= 0f)
                 {
                     RollNextInterval();

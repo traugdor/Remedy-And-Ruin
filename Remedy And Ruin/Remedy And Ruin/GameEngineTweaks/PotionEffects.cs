@@ -117,6 +117,112 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return ActivePotionLevel(entity, EntityBehaviorRemedyEffects.EffectCluster.ANALGESIC) != PotionLevel.None;
         }
 
+        /// <summary>Server-written calendar hour (TotalHours) at which a drunk Topical Ointment's satiety cut ends.</summary>
+        public const string TopicalSatietyCutEndKey = "remedyandruinTopicalSatietyCutEndHours";
+
+        /// <summary>In-game hours a drunk Topical Ointment cuts incoming satiety; independent of the dose window.</summary>
+        public const double TopicalSatietyCutHours = 2.0;
+
+        /// <summary>Factor on incoming satiety during a drunk Topical Ointment's cut.</summary>
+        public const float TopicalSatietyFactor = 0.75f;
+
+        /// <summary>Factor on incoming satiety while the Topical Ointment is overdosed; replaces the drunk factor.</summary>
+        public const float TopicalOverdoseSatietyFactor = 0.5f;
+
+        /// <summary>
+        /// Multiplier on incoming satiety from Topical Ointment: 0.5 while an overdosed dose record
+        /// is unexpired (until its 8-hour window ends), otherwise 0.75 until the drunk cut's own end
+        /// hour passes, otherwise 1. Derived from the calendar on every call.
+        /// </summary>
+        public static float TopicalSatietyMultiplier(Entity entity)
+        {
+            if (IsOverdosed(entity, EntityBehaviorRemedyEffects.EffectCluster.TOPICALOINTMENT))
+            {
+                return TopicalOverdoseSatietyFactor;
+            }
+
+            var attrs = entity?.WatchedAttributes;
+            if (attrs != null && attrs.HasAttribute(TopicalSatietyCutEndKey)
+                && entity.World.Calendar.TotalHours < attrs.GetDouble(TopicalSatietyCutEndKey))
+            {
+                return TopicalSatietyFactor;
+            }
+            return 1f;
+        }
+
+        /// <summary>Factor on mental-fog strengths while a regular Mind Tonic dose is active.</summary>
+        public const float MindTonicRegularFactor = 0.5f;
+
+        /// <summary>
+        /// Multiplier for every mental-fog condition a Mind Tonic lessens (Temporal Fog, Hallucination,
+        /// Mind Poison's fog, wobble and apparitions, and the Skull-Strain headache visual): 1 with no
+        /// unexpired Mind Tonic dose, 0.5 with a regular dose, 0 with a Concentrated dose. Derived
+        /// from the dose records on every call, so it is correct on the server and on the client (the
+        /// records are synced WatchedAttributes) and returns to exactly 1 when the dose window ends
+        /// or the entity dies.
+        /// </summary>
+        public static float MindScale(Entity entity)
+        {
+            switch (ActivePotionLevel(entity, EntityBehaviorRemedyEffects.EffectCluster.MINDTONIC))
+            {
+                case PotionLevel.Regular: return MindTonicRegularFactor;
+                case PotionLevel.Concentrated: return 0f;
+                default: return 1f;
+            }
+        }
+
+        /// <summary>Strength (0-1) of the camera sway a regular Sedative dose causes; constant for the whole window.</summary>
+        public const float GroggyWobbleStrength = 0.2f;
+
+        /// <summary>
+        /// True while a regular (not Concentrated) Sedative dose is unexpired: the player is groggy
+        /// from the drink until the dose window ends, awake or asleep. Derived from the dose records
+        /// on every call, so it is correct on the client and ends exactly with the window or death.
+        /// </summary>
+        public static bool IsGroggy(Entity entity)
+        {
+            return ActivePotionLevel(entity, EntityBehaviorRemedyEffects.EffectCluster.SEDATIVE) == PotionLevel.Regular;
+        }
+
+        /// <summary>Camera-sway strength (0-1) from grogginess; 0 when not groggy.</summary>
+        public static float GroggyStrength(Entity entity)
+        {
+            return IsGroggy(entity) ? GroggyWobbleStrength : 0f;
+        }
+
+        /// <summary>Server-written calendar hour (TotalHours) at which a Mind Tonic overdose's Hallucination is due; absent when none is pending.</summary>
+        public const string PendingHallucinationKey = "remedyandruinPendingHallucinationHours";
+
+        /// <summary>Server-written severity (0-1) of the running overdose Hallucination episode.</summary>
+        public const string HallucinationEpisodeSeverityKey = "remedyandruinHallucinationEpisodeSeverity";
+
+        /// <summary>Server-written calendar hour (TotalHours) at which the running overdose Hallucination episode ends.</summary>
+        public const string HallucinationEpisodeEndKey = "remedyandruinHallucinationEpisodeEndHours";
+
+        /// <summary>In-game hours a Mind Tonic overdose Hallucination lasts.</summary>
+        public const double HallucinationEpisodeHours = 1.0;
+
+        /// <summary>The calendar hour an overdose Hallucination is pending for, or null when none is.</summary>
+        public static double? PendingHallucinationHours(Entity entity)
+        {
+            var attrs = entity?.WatchedAttributes;
+            if (attrs == null || !attrs.HasAttribute(PendingHallucinationKey)) return null;
+            return attrs.GetDouble(PendingHallucinationKey);
+        }
+
+        /// <summary>
+        /// Severity (0-1) of the running overdose Hallucination episode, or 0 once its end hour has
+        /// passed. Readable on the client, which feeds it to the Hallucination manager.
+        /// </summary>
+        public static float HallucinationEpisodeSeverity(Entity entity)
+        {
+            var attrs = entity?.WatchedAttributes;
+            if (attrs == null || !attrs.HasAttribute(HallucinationEpisodeEndKey)) return 0f;
+            return entity.World.Calendar.TotalHours < attrs.GetDouble(HallucinationEpisodeEndKey)
+                ? attrs.GetFloat(HallucinationEpisodeSeverityKey)
+                : 0f;
+        }
+
         /// <summary>A potion item whose effectMultiplier is at least this is the Concentrated tier.</summary>
         public const float ConcentratedEffectMultiplier = 2.0f;
 

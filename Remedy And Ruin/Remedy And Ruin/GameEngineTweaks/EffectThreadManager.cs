@@ -1189,14 +1189,21 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 
         /// <summary>
         /// Force-ends every poison and illness timer. Potion timers are left running unless
-        /// includePotions is set (death), because the Antidote cure clears poisons only.
+        /// includePotions is set (death), because the Antidote cure clears poisons only. When
+        /// poisonCluster is given, only the poison timers of that cluster are ended (no illnesses,
+        /// no potions, no other poisons); each ends without tolerance credit. When potionsOnly is
+        /// set, only potion timers are ended and poisons and illnesses are left running.
         /// </summary>
-        public bool HandleForcefulEnd(bool includePotions = false)
+        public bool HandleForcefulEnd(bool includePotions = false, string poisonCluster = null, bool potionsOnly = false)
         {
             lock (forcedEndLock)
             {
                 List<EffectTimerThread> snapshot = threads.Values
-                    .Where(t => t.Bucket == EffectBucket.Poison || t.Bucket == EffectBucket.Illness || (includePotions && t.Bucket == EffectBucket.Potion))
+                    .Where(t => potionsOnly
+                        ? t.Bucket == EffectBucket.Potion
+                        : poisonCluster != null
+                            ? t.Bucket == EffectBucket.Poison && t.Cluster == poisonCluster
+                            : t.Bucket == EffectBucket.Poison || t.Bucket == EffectBucket.Illness || (includePotions && t.Bucket == EffectBucket.Potion))
                     .ToList();
                 if (snapshot.Count == 0) return true;
 

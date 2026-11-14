@@ -11,7 +11,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
     /// (EntityBehaviorPlayerConditions.StaunchBleeding), regardless of which item was used. A
     /// bandage/poultice made with Antiseptic (or Concentrated Antiseptic) additionally cures Wound
     /// Infection - identified by the item's code containing "antiseptic", matching this plan's own
-    /// bandage-antiseptic/poultice-*-antiseptic variants.
+    /// bandage-antiseptic/poultice-*-antiseptic variants. One made with Topical Ointment
+    /// (bandage-treated, poultice-*-treated; "treated" as a whole dash-separated code segment)
+    /// cures Skin Irritation.
     ///
     /// OnHeldInteractStop only actually heals and consumes the item (slot.TakeOut(1)) once
     /// secondsUsed reaches the item's own application time - a protected, non-static check this
@@ -64,6 +66,18 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
                 bool concentrated = __state.ItemCode.Contains("concentrated"); // matches this mod's own naming for Concentrated-tier items elsewhere
                 conditions.CureWoundInfection((EntityAgent)target, concentrated);
             }
+
+            if (IsTreated(__state.ItemCode) && conditions != null)
+            {
+                conditions.ClearSkinIrritation((EntityAgent)target);
+            }
+        }
+
+        // True when "treated" is one of the item code's dash-separated segments (bandage-treated,
+        // poultice-linen-treated, poultice-reed-treated).
+        private static bool IsTreated(string itemCode)
+        {
+            return System.Array.IndexOf(itemCode.Split('-'), "treated") >= 0;
         }
 
         private static Entity ResolveTargetEntity(CollectibleBehaviorHealingItem instance, ItemSlot slot, EntityAgent byEntity, EntitySelection entitySel)
