@@ -1,0 +1,75 @@
+[
+	{
+		"op": "add",
+		"file": "game:blocktypes/glass/full-colored.json",
+		"path": "/combustiblePropsByType",
+		"value": {
+			"glass-green": {
+				"meltingPoint": 1100,
+				"meltingDuration": 30,
+				"smeltedRatio": 2,
+				"smeltedStack": { "type": "block", "code": "glass-green" }
+			},
+			"glass-blue": {
+				"meltingPoint": 1100,
+				"meltingDuration": 30,
+				"smeltedRatio": 2,
+				"smeltedStack": { "type": "block", "code": "glass-blue" }
+			},
+			"glass-violet": {
+				"meltingPoint": 1100,
+				"meltingDuration": 30,
+				"smeltedRatio": 2,
+				"smeltedStack": { "type": "block", "code": "glass-violet" }
+			},
+			"glass-red": {
+				"meltingPoint": 1100,
+				"meltingDuration": 30,
+				"smeltedRatio": 2,
+				"smeltedStack": { "type": "block", "code": "glass-red" }
+			},
+			"glass-yellow": {
+				"meltingPoint": 1100,
+				"meltingDuration": 30,
+				"smeltedRatio": 2,
+				"smeltedStack": { "type": "block", "code": "glass-yellow" }
+			},
+			"glass-brown": {
+				"meltingPoint": 1100,
+				"meltingDuration": 30,
+				"smeltedRatio": 2,
+				"smeltedStack": { "type": "block", "code": "glass-brown" }
+			},
+			"glass-vintage": {
+				"meltingPoint": 1100,
+				"meltingDuration": 30,
+				"smeltedRatio": 2,
+				"smeltedStack": { "type": "block", "code": "glass-vintage" }
+			},
+			"glass-smoky": {
+				"meltingPoint": 1100,
+				"meltingDuration": 30,
+				"smeltedRatio": 2,
+				"smeltedStack": { "type": "block", "code": "glass-smoky" }
+			},
+			"glass-pink": {
+				"meltingPoint": 1100,
+				"meltingDuration": 30,
+				"smeltedRatio": 2,
+				"smeltedStack": { "type": "block", "code": "glass-pink" }
+			}
+		}
+	},
+	{
+		"op": "add",
+		"file": "game:blocktypes/glass/full-colored.json",
+		"path": "/storageFlags",
+		"value": 5
+	},
+	{
+		"op": "add",
+		"file": "game:blocktypes/glass/full-colored.json",
+		"path": "/size",
+		"value": { "width": 0.0625, "height": 0.0625, "length": 0.0625 }
+	}
+]
