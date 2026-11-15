@@ -123,28 +123,32 @@ namespace Remedy_And_Ruin.RRBehaviors
             }
         }
 
-        // Toxic Poison's thread lifetime once its full phase starts (after the onset window):
-        // if the tolerance-discounted effect crosses 15% of this exposure's own undiscounted
-        // magnitude (02-design-overview.md ~752-761), the DoT itself never ends on its own, so
-        // the owning EffectTimerThread's own EndTotalHours has to outlive it too, or the thread's
-        // normal end-of-duration poll would tear the "permanent" DoT down almost immediately.
-        // 1000 in-game days matches EffectThreadManager's own "effectively forever" reasoning for
-        // the DoT's real-world TimeSpan, just expressed in the calendar hours this field is
-        // measured in.
-        // Below the threshold, the exposure has no DoT at all and genuinely fades on its own -
-        // 24h is this plan's own baseline for a poison with no stated fade-out duration.
-        private const double ToxicInfiniteThreadLifetimeHours = 1000.0 * 24.0;
+        // Toxic Poison strength is measured in vial charges: 1.0 is one charge of regular Liverbane,
+        // which deals ToxicDoTPerSecondPerStrength HP/s. A Toxic exposure with any strength left
+        // after tolerance runs its DoT for ToxicDoTRealSeconds after onset, then ends naturally,
+        // which is what awards tolerance credit. With none left there is no DoT and the healing
+        // dip fades after ToxicBelowThresholdFadeHours.
+        internal const float ToxicDoTPerSecondPerStrength = 1.5f;
+        internal const float ToxicStrengthPerToleranceTier = 1.0f;
+        internal const double ToxicDoTRealSeconds = 10.0;
         private const double ToxicBelowThresholdFadeHours = 24.0;
 
-        // Mirrors EffectThreadManager's own threshold check (DetermineFullDoTEffect) so this
-        // exposure's thread lifetime can be decided at the moment it's created, before dispatch
-        // ever runs - both sides read the same toxicTolerance value and apply the same formula,
-        // so they can never disagree about whether this exposure crosses.
-        private bool ToxicCrossesDoTThreshold(float effectMultiplier)
+        // Thread lifetime in game hours, measured from the moment the exposure starts, so it
+        // spans the onset window plus the DoT's own duration.
+        private double ToxicCrossingThreadLifetimeHours(float onsetMultiplier)
         {
-            float discount = (float)(toxicTolerance / 3) / 9.0f;
-            float discounted = Math.Max(0f, effectMultiplier - discount);
-            return discounted >= 0.15f * effectMultiplier;
+            double onsetHours = GameEngineTweaks.EffectThreadManager.ToxicOnsetHours(onsetMultiplier);
+            return onsetHours + GameEngineTweaks.CalendarTimeHelper.RealSecondsToGameHours(entity.World.Calendar, ToxicDoTRealSeconds);
+        }
+
+        // Mirrors EffectThreadManager's own check (DetermineFullDoTEffect) so this exposure's
+        // thread lifetime can be decided at the moment it's created, before dispatch ever runs -
+        // both sides read the same toxicTolerance value and apply the same formula, so they can
+        // never disagree about whether this exposure has a DoT.
+        private bool ToxicHasDoT(float effectMultiplier)
+        {
+            float discounted = Math.Max(0f, effectMultiplier - (toxicTolerance / 3) * ToxicStrengthPerToleranceTier);
+            return discounted > 0f;
         }
 
         // Noxious Poison's baseline full-phase duration at effectMultiplier 1.0 and 0 tolerance
@@ -733,7 +737,7 @@ namespace Remedy_And_Ruin.RRBehaviors
 
         //============== EVENT HANDLERS ==============//
 
-        public void OnItemConsumed(ItemStack consumedStack, JsonObject effectData, float potencyScale = 1.0f, int doseCount = 1)
+        public void OnItemConsumed(ItemStack consumedStack, JsonObject effectData, float potencyScale = 1.0f, int doseCount = 1, bool fromVial = false)
         {
             // Convert effectData.cluster to uppercase for consistency and fill in defaults/parse data
             EffectStruct effect = new EffectStruct(effectData["cluster"].AsString().ToUpper().ToEnum<EffectCluster>());
@@ -744,7 +748,11 @@ namespace Remedy_And_Ruin.RRBehaviors
             if (effectData.KeyExists("effectMultiplier"))
             {
                 // Vial charge scaling applies to poisons only; a remedy's effectMultiplier is its tier.
-                float scale = PotionEffects.IsRemedyCluster(effect.cluster) ? 1.0f : potencyScale;
+                // Toxic strength is counted in charges: a vial contributes its charge count (9 times
+                // potencyScale), anything else (a mushroom, a bucket) contributes its listed value as-is.
+                float scale = PotionEffects.IsRemedyCluster(effect.cluster) ? 1.0f
+                    : effect.cluster == EffectCluster.TOXICPOISON ? (fromVial ? potencyScale * 9f : 1.0f)
+                    : potencyScale;
                 effect.effectMultiplier = effectData["effectMultiplier"].AsFloat() * scale;
             }
             if (effectData.KeyExists("onsetMultiplier"))
@@ -863,13 +871,13 @@ namespace Remedy_And_Ruin.RRBehaviors
                      *     - used to indicate liverbane aka liver failure
                      *     - calculate effect by subtracting from effect multiplier the tolerance value calculated by (float)(toxicTolerance / 3) / 9.0f
                      *     - apply healingeffectiveness reduction for a certain amount of time
-                     *     - once timer expires, add DoT effect if effect > 0.15; DoT never expires
+                     *     - once onset completes, add a 10 real-second DoT if any effect is left after tolerance; its natural end awards tolerance
                      *     - if effect < 0.15, do not apply DoT and remove healingeffectiveness reduction
                      *     - surviving this awards 1/27 of progression towards toxicTolerance.
                      */
                     poison = true;
-                    effect.timeleft = ToxicCrossesDoTThreshold(effect.effectMultiplier)
-                        ? ToxicInfiniteThreadLifetimeHours
+                    effect.timeleft = ToxicHasDoT(effect.effectMultiplier)
+                        ? ToxicCrossingThreadLifetimeHours(effect.onsetMultiplier)
                         : ToxicBelowThresholdFadeHours;
                     break;
                 case EffectCluster.NOXIOUSPOISON:

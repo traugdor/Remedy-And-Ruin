@@ -334,8 +334,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // dispatch methods below), and spawns its timer thread. effectMultiplier/onsetMultiplier
         // are the exposure's own raw, undiscounted values - each cluster's Determine* case reads
         // its own tolerance counter off entity's EntityBehaviorRemedyEffects and applies the
-        // (tolerance / 3) / 9.0f discount itself, since the discount math (and, for Toxic Poison,
-        // the 15%-of-undiscounted-magnitude threshold) needs both figures at once.
+        // (tolerance / 3) / 9.0f discount itself (Toxic Poison counts in charges, one per tier),
+        // since the discount math needs both figures at once.
         private void ApplyEffect(EffectBucket bucket, string guid)
         {
             var remedyEffects = entity.GetBehavior<EntityBehaviorRemedyEffects>();
@@ -485,13 +485,12 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return startTotalHours + BaselineOnsetHours(cluster) / Math.Max(effectOnset, MinOnsetMultiplier);
         }
 
-        // Toxic Poison's tolerance-discounted magnitude: (tolerance / 3) is the tier reached
-        // (0-9, integer division), each tier worth 1/9 of effectMult. Floored at 0 - full 9/9
-        // tolerance discounts the whole exposure away regardless of its own magnitude.
+        // Toxic Poison's tolerance-discounted strength in charges: (tolerance / 3) is the tier
+        // reached (0-9, integer division), each tier cancelling one charge. Floored at 0.
         private float ToxicToleranceDiscountedEffect(float effectMult)
         {
             int tolerance = entity.GetBehavior<EntityBehaviorRemedyEffects>()?.toxicTolerance ?? 0;
-            float discount = (float)(tolerance / 3) / 9.0f;
+            float discount = (tolerance / 3) * EntityBehaviorRemedyEffects.ToxicStrengthPerToleranceTier;
             return Math.Max(0f, effectMult - discount);
         }
 
@@ -611,13 +610,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             switch (cluster)
             {
                 case "TOXICPOISON":
-                    // Liver failure only actually triggers once the tolerance-discounted effect
-                    // reaches 15% of this exposure's own undiscounted magnitude - a percentage of
-                    // that exposure's own dose, not of 1.0, so a weak dose and a strong dose cross
-                    // out of DoT range at the same tolerance tier regardless of their raw strength.
-                    if (ToxicToleranceDiscountedEffect(effectMult) >= 0.15f * effectMult)
+                    // Rate scales linearly with the strength left after tolerance; no strength, no DoT.
+                    float toxicStrength = ToxicToleranceDiscountedEffect(effectMult);
+                    if (toxicStrength > 0f)
                     {
-                        return BuildEffectivelyForeverDoT(EnumDamageSource.Internal, EnumDamageType.Poison, damageTier: 0, damagePerSecond: 1.5f);
+                        return BuildTimedDoT(EnumDamageSource.Internal, EnumDamageType.Poison, damageTier: 0, damagePerSecond: EntityBehaviorRemedyEffects.ToxicDoTPerSecondPerStrength * toxicStrength, durationSeconds: Convert.ToInt32(Remedy_And_Ruin.RRBehaviors.EntityBehaviorRemedyEffects.ToxicDoTRealSeconds));
                     }
                     break;
                 case "NOXIOUSPOISON": // deliberately non-lethal - no DoT at any point
@@ -1115,6 +1112,19 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             float damagePerTick = damagePerSecond * EffectivelyForeverTickSeconds;
             float totalDamage = damagePerTick * ticksNumber;
             return new DoTSpec(damageSource, damageType, damageTier, totalDamage, EffectivelyForeverDoTDuration, ticksNumber);
+        }
+
+        // Builds a DoTSpec that ticks once per second at an exact damagePerSecond for
+        // durationSeconds, then ends.
+        internal static DoTSpec BuildTimedDoT(EnumDamageSource damageSource, EnumDamageType damageType, int damageTier, float damagePerSecond, int durationSeconds)
+        {
+            return new DoTSpec(damageSource, damageType, damageTier, damagePerSecond * durationSeconds, TimeSpan.FromSeconds(durationSeconds), durationSeconds);
+        }
+
+        // Hours between a Toxic Poison exposure starting and its full phase beginning.
+        internal static double ToxicOnsetHours(float onsetMultiplier)
+        {
+            return BaselineOnsetHours("TOXICPOISON") / Math.Max(onsetMultiplier, MinOnsetMultiplier);
         }
 
         // Identifies the arrow-delivered secondary Toxic DoT (Patch_ArrowPoisonDelivery) to

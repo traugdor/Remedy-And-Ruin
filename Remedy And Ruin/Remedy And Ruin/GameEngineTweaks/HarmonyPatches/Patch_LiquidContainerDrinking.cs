@@ -92,7 +92,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
                 doseCount = System.Math.Max(1, (int)System.Math.Round(litresDrunk / PotionEffects.LitresPerDose));
             }
 
-            remedyBehavior?.OnItemConsumed(contentBefore, effectData, potencyScale, doseCount);
+            remedyBehavior?.OnItemConsumed(contentBefore, effectData, potencyScale, doseCount, fromVial: __instance is BlockVial);
         }
     }
 }

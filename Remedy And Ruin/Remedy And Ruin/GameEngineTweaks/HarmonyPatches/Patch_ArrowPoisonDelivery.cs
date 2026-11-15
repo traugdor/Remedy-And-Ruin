@@ -41,8 +41,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
         // a fixed amount, not scaled by the arrow's own effectMultiplier.
         private const float ToxicArrowFlatBonusDamage = 1.5f;
 
-        // Half the drink dose's 1.5 HP/sec rate - the design doc asks for "a smaller version" of
-        // the liver-failure DoT without giving an exact fraction.
+        // Half the 1.5 HP/s of one charge of Liverbane; procs stack, each running 10 real seconds.
         private const float ToxicArrowSecondaryDoTPerSecond = 0.75f;
 
         // Within the design doc's suggested 25-35% range for this cluster's secondary-DoT proc.
@@ -165,9 +164,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
             EntityBehaviorHealth health = target.GetBehavior<EntityBehaviorHealth>();
             if (health == null) return;
 
-            DoTSpec spec = EffectThreadManager.BuildEffectivelyForeverDoT(
+            DoTSpec spec = EffectThreadManager.BuildTimedDoT(
                 EnumDamageSource.Internal, EnumDamageType.Poison,
-                EffectThreadManager.ArrowBonusToxicDoTDamageTier, ToxicArrowSecondaryDoTPerSecond);
+                EffectThreadManager.ArrowBonusToxicDoTDamageTier, ToxicArrowSecondaryDoTPerSecond,
+                (int)EntityBehaviorRemedyEffects.ToxicDoTRealSeconds);
             health.ApplyDoTEffect(spec.DamageSource, spec.DamageType, spec.DamageTier, spec.TotalDamage, spec.TotalTime, spec.TicksNumber, EffectThreadManager.ArrowBonusToxicDoTEffectType);
         }
 
