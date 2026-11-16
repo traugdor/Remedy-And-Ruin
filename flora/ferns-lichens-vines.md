@@ -19,7 +19,7 @@ from `assets/game/lang/en.json`. Game version 1.22.7.
 
 | In-game lichen | Block code | Real-world plant | Potential herbal use |
 |---|---|---|---|
-| Old man's beard | `hanginglichen-oldmans-*`, also `lichen-oldmansbeard-up` | *Usnea* spp. | Well-documented traditional antimicrobial (usnic acid) — used historically for urinary/respiratory infections, wound cleaning, and by multiple cultures (Hippocrates, Chinese, Native American traditions) independently |
+| Old man's beard | `hanginglichen-oldmans-*` (the `lichen-oldmansbeard-up` block is disabled, `lichen.json:3`, and does not exist in game) | *Usnea* spp. | Well-documented traditional antimicrobial (usnic acid) — used historically for urinary/respiratory infections, wound cleaning, and by multiple cultures (Hippocrates, Chinese, Native American traditions) independently |
 | Lace lichen | `hanginglichen-lace-*` | Possibly *Ramalina menziesii* — low confidence | No specific traditional-use source found in this pass; visually/functionally similar to old man's beard in-game but a different real genus if this ID is right |
 
 ## Vines

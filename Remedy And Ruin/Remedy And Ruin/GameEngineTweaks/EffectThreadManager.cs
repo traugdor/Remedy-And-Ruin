@@ -334,8 +334,8 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // dispatch methods below), and spawns its timer thread. effectMultiplier/onsetMultiplier
         // are the exposure's own raw, undiscounted values - each cluster's Determine* case reads
         // its own tolerance counter off entity's EntityBehaviorRemedyEffects and applies the
-        // (tolerance / 3) / 9.0f discount itself (Toxic Poison counts in charges, one per tier),
-        // since the discount math needs both figures at once.
+        // tolerance discount itself (EntityBehaviorRemedyEffects.StrengthAfterTolerance: strength
+        // in charges, one cancelled per tier), since the discount math needs both figures at once.
         private void ApplyEffect(EffectBucket bucket, string guid)
         {
             var remedyEffects = entity.GetBehavior<EntityBehaviorRemedyEffects>();
@@ -485,42 +485,36 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return startTotalHours + BaselineOnsetHours(cluster) / Math.Max(effectOnset, MinOnsetMultiplier);
         }
 
-        // Toxic Poison's tolerance-discounted strength in charges: (tolerance / 3) is the tier
-        // reached (0-9, integer division), each tier cancelling one charge. Floored at 0.
-        private float ToxicToleranceDiscountedEffect(float effectMult)
-        {
-            int tolerance = entity.GetBehavior<EntityBehaviorRemedyEffects>()?.toxicTolerance ?? 0;
-            float discount = (tolerance / 3) * EntityBehaviorRemedyEffects.ToxicStrengthPerToleranceTier;
-            return Math.Max(0f, effectMult - discount);
-        }
+        // Each cluster's strength in charges after its own tolerance counter's tiers have each
+        // cancelled one charge (EntityBehaviorRemedyEffects.StrengthAfterTolerance), floored at 0.
+        private float ToxicToleranceDiscountedEffect(float effectMult) =>
+            EntityBehaviorRemedyEffects.StrengthAfterTolerance(effectMult, entity.GetBehavior<EntityBehaviorRemedyEffects>()?.toxicTolerance ?? 0);
 
-        // Same tiered discount as ToxicToleranceDiscountedEffect, read against noxiousTolerance -
-        // drives Noxious Poison's fever/tripping/vomit-roll intensity uniformly.
-        private float NoxiousToleranceDiscountedEffect(float effectMult)
-        {
-            int tolerance = entity.GetBehavior<EntityBehaviorRemedyEffects>()?.noxiousTolerance ?? 0;
-            float discount = (float)(tolerance / 3) / 9.0f;
-            return Math.Max(0f, effectMult - discount);
-        }
+        // Drives Noxious Poison's fever/tripping/vomit-roll intensity.
+        private float NoxiousToleranceDiscountedEffect(float effectMult) =>
+            EntityBehaviorRemedyEffects.StrengthAfterTolerance(effectMult, entity.GetBehavior<EntityBehaviorRemedyEffects>()?.noxiousTolerance ?? 0);
 
-        // Same tiered discount as ToxicToleranceDiscountedEffect, read against
-        // neurotoxicTolerance - drives the dizziness sway's own intensity.
-        private float NeurotoxicToleranceDiscountedEffect(float effectMult)
-        {
-            int tolerance = entity.GetBehavior<EntityBehaviorRemedyEffects>()?.neurotoxicTolerance ?? 0;
-            float discount = (float)(tolerance / 3) / 9.0f;
-            return Math.Max(0f, effectMult - discount);
-        }
+        // Drives Cardiac Poison's max-HP hit, stack hits and movement/tool debuffs.
+        private float CardiacToleranceDiscountedEffect(float effectMult) =>
+            EntityBehaviorRemedyEffects.StrengthAfterTolerance(effectMult, entity.GetBehavior<EntityBehaviorRemedyEffects>()?.cardiacTolerance ?? 0);
 
-        // Same tiered discount as ToxicToleranceDiscountedEffect, read against brainrotTolerance -
-        // the one severity value that drives Temporal Fog, the drunken sway, Hallucination's
-        // spawn-family scaling, the psychedelic-trip intensity, and the doubled hunger rate.
-        private float MindPoisonToleranceDiscountedEffect(float effectMult)
-        {
-            int tolerance = entity.GetBehavior<EntityBehaviorRemedyEffects>()?.brainrotTolerance ?? 0;
-            float discount = (float)(tolerance / 3) / 9.0f;
-            return Math.Max(0f, effectMult - discount);
-        }
+        // Drives Neurotoxic Poison's weakness, headache and dizziness intensity.
+        private float NeurotoxicToleranceDiscountedEffect(float effectMult) =>
+            EntityBehaviorRemedyEffects.StrengthAfterTolerance(effectMult, entity.GetBehavior<EntityBehaviorRemedyEffects>()?.neurotoxicTolerance ?? 0);
+
+        // The one severity value that drives Temporal Fog, the drunken sway, Hallucination's
+        // spawn-family scaling, the psychedelic-trip intensity, the move-vomit chance and the
+        // raised hunger rate.
+        private float MindPoisonToleranceDiscountedEffect(float effectMult) =>
+            EntityBehaviorRemedyEffects.StrengthAfterTolerance(effectMult, entity.GetBehavior<EntityBehaviorRemedyEffects>()?.brainrotTolerance ?? 0);
+
+        // Stat penalties scale with strength but never reach a full stop (or reverse the stat).
+        // Walkspeed is additionally limited against every other walkspeed modifier when applied
+        // (see ApplyStatModifiers).
+        private const float MaxStatPenalty = 0.90f;
+
+        private static float CappedPenalty(float penaltyPerStrength, float strength) =>
+            Math.Max(-MaxStatPenalty, penaltyPerStrength * strength);
 
         private static readonly StatModifier[] ToxicHealingDip = { new StatModifier("healingeffectivness", -0.15f) };
 
@@ -586,11 +580,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                     // cluster has no entity.Stats-based component of its own.
                     break;
                 case "CARDIACPOISON":
-                    return CardiacFullStatModifiers;
+                    return CardiacStatModifiers(CardiacToleranceDiscountedEffect(effectMult));
                 case "NEUROTOXICPOISON":
-                    return DetermineNeurotoxicFullStatModifiers(doseNumber, ladderWeight);
+                    return DetermineNeurotoxicFullStatModifiers(doseNumber, ladderWeight, NeurotoxicToleranceDiscountedEffect(effectMult));
                 case "MINDPOISON":
-                    return MindPoisonFullStatModifiers;
+                    return new[] { new StatModifier("hungerrate", MindPoisonHungerRatePerStrength * MindPoisonToleranceDiscountedEffect(effectMult)) };
                 case "ANTIDOTEAFTERMATH":
                     return new StatModifier[]
                     {
@@ -641,11 +635,13 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 case "NOXIOUSPOISON": // fever/tripping/vomiting has no max-health component
                     break;
                 case "CARDIACPOISON":
-                    return DetermineCardiacMaxHealthModifier();
+                    return new MaxHealthModifier(-CardiacFlatHealthHit * CardiacToleranceDiscountedEffect(effectMult));
                 case "NEUROTOXICPOISON":
                     // Only a real dose 3 (a drunk dose, never an arrow's half-weight instance)
                     // carries Cardiac Poison's flat HP hit - see DetermineNeurotoxicFullStatModifiers's
                     // own doc comment for why ladderWeight gates this the same way.
+                    // The hit is the flat per-stack value, not scaled by strength: Neurotoxic's
+                    // escalation comes from the ladder rungs.
                     if (doseNumber >= 3 && ladderWeight >= 1f) return new MaxHealthModifier(-CardiacFlatHealthHit);
                     break;
                 case "MINDPOISON": // deliberately non-lethal - no max-health component
@@ -656,24 +652,36 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return null;
         }
 
-        // Full (9/9) Cardiac tolerance waives the flat HP hit entirely - the one place tolerance
-        // discounts this cluster's magnitude rather than just duration (02-design-overview.md
-        // ~845-852). EntityBehaviorRemedyEffects.ApplyEffect already skips creating a Cardiac
-        // exposure at all once cardiacTolerance reaches 27, so this branch is normally
-        // unreachable; kept as a defensive second check rather than relying on that alone.
-        private MaxHealthModifier? DetermineCardiacMaxHealthModifier()
-        {
-            int cardiacTolerance = entity.GetBehavior<EntityBehaviorRemedyEffects>()?.cardiacTolerance ?? 0;
-            if (cardiacTolerance >= 27) return null;
-            return new MaxHealthModifier(-CardiacFlatHealthHit);
-        }
-
         private void ApplyStatModifiers(EffectTimerThread t)
         {
+            string key = t.Guid.ToString();
             foreach (StatModifier modifier in t.StatModifiers)
             {
-                entity.Stats.Set(modifier.Category, t.Guid.ToString(), modifier.Value, modifier.Persistent);
+                float value = modifier.Value;
+                if (modifier.Category == "walkspeed" && value < 0f)
+                {
+                    // Keep the blended walkspeed at or above the floor the leg penalty uses.
+                    float others = OtherWalkSpeedModifiersSum(key);
+                    value = Math.Max(value, -Math.Max(0f, others - RRBehaviors.EntityBehaviorBrokenBones.MinWalkSpeedFraction));
+                }
+                entity.Stats.Set(modifier.Category, key, value, modifier.Persistent);
             }
+        }
+
+        // Weighted sum of every walkspeed modifier except ownKey's, base value included.
+        private float OtherWalkSpeedModifiersSum(string ownKey)
+        {
+            float sum = 0f;
+            foreach (KeyValuePair<string, EntityFloatStats> entry in entity.Stats)
+            {
+                if (entry.Key != "walkspeed") continue;
+
+                foreach (KeyValuePair<string, EntityStat<float>> modifier in entry.Value.ValuesByKey)
+                {
+                    if (modifier.Key != ownKey) sum += modifier.Value.Value * modifier.Value.Weight;
+                }
+            }
+            return sum;
         }
 
         private void RemoveStatModifiers(EffectTimerThread t)
@@ -763,35 +771,30 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // jitters around this and divides by the discounted multiplier itself.
         private const double NoxiousVomitRollBaseIntervalSeconds = 45.0;
 
-        // Cardiac Poison's flat current/max HP hit - full strength regardless of tolerance below
-        // full (9/9) crossing (02-design-overview.md ~845-852, ~1407). This is also the per-stack
-        // exertion-stacking hit, and Neurotoxic's dose-3 tier (which layers Cardiac Poison's own
-        // package on top of its ladder) reuses this same value and mechanism unmodified.
+        // Cardiac Poison's max-HP hit per point of strength. This is also the base per-stack
+        // exertion-stacking hit (scaled by strength for Cardiac, flat for Neurotoxic's rung 3).
         private const float CardiacFlatHealthHit = 5f;
 
-        // -40% walkspeed, the same value Neurotoxic's own Weakness stage uses - chosen for
-        // consistency across the two clusters' movement debuffs rather than a separately-tuned
-        // number.
+        // Walkspeed penalty per point of strength, the same value Neurotoxic's Weakness uses.
         //
         // miningSpeedMul is the only stat category the engine actually reads for tool-use speed
         // (CollectibleObject.GetMiningSpeed, confirmed against VSDecompile) - it only factors in
         // against Ore/Stone-material blocks in the engine's own default mining-speed calculation,
         // not universally against every tool interaction, since no broader "tool speed" stat
-        // exists to register against. Matches the walkspeed debuff's own magnitude.
-        private static readonly StatModifier[] CardiacFullStatModifiers =
+        // exists to register against. Matches the walkspeed penalty's own magnitude.
+        private const float CardiacStatPenaltyPerStrength = -0.40f;
+
+        private static StatModifier[] CardiacStatModifiers(float strength) => new[]
         {
-            new StatModifier("walkspeed", -0.40f),
-            new StatModifier("miningSpeedMul", -0.40f)
+            new StatModifier("walkspeed", CappedPenalty(CardiacStatPenaltyPerStrength, strength)),
+            new StatModifier("miningSpeedMul", CappedPenalty(CardiacStatPenaltyPerStrength, strength))
         };
 
-        // Doubled hunger rate (02-design-overview.md ~1445-1456) - hungerrate blends additively
-        // onto the engine's own base 1.0 rate, so +1.0 here reads as exactly double.
-        private static readonly StatModifier[] MindPoisonFullStatModifiers = { new StatModifier("hungerrate", 1.0f) };
+        // hungerrate blends additively onto the engine's own base 1.0 rate, so +1.0 per point of
+        // strength reads as exactly double at one charge.
+        private const float MindPoisonHungerRatePerStrength = 1.0f;
 
-        // Neurotoxic's Weakness/Paralysis stages use this bare walkspeed value alone, without
-        // Cardiac's additional miningSpeedMul component - that only enters at dose 3, which reuses
-        // CardiacFullStatModifiers in full instead of adding this on top of it.
-        private static readonly StatModifier NeurotoxicWeaknessWalkspeed = new StatModifier("walkspeed", -0.40f);
+        private const float NeurotoxicWeaknessWalkspeedPerStrength = -0.40f;
 
         // Stand-in for Neurotoxic's "headache" symptom: neither vanilla nor this mod has an
         // existing headache stat to hook into (confirmed by searching both the decompiled source
@@ -799,28 +802,27 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // mechanic, not this). rangedWeaponsAcc is a real, engine-read stat
         // (BaseAimingAccuracy.Update, confirmed against VSDecompile) - a mild aim/concentration
         // penalty stands in for head pain with no dedicated stat of its own.
-        private static readonly StatModifier NeurotoxicHeadacheAccuracy = new StatModifier("rangedWeaponsAcc", -0.15f);
+        private const float NeurotoxicHeadacheAccuracyPerStrength = -0.15f;
 
         /// <summary>
-        /// Neurotoxic's ladder: dose 1 is Weakness alone; dose 2 is a second, independent
-        /// Weakness instance (Paralysis - the two overlapping -40% walkspeed modifiers sum via
-        /// entity.Stats' own additive blending, no separate stat category needed); dose 3 swaps
-        /// in Cardiac Poison's own full package instead of Weakness (reused verbatim, per Task
-        /// 4's own instruction - it already carries its own walkspeed hit). Headache applies
-        /// unconditionally at every stage. An arrow-hit's half-weight instance (ladderWeight < 1)
-        /// always gets bare Weakness regardless of the dose number its cumulative ladder
-        /// progress nominally reaches - only a drunk dose can trigger dose 3's Cardiac package.
+        /// Neurotoxic's ladder: rungs 1 and 2 are Weakness (walkspeed penalty scaled by
+        /// strength); rung 3 swaps in Cardiac Poison's stat package. Headache applies at every
+        /// rung. An arrow-hit's half-weight instance (ladderWeight below 1) always gets bare
+        /// Weakness regardless of rung - only a drunk dose can trigger rung 3's Cardiac package.
         /// </summary>
-        private IReadOnlyList<StatModifier> DetermineNeurotoxicFullStatModifiers(int doseNumber, float ladderWeight)
+        private IReadOnlyList<StatModifier> DetermineNeurotoxicFullStatModifiers(int doseNumber, float ladderWeight, float strength)
         {
-            var modifiers = new List<StatModifier> { NeurotoxicHeadacheAccuracy };
+            var modifiers = new List<StatModifier>
+            {
+                new StatModifier("rangedWeaponsAcc", CappedPenalty(NeurotoxicHeadacheAccuracyPerStrength, strength))
+            };
             if (ladderWeight >= 1f && doseNumber >= 3)
             {
-                modifiers.AddRange(CardiacFullStatModifiers);
+                modifiers.AddRange(CardiacStatModifiers(strength));
             }
             else
             {
-                modifiers.Add(NeurotoxicWeaknessWalkspeed);
+                modifiers.Add(new StatModifier("walkspeed", CappedPenalty(NeurotoxicWeaknessWalkspeedPerStrength, strength)));
             }
             return modifiers;
         }
@@ -906,6 +908,9 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             if (!(entity is EntityAgent agent)) return 0L;
 
             double exertingSeconds = 0.0;
+            float stackHit = t.Cluster == "CARDIACPOISON"
+                ? CardiacFlatHealthHit * CardiacToleranceDiscountedEffect(t.EffectMult)
+                : CardiacFlatHealthHit;
 
             return entity.World.RegisterGameTickListener(dt =>
             {
@@ -926,13 +931,13 @@ namespace Remedy_And_Ruin.GameEngineTweaks
                 var health = entity.GetBehavior<EntityBehaviorHealth>();
                 if (health == null) return;
 
-                health.SetMaxHealthModifiers(t.Guid + "-stack" + stackCount, -CardiacFlatHealthHit);
+                health.SetMaxHealthModifiers(t.Guid + "-stack" + stackCount, -stackHit);
                 entity.ReceiveDamage(new DamageSource
                 {
                     Source = EnumDamageSource.Internal,
                     Type = EnumDamageType.Poison,
                     IgnoreInvFrames = true
-                }, CardiacFlatHealthHit);
+                }, stackHit);
             }, 1000);
         }
 
@@ -1005,9 +1010,10 @@ namespace Remedy_And_Ruin.GameEngineTweaks
         // way Noxious's own psychedelic hold does.
         private const float MindPoisonPsychedelicIntensityAtFullStrength = 2.0f;
 
-        // Within the design doc's own stated 15-25% range for this cluster's move-triggered
-        // vomiting (02-design-overview.md ~1445-1456).
-        private const float MindPoisonMoveVomitChance = 0.20f;
+        // Move-triggered vomit chance per point of strength, capped so some movement attempts
+        // always get through.
+        private const float MindPoisonMoveVomitChancePerStrength = 0.20f;
+        private const float MindPoisonMoveVomitChanceMax = 0.90f;
 
         // How often the move-vomit watcher polls EntityControls.TriesToMove for a fresh
         // rising edge - fast enough that a brief tap of a movement key is never missed between
@@ -1037,20 +1043,21 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             long psychedelicListener = remedyEffects.StartPsychedelicHold(t.Guid, MindPoisonPsychedelicIntensityAtFullStrength * discounted);
             if (psychedelicListener != 0L) listeners.Add(psychedelicListener);
 
-            long vomitListener = StartMindPoisonMoveVomitWatcher(remedyEffects);
+            float moveVomitChance = Math.Min(MindPoisonMoveVomitChanceMax, MindPoisonMoveVomitChancePerStrength * discounted);
+            long vomitListener = StartMindPoisonMoveVomitWatcher(remedyEffects, moveVomitChance);
             if (vomitListener != 0L) listeners.Add(vomitListener);
 
             return listeners;
         }
 
         /// <summary>
-        /// Rolls MindPoisonMoveVomitChance once per genuine movement attempt rather than
+        /// Rolls moveVomitChance once per genuine movement attempt rather than
         /// continuously while a movement key is held - EntityControls.TriesToMove (confirmed real
         /// against VSDecompile: true whenever Forward/Backward/Left/Right is held, deliberately
         /// excluding Jump) is polled for a false-to-true rising edge, so holding a key down for
         /// several seconds counts as one attempt, not dozens.
         /// </summary>
-        private long StartMindPoisonMoveVomitWatcher(EntityBehaviorRemedyEffects remedyEffects)
+        private long StartMindPoisonMoveVomitWatcher(EntityBehaviorRemedyEffects remedyEffects, float moveVomitChance)
         {
             if (!(entity is EntityAgent agent)) return 0L;
 
@@ -1060,7 +1067,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             return entity.World.RegisterGameTickListener(dt =>
             {
                 bool triesToMove = agent.Controls.TriesToMove;
-                if (triesToMove && !wasMoving && rand.NextDouble() < MindPoisonMoveVomitChance)
+                if (triesToMove && !wasMoving && rand.NextDouble() < moveVomitChance)
                 {
                     remedyEffects.TriggerVomit();
                 }

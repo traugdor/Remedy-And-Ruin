@@ -26,7 +26,7 @@ display names from `assets/game/lang/en.json`. Game version 1.22.7.
 | Mugwort | `flower-mugwort-*` | *Artemisia vulgaris* | Well-known herb for dream work/moxibustion, digestive bitter, traditional emmenagogue |
 | Lupine (blue/orange/purple/red/white) | `flower-lupine-{color}-*` | *Lupinus* spp. | Some species used as processed food bean after debittering; many wild lupines contain toxic alkaloids — **caution** |
 | Rafflesia (brown/red) | `flower-rafflesia-{brown/red}` | *Rafflesia* spp. | Southeast Asian folk postpartum tonic — purify womb, aid recovery after birth, boost vitality; no pharmacological studies confirm efficacy |
-| Water lily | `block-waterlily` | *Nymphaea* spp. | Traditional mild sedative/astringent, used in folk traditions for sleep and reproductive complaints |
+| Water lily | `waterlily` | *Nymphaea* spp. | Traditional mild sedative/astringent, used in folk traditions for sleep and reproductive complaints |
 | Small/medium croton | `flower-croton-*` | *Codiaeum variegatum* (ornamental foliage plant) | Decorative croton, **not** the medicinal *Croton* genus (e.g. dragon's blood) — no herbal use found |
 
 ## Notes

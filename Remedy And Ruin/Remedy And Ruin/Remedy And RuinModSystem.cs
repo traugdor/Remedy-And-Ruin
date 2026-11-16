@@ -71,6 +71,7 @@ namespace Remedy_And_Ruin
             api.World.Config.SetBool("RemedyAndRuin.concussionWobbleEnabled", Config.concussionWobbleEnabled);
             api.World.Config.SetBool(ConfigServer.AllowBowWorldKey, Config.allowBowWithUnsplintedBrokenArm);
             api.World.Config.SetFloat(ConfigServer.BowPenaltyWorldKey, Config.brokenArmBowPenaltyPercent);
+            api.World.Config.SetBool(ConfigServer.ImmobilizeBrokenLegWorldKey, Config.immobilizeOnUnsplintedBrokenLeg);
         }
 
         public override void StartServerSide(ICoreServerAPI api)

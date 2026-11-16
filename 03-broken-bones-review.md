@@ -126,19 +126,18 @@ genuinely massive hit can skip tiers entirely, straight to Crush.
 
 Sample numbers — not yet reviewed.
 
-- Based on ~1.5 months to heal a broken bone in reality.
 - Expressed in the game's own month length (scales automatically with server settings, not a
   fixed day count).
 
 | Tier | Duration (splinted) |
 |---|---|
-| Strain | 0.75 months (half baseline) |
-| Fracture / Break | 1.5 months (baseline) |
-| Crush | 2.25 months (baseline +50%) |
+| Strain | 0.25 months |
+| Fracture / Break | 0.75 months |
+| Crush | 2.25 months |
 | Unsplinted (any tier) | Never heals |
 
 **Recovery**:
 - Flat countdown at full severity; clears entirely at zero. No stepping back down through tiers
   on the way.
 - A fresh hit mid-heal rolls against the escalation table: success resets the countdown to the
-  new tier's duration; a failed roll still docks 10% of the current tier's duration.
+  new tier's duration; a failed roll never changes the countdown.

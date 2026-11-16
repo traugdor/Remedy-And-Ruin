@@ -123,13 +123,20 @@ namespace Remedy_And_Ruin.RRBehaviors
             }
         }
 
-        // Toxic Poison strength is measured in vial charges: 1.0 is one charge of regular Liverbane,
-        // which deals ToxicDoTPerSecondPerStrength HP/s. A Toxic exposure with any strength left
-        // after tolerance runs its DoT for ToxicDoTRealSeconds after onset, then ends naturally,
-        // which is what awards tolerance credit. With none left there is no DoT and the healing
-        // dip fades after ToxicBelowThresholdFadeHours.
+        // Every poison's strength is measured in vial charges: 1.0 is one charge of the regular
+        // potion, and each tolerance tier (tolerance / 3, 0-9) cancels PoisonStrengthPerToleranceTier
+        // of it. Strength scales a cluster's intensity only; durations are fixed per cluster.
+        //
+        // For Toxic Poison, 1.0 deals ToxicDoTPerSecondPerStrength HP/s. An exposure with any
+        // strength left after tolerance runs its DoT for ToxicDoTRealSeconds after onset, then ends
+        // naturally, which is what awards tolerance credit. With none left there is no DoT and the
+        // healing dip fades after ToxicBelowThresholdFadeHours.
         internal const float ToxicDoTPerSecondPerStrength = 1.5f;
-        internal const float ToxicStrengthPerToleranceTier = 1.0f;
+        internal const float PoisonStrengthPerToleranceTier = 1.0f;
+
+        /// <summary>Strength left after the given tolerance counter's tiers have each cancelled one charge; never negative.</summary>
+        internal static float StrengthAfterTolerance(float strength, int tolerance) =>
+            Math.Max(0f, strength - (tolerance / 3) * PoisonStrengthPerToleranceTier);
         internal const double ToxicDoTRealSeconds = 10.0;
         private const double ToxicBelowThresholdFadeHours = 24.0;
 
@@ -147,35 +154,13 @@ namespace Remedy_And_Ruin.RRBehaviors
         // never disagree about whether this exposure has a DoT.
         private bool ToxicHasDoT(float effectMultiplier)
         {
-            float discounted = Math.Max(0f, effectMultiplier - (toxicTolerance / 3) * ToxicStrengthPerToleranceTier);
-            return discounted > 0f;
+            return StrengthAfterTolerance(effectMultiplier, toxicTolerance) > 0f;
         }
 
-        // Noxious Poison's baseline full-phase duration at effectMultiplier 1.0 and 0 tolerance
-        // (02-design-overview.md ~1406) - a flat 24h window, no DoT, ends via Antidote or death.
+        // Fixed full-phase durations for Noxious, Cardiac and Mind Poison: any exposure with
+        // strength left after tolerance lasts this long, regardless of how strong it is.
         private const double NoxiousBaselineDurationHours = 24.0;
-
-        private double NoxiousDurationToleranceMultiplier()
-        {
-            int tier = noxiousTolerance / 3;
-            return Math.Max(0.0, 1.0 - tier / 9.0);
-        }
-
-        // Cardiac Poison's baseline full-phase duration at effectMultiplier 1.0 and 0 tolerance
-        // (02-design-overview.md ~1418-1429), before the tolerance-discounted duration factor
-        // below scales it down.
         private const double CardiacBaselineDurationHours = 6.0;
-
-        // Same tiered 1/9-per-reached-tolerance-tier discount every cluster uses, applied to
-        // Cardiac Poison's duration only - the flat HP hit and movement/tool debuffs stay at full
-        // strength below full crossing (02-design-overview.md ~845-852); only recovery time
-        // shortens as tolerance rises. Reaches exactly 0 at cardiacTolerance == 27, though
-        // ApplyEffect's own early-return above already keeps that case from reaching this method.
-        private double CardiacDurationToleranceMultiplier()
-        {
-            int tier = cardiacTolerance / 3;
-            return Math.Max(0.0, 1.0 - tier / 9.0);
-        }
 
         public int neurotoxicTolerance
         {
@@ -188,62 +173,38 @@ namespace Remedy_And_Ruin.RRBehaviors
             }
         }
 
-        // Mind Poison's own baseline lifespan at effectMultiplier 1.0 and 0 tolerance
-        // (02-design-overview.md ~1445-1456) - like Cardiac Poison's own baseline, this is the
-        // exposure's whole lifespan from the moment it's eaten (onset window included), not just
-        // the full-phase symptom window measured from onset completion.
+        // Mind Poison's lifespan is the exposure's whole lifespan from the moment it's eaten
+        // (onset window included), not just the full-phase symptom window.
         private const double MindPoisonBaselineDurationHours = 24.0;
 
-        private double MindPoisonDurationToleranceMultiplier()
-        {
-            int tier = brainrotTolerance / 3;
-            return Math.Max(0.0, 1.0 - tier / 9.0);
-        }
-
-        // Baseline full-phase durations for Neurotoxic Poison's 3-stage ladder
-        // (02-design-overview.md ~1431-1443): dose 2 is double dose 1's baseline, dose 3 is quadruple
-        // Cardiac Poison's own normal 6h baseline. An arrow-hit's half-weight instance always
-        // uses half of dose 1's baseline (3h) regardless of the cumulative dose number it
-        // nominally completes - see ApplyNeurotoxicLadder.
+        // Neurotoxic Poison's three ladder rungs and their fixed durations. An arrow-hit's
+        // half-weight instance (ladderWeight below 1) always uses the arrow duration regardless
+        // of its strength - see ApplyNeurotoxicLadder.
         private const double NeurotoxicWeaknessBaselineDurationHours = 6.0;
         private const double NeurotoxicParalysisBaselineDurationHours = 12.0;
         private const double NeurotoxicCardiacArrestBaselineDurationHours = 24.0;
         private const double NeurotoxicArrowHalfDoseBaselineDurationHours = 3.0;
 
-        // Same tiered 1/9-per-reached-tolerance-tier discount every cluster's own effect
-        // strength uses (see EffectThreadManager's own Toxic/NoxiousToleranceDiscountedEffect),
-        // applied here so Neurotoxic's duration computation doesn't need to reach into
-        // EffectThreadManager just to read this entity's own tolerance value.
-        private float NeurotoxicToleranceDiscountedEffect(float effectMultiplier)
-        {
-            float discount = (float)(neurotoxicTolerance / 3) / 9.0f;
-            return Math.Max(0f, effectMultiplier - discount);
-        }
+        // Neurotoxic rung thresholds on tolerance-discounted strength: below 2 is Weakness, 2 up
+        // to 3 is Paralysis, 3 and above adds Cardiac Poison's package.
+        internal const float NeurotoxicParalysisMinStrength = 2f;
+        internal const float NeurotoxicCardiacArrestMinStrength = 3f;
+
+        internal static int NeurotoxicRungForStrength(float discountedStrength) =>
+            discountedStrength >= NeurotoxicCardiacArrestMinStrength ? 3
+            : discountedStrength >= NeurotoxicParalysisMinStrength ? 2
+            : 1;
 
         /// <summary>
-        /// Resolves a Neurotoxic exposure's dose number on the 3-stage ladder and its own
-        /// baseline duration, writing both into neweffect. Dose number counts
-        /// currently-overlapping Neurotoxic instances only (existingPoisons, the same filtered
-        /// list toleranceEligible already built in the caller) - a fully-resolved prior exposure
-        /// never contributes, matching the confirmed "currently-overlapping, not lifetime" ladder
-        /// semantics.
-        ///
-        /// Each instance carries its own ladderWeight (1.0 for a drunk dose, 0.5 for an
-        /// arrow-hit's half-strength contribution - see Patch_ArrowPoisonDelivery). Dose number
-        /// is the ceiling of the summed weight of every currently-active instance including this
-        /// new one, clamped to the ladder's 3 real stages. An arrow-hit's own instance always
-        /// gets Weakness's bare package at half duration regardless of the dose number it lands
-        /// on - only a drunk dose (ladderWeight 1.0) can trigger Paralysis's second-instance
-        /// stacking or Cardiac Arrest's package, matching "drinking always advances by exactly
-        /// one full stage per dose."
+        /// Resolves a Neurotoxic exposure's ladder rung and its fixed duration, writing both into
+        /// neweffect. The rung comes from the exposure's own tolerance-discounted strength (see
+        /// NeurotoxicRungForStrength), so one large dose lands on a high rung directly. An
+        /// arrow-hit's half-weight instance (ladderWeight 0.5 - see Patch_ArrowPoisonDelivery)
+        /// always gets Weakness's bare package at half duration, whatever its strength.
         /// </summary>
-        private void ApplyNeurotoxicLadder(TreeAttribute neweffect, EffectStruct effect, List<TreeAttribute> existingPoisons)
+        private void ApplyNeurotoxicLadder(TreeAttribute neweffect, EffectStruct effect)
         {
-            float existingWeight = existingPoisons
-                .Where(existing => existing.GetString("cluster") == effect.cluster.ToString())
-                .Sum(existing => existing.GetFloat("ladderWeight", 1f));
-            float cumulativeWeight = existingWeight + effect.ladderWeight;
-            int doseNumber = Math.Min(3, (int)Math.Ceiling(cumulativeWeight));
+            int doseNumber = NeurotoxicRungForStrength(StrengthAfterTolerance(effect.effectMultiplier, neurotoxicTolerance));
 
             double baselineHours;
             if (effect.ladderWeight < 1f)
@@ -262,7 +223,7 @@ namespace Remedy_And_Ruin.RRBehaviors
 
             neweffect.SetInt("doseNumber", doseNumber);
             neweffect.SetFloat("ladderWeight", effect.ladderWeight);
-            neweffect.SetDouble("timeleft", baselineHours * NeurotoxicToleranceDiscountedEffect(effect.effectMultiplier));
+            neweffect.SetDouble("timeleft", baselineHours);
         }
 
         // Server -> client severity bridge shared by every poison cluster that needs a client-
@@ -748,11 +709,10 @@ namespace Remedy_And_Ruin.RRBehaviors
             if (effectData.KeyExists("effectMultiplier"))
             {
                 // Vial charge scaling applies to poisons only; a remedy's effectMultiplier is its tier.
-                // Toxic strength is counted in charges: a vial contributes its charge count (9 times
+                // Poison strength is counted in charges: a vial contributes its charge count (9 times
                 // potencyScale), anything else (a mushroom, a bucket) contributes its listed value as-is.
                 float scale = PotionEffects.IsRemedyCluster(effect.cluster) ? 1.0f
-                    : effect.cluster == EffectCluster.TOXICPOISON ? (fromVial ? potencyScale * 9f : 1.0f)
-                    : potencyScale;
+                    : (fromVial ? potencyScale * 9f : 1.0f);
                 effect.effectMultiplier = effectData["effectMultiplier"].AsFloat() * scale;
             }
             if (effectData.KeyExists("onsetMultiplier"))
@@ -839,6 +799,9 @@ namespace Remedy_And_Ruin.RRBehaviors
             string effectname = effect.cluster.ToString() + "|" + uid.ToString();
             bool poison = false;
             bool antidote = false;
+            // A poison fully cancelled by tolerance records no exposure; a secondary Toxic sliver
+            // is still applied against its own tolerance below.
+            bool negated = false;
             switch (effect.cluster)
             {
                 case EffectCluster.ANALGESIC:
@@ -884,55 +847,48 @@ namespace Remedy_And_Ruin.RRBehaviors
                     /*
                      * NOXIOUS POISON :
                      *     - used to indicate gutbane aka GI irritation
-                     *     - calculate effect by subtracting from effect multiplier the tolerance value calculated by (float)(noxiousTolerance / 3) / 9.0f
-                     *     - apply psychedelic trip effect for a certain amount of time (same as eating a psychedelic mushroom)
-                     *     - trigger Vomiting loop for a certain amount of time, lessened by effect multiplier
+                     *     - strength left after tolerance (see StrengthAfterTolerance) scales fever, tripping and vomit frequency
+                     *     - no strength left: the exposure never happens
+                     *     - psychedelic trip effect (same as eating a psychedelic mushroom) and a repeating vomiting loop for the fixed 24h duration
                      *     - surviving this awards 1/27 of progression towards noxiousTolerance
                      */
                     poison = true;
-                    effect.timeleft = NoxiousBaselineDurationHours * effect.effectMultiplier * NoxiousDurationToleranceMultiplier();
+                    negated = StrengthAfterTolerance(effect.effectMultiplier, noxiousTolerance) <= 0f;
+                    effect.timeleft = NoxiousBaselineDurationHours;
                     break;
                 case EffectCluster.CARDIACPOISON:
                     /*
                      * CARDIAC POISON :
                      *     - used to indicate heartbane aka heart failure
-                     *     - flat -5 current/max HP hit at full strength regardless of tolerance
-                     *       below full (9/9) crossing - only duration scales down with tolerance
-                     *     - movement-speed and tool-use debuffs, 6h baseline duration scaled by
-                     *       effectMultiplier and the same tolerance-discounted duration factor
+                     *     - -5 max HP per point of strength left after tolerance, plus
+                     *       movement-speed and tool-use debuffs that scale with it, for the fixed
+                     *       6h duration
                      *     - exertion (sprinting or tool use) during the active episode adds
-                     *       uncapped stacks: +1h duration and another -5 HP each
-                     *     - at full (9/9) tolerance the entire exposure is voided outright - see
-                     *       the early return below, mirroring the post-Antidote immunity window's
-                     *       own "this exposure never happened" no-op further down this method
+                     *       uncapped stacks: +1h duration and another -5 HP each, scaled by strength
+                     *     - no strength left: the exposure never happens
                      *     - surviving this awards 1/27 of progression towards cardiacTolerance
                      */
-                    if (cardiacTolerance >= 27)
-                    {
-                        return;
-                    }
                     poison = true;
-                    effect.timeleft = CardiacBaselineDurationHours * effect.effectMultiplier * CardiacDurationToleranceMultiplier();
+                    negated = StrengthAfterTolerance(effect.effectMultiplier, cardiacTolerance) <= 0f;
+                    effect.timeleft = CardiacBaselineDurationHours;
                     break;
                 case EffectCluster.NEUROTOXICPOISON:
                     /*
                      * NEUROTOXIC POISON :
                      *     - used to indicate nervebane aka nerve damage
-                     *     - dose number = how many Neurotoxic instances are currently
-                     *       overlapping (including this one), weighted by ladderWeight - see
-                     *       ApplyNeurotoxicLadder, called below once the currently-active list
-                     *       is available
-                     *     - dose 1: Weakness (-40% walkspeed), 6h baseline
-                     *     - dose 2: a second, independent Weakness instance (Paralysis), 12h
-                     *       baseline - the two overlapping walkspeed modifiers sum via
-                     *       entity.Stats' own additive blending
-                     *     - dose 3: Cardiac Poison's own full package (flat HP hit, movement/tool
-                     *       debuffs, exertion-stacking), 24h baseline
-                     *     - headache (rangedWeaponsAcc penalty) and dizziness (DrunkWobbleStrength)
-                     *       apply at every stage
+                     *     - ladder rung comes from strength left after tolerance - see
+                     *       NeurotoxicRungForStrength and ApplyNeurotoxicLadder
+                     *     - rung 1: Weakness (walkspeed penalty), 6h
+                     *     - rung 2: Paralysis, 12h
+                     *     - rung 3: Cardiac Poison's package (flat HP hit, movement/tool
+                     *       debuffs, exertion-stacking), 24h
+                     *     - walkspeed and headache (rangedWeaponsAcc) penalties and dizziness
+                     *       (DrunkWobbleStrength) scale with strength left after tolerance
+                     *     - no strength left: the exposure never happens
                      *     - surviving this awards 1/27 of progression towards neurotoxicTolerance
                      */
                     poison = true;
+                    negated = StrengthAfterTolerance(effect.effectMultiplier, neurotoxicTolerance) <= 0f;
                     break;
                 case EffectCluster.MINDPOISON:
                     /*
@@ -946,14 +902,15 @@ namespace Remedy_And_Ruin.RRBehaviors
                      *       mushroom effect, reused via StartPsychedelicHold)
                      *     - each genuine movement attempt during the effect rolls a chance of
                      *       vomiting (see EffectThreadManager's move-vomit watcher)
-                     *     - double hunger rate
+                     *     - hunger rate rises by 100% per point of strength left after tolerance
                      *     - no DoT, no max-health modifier - deliberately non-lethal
-                     *     - 24h baseline lifespan, scaled by effectMultiplier and discounted by
-                     *       tolerance the same way Cardiac Poison's own duration is
+                     *     - fixed 24h lifespan
+                     *     - no strength left: the exposure never happens
                      *     - surviving this awards 1/27 of progression towards brainrotTolerance
                      */
                     poison = true;
-                    effect.timeleft = MindPoisonBaselineDurationHours * effect.effectMultiplier * MindPoisonDurationToleranceMultiplier();
+                    negated = StrengthAfterTolerance(effect.effectMultiplier, brainrotTolerance) <= 0f;
+                    effect.timeleft = MindPoisonBaselineDurationHours;
                     break;
                 case EffectCluster.TOPICALOINTMENT:
                     break;
@@ -976,7 +933,7 @@ namespace Remedy_And_Ruin.RRBehaviors
             neweffect.SetFloat("toxicOnsetMultiplier", effect.toxicOnsetMultiplier);
             if (poison)
             {
-                if (!IsPostAntidoteWindowActive())
+                if (!IsPostAntidoteWindowActive() && !negated)
                 {
                     List<TreeAttribute> rrpoisons = RRPoisonEffects.value.ToList<TreeAttribute>();
                     bool toleranceEligible = !forceIneligibleForTolerance
@@ -987,7 +944,7 @@ namespace Remedy_And_Ruin.RRBehaviors
 
                     if (effect.cluster == EffectCluster.NEUROTOXICPOISON)
                     {
-                        ApplyNeurotoxicLadder(neweffect, effect, rrpoisons);
+                        ApplyNeurotoxicLadder(neweffect, effect);
                     }
 
                     rrpoisons.Add(neweffect);

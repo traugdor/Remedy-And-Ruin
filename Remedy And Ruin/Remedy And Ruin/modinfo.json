@@ -6,7 +6,7 @@
     "traugdor"
   ],
   "description": "Brew remedies from herbs, flowers, and fungi to treat injuries and illness - or poison a foe.",
-  "version": "1.0.0",
+  "version": "1.0.0-dev3",
   "dependencies": {
     "game": "",
     "cliententityailib": "1.0.3"

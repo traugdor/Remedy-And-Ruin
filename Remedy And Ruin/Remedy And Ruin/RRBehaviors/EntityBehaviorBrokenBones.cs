@@ -57,14 +57,16 @@ namespace Remedy_And_Ruin.RRBehaviors
     /// FindWorstSplintableLimb / TrySplintWorstLimb: pick and splint the worst injured, unsplinted limb.
     ///
     /// Healing: a limb heals while it is injured and either splinted or the Skull (which cannot be
-    /// splinted). Full duration in game months by tier: Strain 0.75, Fracture 1.5, Break 1.5, Crush
+    /// splinted). Full duration in game months by tier: Strain 0.25, Fracture 0.75, Break 0.75, Crush
     /// 2.25, times Calendar.DaysPerMonth. The countdown is one calendar end day per limb in
     /// WatchedAttributes (0 = not healing), so it follows calendar speed and sleep and survives
     /// relogs. It starts at the current tier's full duration when a limb becomes eligible, and is
     /// dropped when the limb stops being eligible. A tier rise unsplints ChestArms and Legs (they must
-    /// be re-splinted) and restarts the Skull's countdown. A hit that may injure a healing limb but
-    /// does not raise it pushes the end day later by 10% of that tier's duration. When the end day
-    /// passes the limb clears entirely to None and unsplinted. One game tick listener per instance
+    /// be re-splinted) and restarts the Skull's countdown. A hit whose roll succeeds but does not
+    /// raise a healing limb pushes the end day later by 10% of that tier's duration, but only when
+    /// the tier the hit rolled is at least the limb's current tier; a failed roll never delays
+    /// healing. While the player sleeps in a bed the countdown runs at twice the calendar rate (each
+    /// heal tick moves every end day earlier by the calendar time since the previous tick). When the end day passes the limb clears entirely to None and unsplinted. One game tick listener per instance
     /// runs while any limb is injured; ResumeAfterLogin re-evaluates all limbs and restarts it.
     ///
     /// GetHealDaysRemaining / SetHealDaysRemaining: read or (debug) overwrite the countdown.
@@ -73,14 +75,17 @@ namespace Remedy_And_Ruin.RRBehaviors
     /// Death clears every limb to None and unsplinted, and every end day to 0.
     ///
     /// Leg effects: ApplyLegEffects maintains one persistent walkspeed modifier (LegWalkStatKey) from
-    /// the Legs tier: Strain -0.05, Fracture -0.10, Break or Crush -0.40. It runs on every Legs tier or
+    /// the Legs tier: Strain -0.05, Fracture -0.10, Break or Crush -0.40 splinted and -0.60 unsplinted.
+    /// It runs on every Legs tier or
     /// splint change, at login and on the heal tick, and removes the modifier when the Legs tier is
-    /// None. The modifier never drives the blended walkspeed below 0, because air control reads the
-    /// blended value without a lower clamp.
+    /// None. The modifier never drives the blended walkspeed below MinWalkSpeedFraction (20%, a -80%
+    /// cap that counts every other walkspeed modifier, including other mods'), because air control
+    /// reads the blended value without a lower clamp. Only the lock setting below goes to 0.
     ///
-    /// Movement lock: IsLegLocked is true for an unsplinted Break or Crush Legs injury on a
-    /// non-mounted player outside creative and spectator mode. It reads only WatchedAttributes, so it is
-    /// valid on the client where this behavior instance does not exist. Player physics is simulated
+    /// Movement lock: with the server setting immobilizeOnUnsplintedBrokenLeg on (off by default),
+    /// IsLegLocked is true for an unsplinted Break or Crush Legs injury on a non-mounted player
+    /// outside creative and spectator mode. It reads only WatchedAttributes and the published world
+    /// config, so it is valid on the client where this behavior instance does not exist. Player physics is simulated
     /// on the client, so the server cannot veto movement input; the client enforces the lock (see
     /// Remedy_And_RuinModSystem), and the server backstop sets the modifier so the blended walkspeed
     /// is 0.
@@ -149,6 +154,10 @@ namespace Remedy_And_Ruin.RRBehaviors
         private const float LegStrainWalkPenalty = -0.05f;
         private const float LegFractureWalkPenalty = -0.10f;
         private const float LegBrokenWalkPenalty = -0.40f;
+        private const float LegUnsplintedBrokenWalkPenalty = -0.60f;
+
+        /// <summary>Lowest blended walkspeed the leg penalty may produce (-80%), whatever other modifiers apply.</summary>
+        internal const float MinWalkSpeedFraction = 0.20f;
 
         private const string ArmMeleeStatKey = "remedyandruinBonesArms";
 
@@ -159,6 +168,9 @@ namespace Remedy_And_Ruin.RRBehaviors
         private const double BellHeadacheLingerDays = 1.0 / 24.0;
 
         private long tickListenerId;
+
+        // In memory only; the calendar day of the previous heal tick.
+        private double lastHealTickDays;
 
         // In memory only; true while the end message for the current headache is still owed.
         private bool bellHeadacheAnnounced;
@@ -307,10 +319,12 @@ namespace Remedy_And_Ruin.RRBehaviors
         }
 
         // True when the entity's own movement input is disabled by an unsplinted Break or Crush Legs
-        // injury. Creative, spectator and mounted players are never locked.
+        // injury, which happens only when the server setting immobilizeOnUnsplintedBrokenLeg is on.
+        // Creative, spectator and mounted players are never locked.
         public static bool IsLegLocked(Entity entity)
         {
             if (entity is not EntityPlayer player || entity.WatchedAttributes == null) return false;
+            if (!ConfigServer.ImmobilizeOnUnsplintedBrokenLeg(entity.World)) return false;
             if (player.MountedOn != null) return false;
 
             EnumGameMode? mode = player.Player?.WorldData?.CurrentGameMode;
@@ -324,8 +338,10 @@ namespace Remedy_And_Ruin.RRBehaviors
 
         // Sets, updates or removes the Legs walkspeed modifier. The modifier is the Legs penalty, with
         // pain penalties scaled by PotionEffects.PainScale (an unsplinted Break or Crush is not),
-        // limited so the blended walkspeed stays at or above 0; while locked it is the negative of
-        // the other modifiers' blended sum (floored at 0), which makes the blended walkspeed 0.
+        // limited so the blended walkspeed stays at or above MinWalkSpeedFraction (a penalty that
+        // would go lower is reduced, and is 0 when other modifiers already put it at or below that
+        // floor); while locked it is the negative of the other modifiers' blended sum (floored at 0),
+        // which makes the blended walkspeed 0.
         public void ApplyLegEffects()
         {
             if (entity.World.Side != EnumAppSide.Server) return;
@@ -336,7 +352,7 @@ namespace Remedy_And_Ruin.RRBehaviors
             {
                 InjuryTier.Strain => LegStrainWalkPenalty * painScale,
                 InjuryTier.Fracture => LegFractureWalkPenalty * painScale,
-                InjuryTier.Break or InjuryTier.Crush => splinted ? LegBrokenWalkPenalty * painScale : LegBrokenWalkPenalty,
+                InjuryTier.Break or InjuryTier.Crush => splinted ? LegBrokenWalkPenalty * painScale : LegUnsplintedBrokenWalkPenalty,
                 _ => 0f
             };
 
@@ -348,8 +364,9 @@ namespace Remedy_And_Ruin.RRBehaviors
                 return;
             }
 
-            float floor = -Math.Max(0f, others);
-            float value = IsLegLocked(entity) ? floor : Math.Max(penalty, floor);
+            float lockFloor = -Math.Max(0f, others);
+            float capFloor = -Math.Max(0f, others - MinWalkSpeedFraction);
+            float value = IsLegLocked(entity) ? lockFloor : Math.Max(penalty, capFloor);
             if (existing != null && Math.Abs(existing.Value - value) < 0.00001f) return;
 
             entity.Stats.Set("walkspeed", LegWalkStatKey, value, persistent: true);
@@ -632,11 +649,7 @@ namespace Remedy_And_Ruin.RRBehaviors
             // enemies can deal several damage types in one hit.
             BoneLocation limb = hit.Location;
             int jump = RollEscalationJump(damage, victim.World.Rand);
-            if (jump <= 0)
-            {
-                bones.DockHealing(limb);
-                return;
-            }
+            if (jump <= 0) return;
 
             if (limb == BoneLocation.Skull && ExceedsSkullLimit(bones.GetTier(limb), jump))
             {
@@ -649,7 +662,10 @@ namespace Remedy_And_Ruin.RRBehaviors
                 return;
             }
 
-            if (!bones.Raise(limb, jump)) bones.DockHealing(limb);
+            // The rolled jump is the tier an uninjured limb would take from this hit. A hit that
+            // does not raise the limb delays healing only when that tier is at least the limb's
+            // current tier.
+            if (!bones.Raise(limb, jump) && jump >= (int)bones.GetTier(limb)) bones.DockHealing(limb);
         }
 
         // Returns the tier jump for a hit of the given post-armor damage, or 0 when the roll fails.
@@ -685,9 +701,9 @@ namespace Remedy_And_Ruin.RRBehaviors
 
         private static double MonthsFor(InjuryTier tier) => tier switch
         {
-            InjuryTier.Strain => 0.75,
-            InjuryTier.Fracture => 1.5,
-            InjuryTier.Break => 1.5,
+            InjuryTier.Strain => 0.25,
+            InjuryTier.Fracture => 0.75,
+            InjuryTier.Break => 0.75,
             InjuryTier.Crush => 2.25,
             _ => 0.0
         };
@@ -755,6 +771,7 @@ namespace Remedy_And_Ruin.RRBehaviors
 
             if (injured && tickListenerId == 0L)
             {
+                lastHealTickDays = entity.World.Calendar.TotalDays;
                 tickListenerId = entity.World.RegisterGameTickListener(dt => OnHealTick(), TickIntervalMs);
             }
             else if (!injured && tickListenerId != 0L)
@@ -764,8 +781,26 @@ namespace Remedy_And_Ruin.RRBehaviors
             }
         }
 
+        // While the player sleeps (vanilla sets the tiredness behavior's IsSleeping when a bed is used),
+        // each healing countdown is moved earlier by the calendar time since the last tick, so it runs
+        // down at twice the calendar rate.
+        private void AdvanceHealingWhileSleeping()
+        {
+            double now = entity.World.Calendar.TotalDays;
+            double elapsed = now - lastHealTickDays;
+            lastHealTickDays = now;
+            if (elapsed <= 0.0 || entity.GetBehavior<EntityBehaviorTiredness>()?.IsSleeping != true) return;
+
+            foreach (BoneLocation limb in Enum.GetValues(typeof(BoneLocation)))
+            {
+                double endDay = GetEndDay(limb);
+                if (endDay > 0.0) SetEndDay(limb, Math.Max(endDay - elapsed, 0.000001));
+            }
+        }
+
         private void OnHealTick()
         {
+            AdvanceHealingWhileSleeping();
             foreach (BoneLocation limb in Enum.GetValues(typeof(BoneLocation)))
             {
                 CompleteIfExpired(limb);

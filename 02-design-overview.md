@@ -39,9 +39,10 @@ Part 3: Conditions & Poison Effects — what everything actually does: Bleeding,
         ├──▶ Part 4: Broken Bones — Chest/Arms & Legs (Strain→Fracture→Break→Crush) and
         │     Skull (Strain→Fracture→death), escalation via repeated hits, location-scoped armor.
         │
-        └──▶ Part 5: Renewable Cultivation — extends vanilla's decorative flowerpot/planter
-              blocks with a berry-bush-style growth cycle, covering all flora (mushrooms
-              included) without an existing regrowth mechanism.
+        └──▶ Part 5: Renewable Cultivation — separate Propagation Pot, Propagation Planter
+              and Log Planter blocks (crafted from vanilla pots, vanilla untouched) that grow
+              every mushroom and the remedy and poison plants vanilla cannot propagate, on a calendar-based
+              three-stage timer, with the plant consumed on harvest.
 ```
 
 Poisons and remedies share one pipeline. Conditions and poison effects share one delivery
@@ -78,7 +79,11 @@ mushroom poisoning too.
 **Harvestability caveat:** being catalogued here doesn't guarantee an ingredient is actually
 obtainable. Confirmed example: `tallgrass-*` drops `drygrass` on break, never a `tallgrass-*`
 item itself (`assets/survival/blocktypes/plant/tallgrass.json:145-151`, tool `knife`/`scythe`) —
-same non-harvestable pattern found for tree leaves during original research. Other borderline
+same non-harvestable pattern found for tree leaves during original research. Also confirmed
+non-harvestable: ghost pipe (`flower-ghostpipe*` has `dropsByType: []`,
+`assets/survival/blocktypes/plant/flower.json:234-236`) and the hanging lichens
+(`BlockHangingLichen.GetDrops` returns an empty array); the `lichen-oldmansbeard-up` block is
+disabled in the shipped game (`lichen.json:3`, `enabled: false`) and does not exist. Other borderline
 entries below are marked low-confidence where the real-world species ID itself is uncertain, but
 their harvestability as an item has not been individually re-verified.
 
@@ -94,7 +99,7 @@ the intended use.
 | Ingredient | Block code | Note |
 |---|---|---|
 | Cattails | `tallplant-coopersreed-*` | TCM hemostatic use (pollen, "Pu Huang"); Native American antiseptic stem juice; wound-bandage fluff |
-| Old man's beard | `hanginglichen-oldmans-*`, `lichen-oldmansbeard-up` | Usnic acid, well-documented traditional antimicrobial, wound cleaning |
+| Old man's beard | `hanginglichen-oldmans-*` | Usnic acid, well-documented traditional antimicrobial, wound cleaning |
 | Wild daisy | `flower-wilddaisy-*` | Arnica-like, bruises/wounds, some modern wound-healing study support |
 | Woad | `flower-woad-*` | Ancient antiseptic/wound remedy; root in European Pharmacopoeia today |
 | Sage | `herb-sage-*` | Mild antiseptic, sore throat gargle |
@@ -130,7 +135,7 @@ means (Part 3).
 | Chamomile | `herb-chamomile-*` | Classic calming/sleep-aid tea |
 | Lavender | `herb-lavender-*` | Calming/sleep aid |
 | Ghost pipe | `flower-ghostpipewhite/pink/red-*` | Nervine/sedative/antispasmodic |
-| Water lily | `block-waterlily` | Mild sedative, sleep-related folk use |
+| Water lily | `waterlily` | Mild sedative, sleep-related folk use |
 | Mugwort | `flower-mugwort-*` | Dream work/moxibustion tradition |
 | Golden poppy | `flower-goldenpoppy-*` | **Low confidence** species ID — mild non-narcotic sedative if correct |
 
@@ -743,22 +748,27 @@ half of this.
 
 **Toxic Poison cluster** (primary effect only, no secondary):
 
-| Mushroom | Effect × | Onset × |
-|---|---|---|
-| Death Cap | 1.0 | 1.0 |
-| Funeral Bell | 0.8 | 1.0 |
-| Fool's Conecap | 0.4 | 0.8 |
+Toxic strength is counted in vial charges: **1.0 is one charge of regular Liverbane, which deals
+1.5 HP/s.** The DoT rate is 1.5 HP/s times the strength left after tolerance, and it runs for 10
+real seconds, then ends on its own. Surviving that natural end awards tolerance credit.
+A vial contributes its charge count times the potion's own strength (regular 1.0, concentrated
+2.0); a mushroom contributes its listed strength as-is.
 
-**Liver Failure only actually triggers once the tolerance-discounted effect exceeds 15% of that
-exposure's own undiscounted magnitude** — below that, the exposure produces only the harmless
-early-warning symptom (a small `healingeffectivness` dip) and fades on its own, no Antidote
-needed. Tolerance discounts in fixed 1/9 steps per tier reached (see Tolerance below), so this
-threshold is crossed the moment discount reaches 8/9 (leaving 11.1% of the original magnitude,
-under the 15% line) — the 22nd survived exposure to that cluster, one tier short of full (9/9)
-immunity. This is a percentage of each exposure's own magnitude, not an absolute number, so Death
-Cap, Funeral Bell, Fool's Conecap, and any incidental Toxic sliver riding in from another cluster
-all stop being able to cross into the real DoT at the exact same tolerance progress, regardless of
-how strong the source mushroom's raw dose was.
+| Mushroom | Strength | HP/s | Onset × |
+|---|---|---|---|
+| Death Cap | 5 / 1.5 | 5.0 | 1.0 |
+| Funeral Bell | 4 / 1.5 | 4.0 | 1.0 |
+| Fool's Conecap | 2 / 1.5 | 2.0 | 0.8 |
+
+Each tolerance tier (see Tolerance below) cancels exactly 1.0 strength, one charge's worth, so
+tolerance is how much of a dose the body can take before it hurts. Strength cannot go below 0.
+With none left there is no DoT, only the harmless early-warning symptom (a small
+`healingeffectivness` dip) that fades after 24 in-game hours.
+
+Incidental Toxic slivers riding in from another cluster follow the same rule, at 5 HP/s per
+old 1.0 of their former strength (Pink Bonnet, Devil Bolete and Laughing Jim 1.0 HP/s, Earthball
+0.8, Sickener and Elfin Saddle 0.7, Fly Agaric 0.65, Jack-o'-lantern 0.6, Gold Drop Milkcap 0.25).
+A poisoned arrow's secondary DoT is 0.75 HP/s for the same 10 seconds; procs stack.
 
 **Noxious Poison cluster** (GI is primary; all eight also carry a secondary Toxic sliver):
 
@@ -1190,7 +1200,7 @@ walkSpeed penalty** on any condition that carries one — Wound Infection's -10%
 Flu's fever is halved the same way. **Concentrated Analgesic clears the walkSpeed penalty
 entirely** on Wound Infection and Flu's fever while active. **Broken-bone penalties are never
 removed, by either tier: both soften them by 50%** — Strain and Fracture directly, and Break and
-Crush only while the limb is splinted, since an unsplinted Break or Crush stays fully locked.
+Crush only while the limb is splinted, since an unsplinted Break or Crush keeps its full penalty.
 **Does not touch
 Skin Irritation** — its debuff is healingeffectivness-only, with no walkSpeed component for
 Analgesic to act on, so it's simply unaffected. The healingeffectivness side of any condition
@@ -1535,7 +1545,7 @@ for each other, so the recipe requires all three specifically. Field Mushroom an
 both genuinely Rare (`chance: 0.08`, Part 1); Bitter Bolete is meaningfully more common
 (`chance: 1.2`, Uncommon tier) — not the equally-rare trio the recipe was originally picked around,
 so the "hard to stockpile" framing rests more on Field Mushroom and Red Wine Cap than on all three
-equally.
+equally. All three can be grown in a Propagation Pot or Planter (Part 5), so the Antidote's real cost is the cultivation time and the plant consumed per harvest.
 
 Follows the normal tier rules otherwise — the Potion Base can be eaten directly for a
 short-duration version of the effect, but Diluted Potion stays a non-functional intermediate; a
@@ -1696,9 +1706,10 @@ clothing are not worn down by every tick.
 
 **Splint and healing interaction.** A hit-triggered tier rise **breaks the splint** of a
 Chest/Arms or Legs limb — it must be splinted again, and its healing countdown starts over at the
-new tier's duration once it is. A Skull has no splint. A qualifying hit on a limb that does not
-escalate it (roll failed, or already at Crush) while it is healing sets its healing back by 10% of
-that tier's duration (Healing duration, below).
+new tier's duration once it is. A Skull has no splint. A qualifying hit whose roll succeeds but
+cannot escalate a healing limb (already at the highest tier) sets its healing back by 10% of that
+tier's duration, but only when the tier the hit rolled is at least the limb's current tier; a hit
+whose roll fails never affects healing (Healing duration, below).
 
 **Use-triggered escalation: a flat 5% chance per qualifying event** (swinging a tool with a
 Strained arm, walking on a Fractured leg, etc.), unaffected by the hit-magnitude formula above —
@@ -1782,21 +1793,26 @@ the pain penalty), not a new penalty type. Still fully usable, just more painful
 "a fractured limb is still a working limb." Same deal as Strain: Analgesic only manages the pain,
 splinting is what heals it and what blocks the use-triggered escalation roll toward Break.
 
-**Break**: unsplinted, the player's own movement is prevented entirely — walking, sprinting,
-jumping and swimming. A locked player in deep water sinks and drowns; in water shallower than head
-height they cannot swim out. Sneaking is not blocked. Mounted players, and creative and spectator
-players, are never locked. Splinting restores a **floor of function, not full use**: **-40% walk
-speed** even splinted (the slowest the game's own animations still read as intentional rather
-than broken). Splinting a Break is still required for it to
-actually heal. **No separate internal Break graduation** — the hit-magnitude formula above already
+**Break**: unsplinted, the player walks at **-60% walk speed**. A server setting,
+`immobilizeOnUnsplintedBrokenLeg` (off by default), instead prevents the player's own movement
+entirely — walking, sprinting, jumping and swimming — for servers that give players another way to
+be moved. A locked player in deep water sinks and drowns; in water shallower than head height they
+cannot swim out. Sneaking is not blocked. Mounted players, and creative and spectator players, are
+never locked. Splinting restores a **floor of function, not full use**: **-40% walk speed** even
+splinted (the slowest the game's own animations still read as intentional rather than broken).
+Splinting a Break is still required for it to actually heal. **Walk speed never drops below 20%
+(a -80% cap) from the leg penalty**, counting every other walkspeed modifier on the player,
+including other mods': a penalty that would go lower is reduced, and none applies when the player
+is already at or below that floor. Only the immobilization setting goes to 0. **No separate internal Break graduation** — the hit-magnitude formula above already
 decides Break vs. Crush directly, so there's nothing left for a "mild vs. severe Break" grade to
 represent.
 
 **Crush**: **a much longer healing duration is the entire distinction from Break — no worse
-functional lockout.** Unsplinted, Crush guarantees the same total immobilization as Break's
-worst case; splinted, a Crush caps at the exact same -40% walk speed floor as a splinted
-Break. **Settled: splinting is the only lever that lifts this lockout** — nothing else (time
-alone, any remedy) does. Once the leg is splinted, Analgesic softens the remaining -40% by 50%.
+functional lockout.** Unsplinted, Crush has the same -60% walk speed (or the same immobilization
+when the server setting is on) as Break; splinted, a Crush caps at the exact same -40% walk speed
+floor as a splinted Break. **Settled: splinting is the only lever that lifts the unsplinted
+penalty** — nothing else (time alone, any remedy) does. Once the leg is splinted, Analgesic
+softens the remaining -40% by 50%.
 
 ### Skull (2-tier track, then death)
 
@@ -1880,13 +1896,12 @@ separate config of our own needed.
 
 A limb heals while it is injured and either splinted or the Skull.
 
-- **Fracture and Break: 1.5 months** (`DaysPerMonth * 1.5`) — the baseline "a broken
-  bone" duration, same for both since they're both genuinely broken, just at different
-  functional severity (above).
-- **Crush: 2.25 months** (`DaysPerMonth * 2.25`, the baseline + 50%) — the actual number behind
-  "Crush's real distinguishing trait is a much longer healing duration" (above).
-- **Strain: 0.75 months** (`DaysPerMonth * 0.75`, half the baseline) — Strain isn't really a
-  break, just the on-ramp to one, so it heals faster than a genuine break does.
+- **Fracture and Break: 0.75 months** (`DaysPerMonth * 0.75`) — the same for both since they're
+  both genuinely broken, just at different functional severity (above).
+- **Crush: 2.25 months** (`DaysPerMonth * 2.25`) — the actual number behind "Crush's real
+  distinguishing trait is a much longer healing duration" (above).
+- **Strain: 0.25 months** (`DaysPerMonth * 0.25`) — Strain isn't really a break, just the on-ramp
+  to one, so it heals much faster than a genuine break does.
 - **Skull**: heals at its tier's duration above without needing a splint.
 - **Unsplinted Chest/Arms or Legs**: never heals, regardless of tier (Splinting, above) — these
   durations only apply once splinted.
@@ -1895,92 +1910,137 @@ A limb heals while it is injured and either splinted or the Skull.
 stays at full injury severity (and the splinted rates, if Break/Crush) the whole time, then clears
 entirely the moment the timer ends, rather than stepping back down through the named tiers on the
 way. The countdown is stored as calendar end days, so it follows calendar speed and sleep and
-survives relogs. **A fresh qualifying hit to a healing limb still rolls against the same magnitude
+survives relogs. **While the player sleeps in a bed, the countdown runs at twice the calendar
+rate.** **A fresh qualifying hit to a healing limb still rolls against the same magnitude
 table (above)**: a successful roll escalates the tier as normal, breaking the splint of a
 Chest/Arms or Legs limb so that the countdown starts over at the new, worse tier's own full
-duration once re-splinted; a roll that fails to escalate (or a limb already at Crush) still
-**docks a flat 10% of that tier's total healing duration** — reinjuring a healing bone sets it
-back even when it doesn't get objectively worse. Death clears every injury.
+duration once re-splinted. A roll that fails never changes the countdown. A successful roll on a
+limb that cannot escalate further **docks a flat 10% of that tier's total healing duration**, but
+only when the tier the hit rolled is at least the limb's current tier. Death clears every injury.
 
 ---
 
 # Part 5: Renewable Cultivation
 
-Resolves the scarcity/renewability gap in Part 1 — wild-only ingredients like heather can be
-over-harvested to local depletion, with no vanilla mechanic to regenerate them besides new chunk
-generation. Grounded in this game's own existing mechanics rather than built from scratch.
+Resolves the scarcity/renewability gap in Part 1: the plants that go into remedies and poisons are one-time worldgen
+spawns, so a heavily harvested area stays bare, and vanilla has no way for a player to grow them. This part adds
+a way to grow them, built on this game's own growth, room and climate mechanics, and without changing any
+vanilla pot or planter.
 
 ## What's actually in vanilla today
 
-- **Vanilla's flowerpot/planter block entity (`BlockEntityPlantContainer`) is purely
-  decorative.** `OnTick` is a literal empty method body — no growth logic exists at all. It also
-  explicitly freezes spoilage/transition on its contents (`slotTransitionSpeed` returns `0f`) —
-  there's no vanilla growth mechanic on the pot itself to build on.
-- **A real, already-tuned, already-shipped regrowth mechanic exists elsewhere**:
-  `BlockEntityBerryBush` runs a periodic tick (`RegisterGameTickListener(CheckGrow, 8000)`)
-  cycling through named growth stages (`empty` → `flowering` → `ripe`), harvestable once ripe,
-  then resets. The pattern to crib the actual tick/state-machine shape from — proven and balanced
-  in this exact game.
-- **Room-based environment classification already exists and is reused across multiple vanilla
-  systems**: `RoomRegistry.GetRoomForPosition(BlockPos)` returns a `Room` with
-  `SkylightCount`/`NonSkylightCount`/`ExitCount`. `BlockEntityBerryBush` uses this for a
-  greenhouse temperature bonus (`greenhousetempbonus`); `ItemCheese` uses the same registry for
-  cellar-aging detection. No "humidity"/"dampness" stat exists anywhere in the engine — every
-  existing "damp/cool" mechanic in this game is approximated via enclosure + light level.
+- **Vanilla's flowerpot and planter (`BlockPlantContainer` with the `PlantContainer` block entity) are purely
+  decorative.** `OnTick` is an empty method, and the pot freezes spoilage on its contents (`slotTransitionSpeed`
+  returns 0). Only the plants that carry a `plantContainable` attribute fit (flowers, ferns, the ground mushrooms,
+  a few others); herbs and tree-side mushrooms do not. A plant leaves a pot only when the pot is broken, and a
+  broken vanilla pot drops itself and the plant as separate items, so a vanilla pot item never holds a plant.
+- **Growth in vanilla is lazy and calendar-based.** Live berry bushes and farmland store a last-updated time and, on
+  each tick, process every elapsed 3 to 4 hour interval in one pass (so sleep, offline time and unloaded chunks are
+  caught up), sampling the climate for each interval. Berry bush stages are lengths in months (empty 1, flowering 0.5,
+  ripening 1, ripe 1; a month is 9 in-game days) divided by the world setting `cropGrowthRateMul`.
+- **Temperature never speeds growth up in vanilla.** Farmland rolls a growth chance of `1 + (T - 10) * 0.1` per interval,
+  and bushes pause below 4 and above 30 degrees C. Climate temperature at a position comes from
+  `GetClimateAt` and includes the season, the day and night swing (about plus or minus 9 degrees C) and noise, but
+  nothing about rooms or roofs.
+- **Rooms are classified by `RoomRegistry.GetRoomForPosition`, which never returns null.** Outdoors is a room with
+  `ExitCount` above 0 (a span of 14 or more blocks on any axis counts as an exit). Vanilla's greenhouse test is a roof over
+  the position (the rain map height is above the block) plus `ExitCount` 0 plus `SkylightCount` greater than
+  `NonSkylightCount`, and its effect is +5 degrees C on the temperature checks, not a speed bonus. No humidity stat exists
+  in the engine; damp and dark are approximated by enclosure and light.
+- **Some of Part 1 already regrows.** Cattails, papyrus, tule and brown sedge regrow after cutting; wild mushrooms regrow from mycelium
+  in the soil (which a player cannot place); bamboo drops a sapling that grows a tree. Flowers, herbs, ferns, cacti and
+  lichens have no regrowth, and ghost pipe, hanging lichens and tallgrass drop nothing a player can plant.
 
 ## Decisions
 
-### Extends vanilla's existing pots, not a new dedicated block
+### Separate Propagation items, vanilla pots untouched
 
-Growth logic is added to the flowerpot/planter blocks players already have, rather than a
-separate "Cultivation Pot" block. Mechanically: swap in a mod-provided `BlockEntity` subclass of
-`BlockEntityPlantContainer` (overriding the empty `OnTick` with real growth logic) via a JSON
-patch changing the existing pot blocks' `class` attribute — real new C#, and a point of potential
-conflict if another mod also patches the same block's class.
+Installing the mod changes no vanilla pot, planter, plant, recipe or block entity. Growth lives in separate blocks in
+the mod's own domain: a **Propagation Pot** (small, 2 per harvest), a **Propagation Planter** (large, 4 per harvest) and
+a **Log Planter** (one tree-side mushroom, 4 per harvest; modeled separately). The Propagation Pot and Planter exist in every vanilla color
+and glaze family and share the vanilla shapes and textures.
 
-### Growth model: timed stages, berry-bush style
+A player makes one by putting a finished vanilla flowerpot or planter in the crafting grid (a single-ingredient shapeless recipe, color or
+glaze carried through, no extra cost) and returns it to the vanilla item the same way. Raw clay pots do not convert. A placed vanilla pot
+holding a plant is broken first, which drops the plant as an item. A Propagation item that carries a plant (see below) does not convert
+back until the plant is gone.
 
-Deterministic stages (Planted → Growing → Ready), each a fixed real/game-time duration,
-harvestable once Ready, then resets — same shape as `BlockEntityBerryBush`'s empty/flowering/ripe
-cycle, chosen because it reuses a pattern already proven and balanced in this game rather than
-inventing new probability math with no in-game precedent.
+A player makes a Log Planter from a log, a knife or chisel, and a hammer or club (whittling bark and cutting places for the mushrooms), keeping the
+log's wood; each tool loses durability. It does not convert back.
 
-### Growable scope: all flora without an existing growth mechanism, mushrooms included
+Vanilla pots stay decorative and accept exactly what they accept today. The Propagation blocks decide what they accept through a mod
+attribute on the plant (not vanilla's `plantContainable`), so no vanilla pot gains a plant either.
 
-Any flora currently a one-time static worldgen spawn (everything in Part 1 — flowers, herbs,
-ferns, lichens, cacti, reeds, mushrooms) qualifies, specifically because it has no existing
-regrowth mechanism — crops and berry bushes already regrow and aren't in scope. Mushrooms are
-explicitly included, not treated as out of scope, despite growing differently in reality.
+### Extending to other mods' pots
 
-### Environment gating: three growing conditions, mushrooms restricted to one
+The mod's block and block entity classes are not tied to vanilla pot codes. Supporting another mod's pot family takes one
+block definition (copying that family's shape, textures, container size and fill height, with this mod's class) and two
+conversion recipes written against that family's block code, with no new code. A recipe cannot be keyed on a tag, because a tag can
+match "any tagged pot" but cannot name the matching Propagation block.
 
-No new detection code, just a new consumer of `RoomRegistry`:
+### Scope: recipe plants vanilla cannot propagate
 
-- **Outdoor** (unenclosed / no room) — general flora only.
-- **Indoor / cellar-like** (enclosed, `NonSkylightCount` dominant — dark) — general flora, and
-  the *only* environment mushrooms can grow in, the best available proxy for "damp and out of
-  direct light."
-- **Greenhouse** (enclosed, `SkylightCount` dominant — bright) — general flora only, not
-  mushrooms (too bright/dry by the same proxy logic).
+Every mushroom is cultivable, ground and tree-side, whether or not a recipe uses it: all 45 species (33 ground, 12 tree-side), including the three
+Universal Antidote mushrooms. Flowers, herbs and ferns are cultivable when a remedy or poison recipe uses them (the Antidote counts as a remedy; the Sludge
+catch-all does not add scope), vanilla cannot already propagate them and they drop something a player can hold: 15 flowers (lupine in five colors), 9 herbs
+and 3 ferns. That is 60 plants for the Propagation Pot and Planter (the 27 non-mushrooms plus 33 ground mushrooms) and 12 tree-side mushrooms for the Log
+Planter, 72 in all. Cattails and bamboo are excluded as already renewable in vanilla; ghost pipe and old man's
+beard are excluded because they drop nothing in vanilla and no new way to obtain them is added; water lily is excluded because it can only be placed over
+fresh water and cannot stand in a pot. Sludge-only flowers, ferns and other non-mushrooms are not cultivable. Because the Antidote's mushrooms can be grown, its
+cost is the cultivation time and the consumed plant rather than wild rarity. The exact lists are in `docs/plans/2026-11-14-plan-17-renewable-cultivation.md`.
+
+### Growth model: three calendar-based stages, consumed on harvest
+
+A planted item sits in the pot's single slot and grows on the in-game calendar through three stages modeled on the berry bush's stage countdown: **Planted**, **Growing**
+and **Ready**. The total from Planted to Ready is half a berry bush's empty-to-ripe cycle (2.5 months, so 1.25 months), expressed in calendar months and
+converted with the running calendar's days per month and hours per day, split into two timed steps of equal length by default (config) with the berry bush's
+0.1-month variance per step. It is evaluated lazily on the server tick so sleep, offline time and unloaded chunks are caught up in one pass. A Ready plant waits until harvested.
+Harvest is an empty-hand right-click on a Ready pot; it **consumes the plant** (the pot returns to empty and needs a new plant), so a pot is a multiplier,
+not an endless source. A harvest gives the item the recipes accept for that plant (the same item that was planted for flowers, herbs, ferns and mushrooms). Rain has no effect
+and no watering is needed.
+
+### Moving a planted pot: pickup carries the plant
+
+A planted Propagation Pot, Planter or Log Planter is picked up with sneak plus an empty-hand right-click. The resulting item carries its plant and its growth state in its
+attributes, and placing it restores both (time spent in the inventory is not growth). The player needs a free inventory slot; with none, nothing happens and an in-game
+message says so. Breaking a planted pot with the normal break action drops only the empty pot and destroys the plant. Two carried pots never stack, and a carried
+Propagation item cannot be converted back to a vanilla pot. The plain empty-hand right-click stays the harvest.
+
+### The growth rate depends on the environment
+
+Growth advances at a rate. **Outdoor** plants follow a temperature curve: frozen at 0 degrees C or below, ramping up through the baseline rate of 1.0 at 15, peaking
+at 1.5 at 25, slowing to 0.5 at 35 and stopping at 40 or above. **Indoor** plants ignore outdoor temperature entirely and always grow at exactly the baseline rate 1.0, so
+they are guaranteed to grow but are never the fastest. **Greenhouse** plants also ignore the curve: the rate is 1.0 times a configurable multiplier (default 1.5), always.
+Vanilla's +5 degrees C greenhouse effect is not used, and the engine's temperature ignores rooms, which is why indoor and greenhouse plants do not use it at all.
+
+### Environment: three growing conditions, mushrooms restricted to one
+
+Detected at the air block above the pot with the same registry and criteria vanilla uses for greenhouses:
+
+- **Outdoor**: the room has any exit (`ExitCount` above 0), including roofed but open spaces and rooms 14 or more blocks wide. General flora only.
+- **Indoor** (cellar-like): an enclosed room (`ExitCount` 0) that is not a greenhouse. General flora, and the only environment mushrooms grow in,
+  the best available proxy for damp and out of direct light.
+- **Greenhouse**: a roof over the pot, an enclosed room, and more sunlit columns than unlit ones. General flora only, not mushrooms.
+
+A plant in an environment it cannot grow in simply does not grow; the block info says why, and the player moves the pot or log.
+
+### Visuals
+
+The pot draws the vanilla pot mesh. A planted plant shows one generic growing shape, small in Planted and scaling up through Growing; a Ready plant shows its
+wild-growing look scaled to fit the pot or planter. Code ships with placeholders so art can arrive later.
 
 ## Settled decisions
 
-- **Harvest yield scales by pot size.** Flowerpot (`smallContainer`) doubles the plant — harvest
-  gives 2 once fully grown. Planter (`largeContainer`) gives 4 — a genuine upgrade, not just a
-  bigger version of the same yield.
-- **Mod-compatibility risk is handled at the listing level, not in code.** If another mod also
-  patches `BlockEntityPlantContainer`'s block class, the resolution is to mark that mod as
-  incompatible or risky on this mod's ModDB page — a documentation/support answer, not an in-game
-  detection-and-fallback mechanism.
-- **Greenhouse gives a real growth-speed bonus**, the same way it already does for berry bushes
-  (the `greenhousetempbonus` mechanism) — not just a pass/fail gate, greenhouse specifically
-  speeds things up further.
-- **Growth stage durations are twice as fast as vanilla berry bushes.** Berry bush stage duration
-  comes from `GetHoursForNextStage()` — a per-species `nextStageMonths` range converted through
-  the calendar, divided by a `growthRateMul` modifier, not a hardcoded constant. "Double speed"
-  means this mod's cultivable flora use the same formula shape with either half the
-  `nextStageMonths` value a comparable berry bush would use, or an equivalent ~2x
-  `growthRateMul` — falls out of the existing formula, just different per-species tuning values.
+- **Harvest yield scales by container.** A Propagation Pot (small container) gives 2 once fully grown; a Propagation Planter (large container)
+  gives 4; a Log Planter gives 4.
+- **Plants grow twice as fast as berry bushes.** The baseline duration is half a live berry bush's empty-to-ripe cycle, in calendar months.
+- **Three stages:** Planted, Growing, Ready; harvest removes the plant.
+- **Rate by environment:** outdoor follows the temperature curve; indoor is always the baseline 1.0; greenhouse is a configurable multiplier (default 1.5)
+  of the baseline with no temperature effect. Rain does not matter.
+- **The plant is consumed on harvest.**
+- **A planted pot is picked up by sneak plus empty hand into a free slot and carries its plant;** breaking it destroys the plant.
+- **Mushrooms grow only in the indoor environment;** ground mushrooms in a Propagation Pot or Planter, tree-side mushrooms in a Log Planter (one mushroom).
+- **Scope is every mushroom, plus every flower, herb and fern in a remedy or poison recipe that vanilla cannot propagate and that drops something, except water lily** (72 plants).
 
 ---
 
@@ -2009,7 +2069,7 @@ Connections that span multiple parts, not obvious from reading any single part i
   Weakness/Paralysis.
 - **Room-based classification** (`RoomRegistry.GetRoomForPosition`) does three unrelated jobs:
   Immune/Tonic contagion, mushroom cultivation's indoor/damp gate, and cultivation's greenhouse
-  speed bonus.
+  speed multiplier (Part 5).
 - **Wound Infection and broken bones share a debuff shape, not a tier system** — worsening
   untreated infection can apply a Break-equivalent penalty without the limb being tracked as
   broken.
@@ -2058,11 +2118,13 @@ sepia/desaturation color grade, Concussion applies a horizontal shear plus a con
 boost and a drunken camera sway (toggleable for accessibility via config). Both are driven by two
 debug chat commands (`.rrTempFog`, `.rrConcussion`) — not yet wired to any real gameplay trigger.
 
-**Part 5 (Renewable Cultivation)**: fully settled — no open items remain.
+**Part 5 (Renewable Cultivation)**: the design is settled and the plan
+(`docs/plans/2026-11-14-plan-17-renewable-cultivation.md`) is ready for sign-off with no open items. The Log
+Planter's model is being made by the user.
 
 **Balance numbers, everywhere, structurally**: toxicity thresholds, distillation ratios, steep
 durations, bleed/infection severity curves, escalation timing, per-damage-type armor resistance
-values, per-species cultivation growth durations. None of this is designable further without
+values, cultivation growth durations. None of this is designable further without
 playtesting a real build.
 
 **Effect duration persistence across logout/login, decided and numbered.** An absolute-date

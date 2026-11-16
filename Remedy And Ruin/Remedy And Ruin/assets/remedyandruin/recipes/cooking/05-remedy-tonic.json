@@ -71,8 +71,8 @@
 					"stackSize": 6
 				},
 				{
-					"type": "item",
-					"code": "game:herbbundle-saffron",
+					"type": "block",
+					"code": "game:herb-saffron",
 					"stackSize": 6
 				},
 				{

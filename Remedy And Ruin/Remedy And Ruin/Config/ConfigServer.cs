@@ -56,9 +56,19 @@ namespace Remedy_And_Ruin
         [JsonProperty(Order = 13)]
         public float foodPoisoningVomitMaxIntervalMinutes { get; set; } = 60f;
 
+        // When true, an unsplinted Break or Crush Legs injury disables the player's own movement
+        // input entirely; when false it applies a heavy walkspeed penalty instead.
+        [JsonProperty(Order = 14)]
+        public bool immobilizeOnUnsplintedBrokenLeg { get; set; } = false;
+
         // World config keys that publish the settings the client needs to read.
         public const string AllowBowWorldKey = "RemedyAndRuin.allowBowWithUnsplintedBrokenArm";
         public const string BowPenaltyWorldKey = "RemedyAndRuin.brokenArmBowPenaltyPercent";
+        public const string ImmobilizeBrokenLegWorldKey = "RemedyAndRuin.immobilizeOnUnsplintedBrokenLeg";
+
+        // Reads the published setting from the world config; the default applies when it is absent.
+        public static bool ImmobilizeOnUnsplintedBrokenLeg(IWorldAccessor world) =>
+            world?.Config?.GetBool(ImmobilizeBrokenLegWorldKey, false) ?? false;
 
         // Reads the published setting from the world config; the default applies when it is absent.
         public static bool AllowBowWithUnsplintedBrokenArm(IWorldAccessor world) =>
@@ -83,6 +93,7 @@ namespace Remedy_And_Ruin
             injuryChatMessagesEnabled = previousConfig.injuryChatMessagesEnabled;
             allowBowWithUnsplintedBrokenArm = previousConfig.allowBowWithUnsplintedBrokenArm;
             brokenArmBowPenaltyPercent = previousConfig.brokenArmBowPenaltyPercent;
+            immobilizeOnUnsplintedBrokenLeg = previousConfig.immobilizeOnUnsplintedBrokenLeg;
             discoloredBushMeatEnabled = previousConfig.discoloredBushMeatEnabled;
             foodPoisoningVomitMinIntervalMinutes = previousConfig.foodPoisoningVomitMinIntervalMinutes;
             foodPoisoningVomitMaxIntervalMinutes = previousConfig.foodPoisoningVomitMaxIntervalMinutes;

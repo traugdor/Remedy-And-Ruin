@@ -167,9 +167,21 @@ No location bucketing, tier state machine, splinting, `SetMaxHealthModifiers` us
 Bell-proximity headache trigger. The design itself is fully numbered/complete on paper; zero of it
 exists in code.
 
-### A16. Part 5: Renewable Cultivation — NOT STARTED (entire part)
+### A16. Part 5: Renewable Cultivation — NOT STARTED (entire part; Plan 17 ready for sign-off)
 
-No `BlockEntityPlantContainer` subclass, growth-stage machine, or room-registry-based gating.
+Nothing is built except one recipe data fix: the Tonic and Sludge cooking recipes accept the
+`herb-saffron` block. The planned shape of the work, in `docs/plans/2026-11-14-plan-17-renewable-cultivation.md`:
+separate Propagation Pot, Propagation Planter and Log Planter blocks (vanilla pots are left
+untouched; a vanilla pot converts to a Propagation twin and back in the crafting grid, and the Log
+Planter is crafted from a log, a knife or chisel, and a hammer or club), a block
+class and block entity subclassing vanilla's `BlockPlantContainer` and `BlockEntityPlantContainer`
+under this mod's own registered names (no Harmony patch), a three-stage (Planted, Growing, Ready)
+calendar-based growth countdown whose rate is a temperature curve outdoors, exactly the baseline indoors
+and a configurable multiple in a greenhouse, `RoomRegistry`-based environment
+gating (mushrooms indoor only), empty-hand harvest that consumes the plant, sneak plus empty-hand
+pickup of a planted pot into a free slot that carries the plant and its progress, and own-mesh stage
+visuals. The scope is 72 plants: all 45 mushrooms (33 ground, 12 tree-side) plus the 27 flowers, herbs and ferns used in remedy or poison recipes that vanilla cannot propagate. None of
+the cultivation code exists yet.
 
 ### A17. "R&R Ongoing Effects" UI tab — NOT STARTED
 
@@ -294,8 +306,10 @@ necessarily by priority (priority is an open question, see Part D).
 17. **"R&R Ongoing Effects" UI tab** — new GUI dialog listing active effects.
 18. **Broken Bones system (Part 4)** — a large, largely self-contained subsystem: damage-location
     bucketing, tier state machine, splinting, armor-odds hook, healing-duration tracking.
-19. **Renewable Cultivation (Part 5)** — a large, self-contained subsystem: custom
-    `BlockEntityPlantContainer`, growth stages, indoor/outdoor/greenhouse gating.
+19. **Renewable Cultivation (Part 5)** — a large, self-contained subsystem: Propagation Pot,
+    Propagation Planter and Log Planter blocks with their own block entities, a three-stage
+    growth countdown (temperature-rate outdoors, fixed rate indoors and in a greenhouse),
+    indoor/outdoor/greenhouse gating, pickup that carries the plant.
 20. **Handbook pages** — deferred per the doc's own note; last.
 
 ---
@@ -540,8 +554,17 @@ in scope per D1/D11, so order here is about what unblocks what, not what matters
     lack-of-sleep Hallucination trigger (both Plan 19), the Antidote clearing remedy doses, the
     Creative-tab Cure-All potion and handbook pages (Plan 20), the client hand state after a vomit
     interrupt, and teleporting while held in bed.
-17. **Renewable Cultivation (Part 5)** — its own large plan, fully independent of the poison/remedy
-    systems.
+17. **Renewable Cultivation (Part 5)** — its own large plan (Plan 17, ready for sign-off), fully
+    independent of the poison/remedy systems. Adds a Propagation Pot and Propagation
+    Planter, each crafted from a finished vanilla pot or planter and convertible back (vanilla pots
+    are never modified), and a Log Planter for tree-side mushrooms, crafted from a log, a knife or
+    chisel, and a hammer or club. A planted plant (72 species: every mushroom plus the remedy and poison flowers, herbs and ferns that vanilla cannot propagate)
+    grows on the calendar through Planted, Growing and Ready at twice a berry bush's speed (1.25 months):
+    a temperature curve outdoors, exactly the baseline indoors, and a configurable multiple (default 1.5)
+    in a greenhouse; mushrooms grow only indoors. It is harvested with an empty hand for 2 items from a pot
+    or 4 from a planter or Log Planter, and is consumed by the harvest. A planted pot is picked up with sneak
+    plus an empty hand into a free slot and carries its plant and progress; breaking it destroys the plant.
+    Other mods' pots are supported by a JSON block definition and two conversion recipes per family.
 18. **"R&R Ongoing Effects" UI tab** — standalone once there's real effect data to display.
 19. **Final wiring plan** — connects everything: Hallucination/Temporal Fog/Concussion trigger
     swaps, Broken Bones ↔ poison/remedy cross-references (e.g. Bell proximity, splinting
@@ -588,3 +611,7 @@ all 20 steps are complete.
   Main custom work: `genTransformationMatrices()` for slot layout and put/take interaction logic.
   Verdict: easy-to-moderate. Worth double-checking whether `poisonCharges` needs to be folded into
   the mesh cache key so two vials with different charge counts don't render identically.
+
+- **Apothecary trader (after the mod is published)** — a new trader NPC, the Apothecary, who lives in
+  his own hut. The hut spawns together with the trader and is hooked into world generation. Tad in
+  the Nadiya village should be able to treat the player, as Tobias can.
