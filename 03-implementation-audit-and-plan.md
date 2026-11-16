@@ -137,7 +137,7 @@ no dilution exploit) is also already built via `Patch_MealEating`'s per-ingredie
 
 ### A11. Arrow poisoning (Part 2 §8) — NOT STARTED
 
-No dip-craft recipe, no poisoned-arrow item variant, no delivery code.
+No dip interaction, no poisoned-arrow item variant, no delivery code.
 
 ### A12. Hallucination / apparition system (Part 3 "Brain Fog") — PARTIAL, most complete non-pipeline system
 
@@ -289,7 +289,7 @@ necessarily by priority (priority is an open question, see Part D).
 9. **Remedy potion magnitude data** — `effectMultiplier`/`onsetMultiplier` values need adding to
    all 8 remedy-potion + Antidote item JSON (currently absent) — this is balance data, not code.
 10. **Stacking** — resolved without code changes; see A10.
-11. **Arrow poisoning** — dip-craft recipe + delivery hook into the same `OnItemConsumed`-adjacent
+11. **Arrow poisoning** — dip interaction + delivery hook into the same `OnItemConsumed`-adjacent
     pipeline (or a parallel damage-source-triggered path, since arrows don't go through eating).
 12. **Per-condition mechanics** (each is its own block, largely independent of each other once (3)
     and (4) exist): Analgesic, Antinausea (finish Upset Stomach), Antiseptic (Wound Infection
@@ -522,7 +522,7 @@ in scope per D1/D11, so order here is about what unblocks what, not what matters
 9. **Antidote fixes + missing rules** — the bug fix, the between-doses reset rule, and the 2-hour
    restricted-diet window, all together as one plan (all touch the same class/area).
 10. **Stacking** — resolved without code changes; see A10.
-11. **Arrow poisoning** — dip-craft recipe + delivery, standalone.
+11. **Arrow poisoning** — dip interaction + delivery, standalone.
 12. **The 5 poison-cluster effects** (Toxic/Noxious/Cardiac/Neurotoxic/Mind Poison) — one plan,
     since they share the same `ApplyEffect` switch and the same tolerance-discount formula shape.
 13. **Bleeding + Wound Infection + Skin Irritation + Tiredness/sleep-gate completion** — DONE

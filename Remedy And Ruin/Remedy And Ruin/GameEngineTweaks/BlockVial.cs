@@ -7,7 +7,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks
 {
     /// <summary>
     /// The Vial's 9-charge lifecycle (02-design-overview.md §4): a freshly-filled Vial starts at
-    /// 9/9. Dipping or crafting a poisoned arrow from it each consume 1 charge directly via
+    /// 9/9. Dipping an arrow in it consumes 1 charge directly via
     /// ItemStack.Attributes, independent of this class - spending the 9th and final charge also
     /// clears the Vial's actual liquid content (SetContent to null), not just the charge count, so
     /// it reads as genuinely empty everywhere, not just to this refill gate. Drinking always

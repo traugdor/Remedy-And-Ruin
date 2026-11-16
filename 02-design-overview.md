@@ -27,7 +27,7 @@ Part 2: Brewing Pipeline — Cookpot (1L water + 3 stacks, any mix of one cluste
         Base (edible directly, ~2hr fresh) → Barrel (10L water, ~1wk steep) → Diluted
         Potion (non-functional) → Distillery (Boiler+Condenser) → Potion → Concentrated
         Potion. Dosing via Vial (precise) or any liquid container (risky, 4x dose). One-dose-
-        per-8-hours overdose rule. Poison track reuses the same pipeline. Arrow poisoning (dip + craft).
+        per-8-hours overdose rule. Poison track reuses the same pipeline. Arrow poisoning (dip).
         │
         ▼
 Part 3: Conditions & Poison Effects — what everything actually does: Bleeding, Wound
@@ -523,13 +523,12 @@ liquid. This mod adds one new container to exploit that:
   block with no vanilla shape to reuse, so it needs its own model authored in VSMC (Vintage Story
   Model Creator) and referenced from its shape JSON.
 - **Vial charges (9 per fill), only relevant once §8 Arrow poisoning exists.** A freshly-filled
-  Vial starts at a full 9/9. Dipping an arrow or crafting a poisoned arrow from a Vial (§8) each
-  consume exactly 1 charge, regardless of which of the two methods was used — a poisoned arrow's
+  Vial starts at a full 9/9. Dipping an arrow in a Vial (§8) consumes exactly 1 charge — a poisoned arrow's
   own potency is always fixed at full strength and is never affected by how many charges the Vial
-  had remaining at the moment of dipping/crafting; only the Vial's own *remaining liquid* is
+  had remaining at the moment of dipping; only the Vial's own *remaining liquid* is
   affected. Drinking a Vial always consumes everything still in it in one dose, whatever fraction
   of the 9 charges that happens to be — an untouched 9/9 Vial drunk directly is a full-strength
-  dose, but a Vial already drawn down to, say, 3/9 by prior dipping/crafting delivers only 3/9 of
+  dose, but a Vial already drawn down to, say, 3/9 by prior dipping delivers only 3/9 of
   that dose's normal potency when drunk. This is a deliberate, safer tolerance-building path,
   alongside deliberately eating/drinking small enough discounted doses (Tolerance below) — drawing
   a Vial most of the way down via arrows first, then drinking the diminished remainder, is a way to
@@ -589,22 +588,20 @@ effects and escalation ladders (Part 3), this table is specific to the 8 remedy 
 
 ## §8. Arrow poisoning
 
-Both application methods are supported, mirroring the dual interaction pattern already used by
-fishing rods/bait in the base game:
+Arrows are poisoned by dipping, mirroring the interaction pattern already used by fishing
+rods/bait in the base game:
 
 - **Dip**: right-click one arrow against a poison-filled Vial (§4's 9-charge Vial specifically,
   not a generic container) to coat it directly, producing a poisoned arrow. Dipping only ever
   treats a single arrow per interaction, regardless of how large the held stack is — poisoning a
   whole stack means repeating the interaction once per arrow.
-- **Craft**: a conventional grid recipe consuming 1 arrow + 1 Vial of poison to output 1 poisoned
-  arrow, leaving the same Vial behind with one less charge (it isn't consumed outright — see §4).
 
 **Dose and coating rules:**
 
-- Both dipping and crafting consume exactly **1 of the Vial's 9 charges** per arrow — never a
+- Dipping consumes exactly **1 of the Vial's 9 charges** per arrow — never a
   flat liquid volume, and never from any container other than a Vial (§4). A poisoned arrow's own
   potency is always fixed at full strength regardless of how many charges the Vial had remaining
-  at the moment of dipping/crafting; only the Vial's own remaining liquid (and what it delivers if
+  at the moment of dipping; only the Vial's own remaining liquid (and what it delivers if
   later drunk) is affected by charge depletion.
 - **Picking up a poisoned arrow strips it** — it's no longer poisoned once retrieved, and must
   be re-treated before it counts as poisoned again.

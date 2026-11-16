@@ -6,7 +6,7 @@ using Vintagestory.GameContent;
 namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
 {
     /// <summary>
-    /// Dip, craft, and drink all clear a Vial's poisonCharges attribute themselves when they empty
+    /// Dip and drink both clear a Vial's poisonCharges attribute themselves when they empty
     /// it. Every other way a Vial's content can become empty - pouring into another container,
     /// spilling - goes through vanilla's own BlockLiquidContainerBase.SetContent without touching
     /// poisonCharges at all, leaving it stale. That breaks stacking (two empty Vials with different
