@@ -32,9 +32,9 @@ The game already supports everything this system needs, with no new engine code 
 - A limb's tier advances through repeated injury, not a single severity roll per hit.
 - 2 things can trigger an escalation attempt:
   - Taking a new qualifying hit to that limb.
-  - Using an unsplinted injured limb at all (swinging a tool, walking on it).
-- Splinting removes the use-triggered risk. A fresh direct hit can still escalate a splinted
-  limb.
+  - A hard landing on an injured leg. Using or moving a limb never escalates it.
+- Splinting does not prevent escalation. A fresh direct hit or a hard landing can still escalate a
+  splinted limb.
 - Leaving pain untreated does **not** advance the tier by itself — Analgesic manages pain only,
   it's not the on-ramp to a worse injury.
 
@@ -58,9 +58,10 @@ genuinely massive hit can skip tiers entirely, straight to Crush.
 - Not split by damage type yet, even though most enemies only deal slashing damage today —
   worth revisiting once vanilla's 1.23 combat update lands multiple damage types per attack.
 
-### Use-triggered escalation
+### Hard-landing escalation
 
-- Flat 5% chance per qualifying use of an unsplinted injured limb.
+- Flat 5% chance per hard landing on an injured leg, splinted or not. Nothing else rolls: walking,
+  sprinting, jumping and arm use never escalate a limb.
 - Always +1 tier on success — never a multi-tier jump.
 
 ## What each tier does
@@ -115,8 +116,6 @@ genuinely massive hit can skip tiers entirely, straight to Crush.
   injured limb. Consumes both.
 - **1 application per injury** — a splint can't be applied twice.
 - **Required for healing** — an unsplinted injury never heals on its own, at any tier.
-- **Blocks the use-triggered escalation risk** — a fresh direct hit can still escalate it
-  regardless.
 - **Restores a floor of function, Break/Crush only** — Strain and Fracture are already usable
   unsplinted, nothing to restore there. Break/Crush splinted: -40% movement/work speed, offhand
   can hold light items but not a shield.

@@ -540,7 +540,7 @@ in scope per D1/D11, so order here is about what unblocks what, not what matters
 15. **Broken Bones (Part 4)** — DONE (Plan 15, implemented, tested in-game, and committed). Hit
     location classification shared by armor and injury, location-scoped armor, the post-armor
     damage hook (Bleeding now reads damage after armor), the limb injury state machine with
-    hit- and use-triggered escalation, splinting, healing, the leg, arm, offhand, bow and skull
+    hit- and hard-landing-triggered escalation, splinting, healing, the leg, arm, offhand, bow and skull
     effects, and the Bell headache trigger are live. Analgesic's pain halving and Mind Tonic's
     headache cure are hooks left for Plan 16; the headache's visual and stat effect is wired in
     the final wiring plan.

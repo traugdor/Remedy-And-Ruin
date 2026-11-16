@@ -1659,11 +1659,11 @@ Strained skull from a jump of 2 or more, and a Fractured skull from any successf
 
 **A limb's tier advances through repeated qualifying injury to that same limb, not a fresh
 independent severity roll per hit — and "injury" isn't only new hits.** 2 distinct sources can
-trigger an escalation event: **taking a new qualifying hit to that limb**, or **using an
-unsplinted injured limb** — swinging a tool with a Strained arm, walking on a Fractured leg, etc.
-**Splinting exists specifically to remove most of that second source**: a splinted limb takes no
-use risk apart from jumping and hard landings on an injured leg (below), though a fresh direct hit
-to it can still push it further regardless of splinting. **Leaving pain untreated does not, by
+trigger an escalation event: **taking a new qualifying hit to that limb** (a fall's damage is a
+hit to the legs), or **a hard landing on an injured leg**. **Using or moving a limb never
+escalates it: walking, sprinting, jumping and swinging, breaking or placing with an arm carry no
+risk.** A splinted limb can still be pushed further by a fresh direct hit, and a hard landing rolls
+whether or not the leg is splinted. **Leaving pain untreated does not, by
 itself, advance the tier** — Analgesic only manages the pain symptom, it was never the on-ramp.
 
 **Hit-triggered escalation: 1 unified magnitude formula, no damage-type gating.** A qualifying
@@ -1708,21 +1708,16 @@ cannot escalate a healing limb (already at the highest tier) sets its healing ba
 tier's duration, but only when the tier the hit rolled is at least the limb's current tier; a hit
 whose roll fails never affects healing (Healing duration, below).
 
-**Use-triggered escalation: a flat 5% chance per qualifying event** (swinging a tool with a
-Strained arm, walking on a Fractured leg, etc.), unaffected by the hit-magnitude formula above —
+**Hard-landing escalation: a flat 5% chance per hard landing** on an injured leg, unaffected by
+the hit-magnitude formula above —
 mirrors Minor's own hit-triggered chance for consistency. Always **+1 tier on success**, never a
 multi-tier jump — unlike a hit, "use" carries no magnitude to scale a bigger jump off of. It only
 applies while the limb is injured; creative and spectator players never roll, and neither do
 mounted players for leg use.
 
-- **Arms**: hitting a creature, breaking a block, or placing a block — only while the arm is
-  unsplinted.
-- **Legs, footsteps**: only while the leg is unsplinted, counted per N steps, where N is 10 for
-  Strain, 5 for Fracture, 3 for Break and 2 for Crush (halved while sprinting, doubled while
-  sneaking, never below 1).
-- **Legs, jumps and hard landings**: a jump (taken from the ground) and a hard landing (a fall
-  that deals fall damage — an extra roll on top of the fall's own hit roll) roll for any injured
-  leg, splinted or not.
+- **Hard landings**: a hard landing (a fall that deals fall damage — an extra roll on top of the
+  fall's own hit roll) rolls for any injured leg, splinted or not. Nothing else rolls: walking,
+  sprinting, jumping and arm use never escalate a limb.
 
 ## What each tier does
 
@@ -1738,14 +1733,12 @@ a message (an on-screen warning plus an optional chat line, controlled by a serv
 
 **Strain**: Pain — digging speed and melee damage drop to **95%** (Analgesic halves the pain
 penalty). Otherwise fully usable. **Analgesic manages the pain symptom only — it does not heal the
-injury.** Splinting is what actually lets a Strain heal; left unsplinted, using the arm risks the
-use-triggered escalation roll toward Fracture (above).
+injury.** Splinting is what actually lets a Strain heal; using the arm never raises the tier (above).
 
 **Fracture**: The same pain symptom, dialed up — digging speed and melee damage drop to **90%**
 (Analgesic halves the pain penalty), not a new penalty type. Still fully usable, just more painful
 than Strain — "a fractured limb is still a working limb." Same deal as Strain: Analgesic only
-manages the pain, splinting is what heals it and what blocks the use-triggered escalation roll
-toward Break.
+manages the pain, and splinting is what heals it.
 
 **Break**: a broken arm means everything is done one-handed. Digging speed and melee damage drop
 to **50% unsplinted** and **60% splinted**. Digging speed is computed on the client and scaled
@@ -1782,13 +1775,13 @@ unaffected by an arm injury.
 **Strain**: Pain — a **-5% walk speed penalty** (Analgesic halves the pain penalty; the same
 pain-linked walkSpeed component Part 3's Pain relief section already assumed existed). Otherwise
 fully usable. **Analgesic manages the pain symptom only — it does not heal the injury.**
-Splinting is what actually lets a Strain heal; left unsplinted, using the leg risks the
-use-triggered escalation roll toward Fracture (above).
+Splinting is what actually lets a Strain heal; a leg tier rises only from damage to the leg,
+never from walking on it (above).
 
 **Fracture**: The same pain symptom, dialed up — a **-10% walk speed penalty** (Analgesic halves
 the pain penalty), not a new penalty type. Still fully usable, just more painful than Strain —
 "a fractured limb is still a working limb." Same deal as Strain: Analgesic only manages the pain,
-splinting is what heals it and what blocks the use-triggered escalation roll toward Break.
+and splinting is what heals it.
 
 **Break**: unsplinted, the player walks at **-60% walk speed**. A server setting,
 `immobilizeOnUnsplintedBrokenLeg` (off by default), instead prevents the player's own movement
@@ -1867,14 +1860,13 @@ Bleeding and the escalation table above; it is not a separate success roll.
   nothing can be splinted. Grid-craft-free, a direct use-interaction like bandaging a wound.
   **1 application per injury — a splint can't be applied twice.** The splint breaks when the limb
   escalates or when a shield block breaks it (Chest/Arms, above).
-- **Not a symptom mask — it's what actually lets the limb heal, and it ends most use-triggered
-  escalation risk (Tier progression, above).** An unsplinted Chest/Arms or Legs injury doesn't
-  heal on its own; using it risks pushing it up a tier. Splinting removes that risk (for legs,
-  jumps and hard landings still roll) and is the precondition for healing to happen — but a fresh
-  direct hit to the limb can still escalate it regardless of splinting.
+- **Not a symptom mask — it's what actually lets the limb heal.** An unsplinted Chest/Arms or Legs
+  injury doesn't heal on its own. Splinting is the precondition for healing to happen, but it does
+  not stop escalation: a fresh direct hit or a hard landing on a leg can still raise the tier
+  regardless of splinting (Tier progression, above).
 - **Restores a floor of function, not full use, and only at Break/Crush** — Strain and Fracture
   are already fully usable unsplinted (just painful, above), so splinting there is purely about
-  enabling healing and blocking use-triggered escalation, nothing to functionally restore.
+  enabling healing, nothing to functionally restore.
   Splinted Break or Crush works at **-40% walk speed for Legs**, or **60% digging speed and melee
   damage for Chest/Arms with the offhand unrestricted** — a real improvement over the unsplinted
   lockout, but still obviously a broken limb, not a cured one.

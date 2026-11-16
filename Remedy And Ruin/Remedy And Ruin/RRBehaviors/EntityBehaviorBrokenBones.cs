@@ -9,15 +9,6 @@ using Vintagestory.GameContent;
 
 namespace Remedy_And_Ruin.RRBehaviors
 {
-    /// <summary>Kinds of use event that can roll a use escalation (see RollFromUse).</summary>
-    public enum UseKind
-    {
-        ArmUse = 0,
-        Footstep = 1,
-        Jump = 2,
-        HardLanding = 3
-    }
-
     public enum InjuryTier
     {
         None = 0,
@@ -48,10 +39,10 @@ namespace Remedy_And_Ruin.RRBehaviors
     /// the victim's health so vanilla's own death handling runs. Register it before any handler that
     /// reduces the damage, so it sees the full post-armor amount.
     ///
-    /// Use escalation: RollUseEscalation gives an injured limb a flat chance of one more tier. Callers
-    /// decide who may roll; RollFromUse is the policy for real use events (ArmUse, Footstep, Jump,
-    /// HardLanding). Hard landings are rolled here from HandlePostArmorDamage for fall damage.
-    /// DebugUseChancePercent and DebugStepsPerRoll are non-persistent debug overrides for use rolls.
+    /// Hard-landing escalation: RollUseEscalation gives an injured limb a flat chance of one more
+    /// tier. RollHardLanding is the only real event that rolls it, from HandlePostArmorDamage for fall
+    /// damage, on top of the fall's own hit roll. Walking, sprinting, jumping and using an arm never
+    /// escalate a limb. DebugUseChancePercent is a non-persistent debug override for the roll chance.
     ///
     /// GetTier / IsSplinted: read the state. SetTier / SetSplinted: write it, server only, no message.
     /// FindWorstSplintableLimb / TrySplintWorstLimb: pick and splint the worst injured, unsplinted limb.
@@ -140,8 +131,6 @@ namespace Remedy_And_Ruin.RRBehaviors
         /// <summary>Debug override of the use-roll chance in percent; null uses the default. Static, never saved.</summary>
         public static float? DebugUseChancePercent;
 
-        /// <summary>Debug override of footsteps per leg use roll; null uses the computed value. Static, never saved.</summary>
-        public static int? DebugStepsPerRoll;
         private const InjuryTier SkullMaxTier = InjuryTier.Fracture;
         private const int TickIntervalMs = 5000;
         private const double DockFraction = 0.1;
@@ -585,22 +574,17 @@ namespace Remedy_And_Ruin.RRBehaviors
             return Raise(limb, 1);
         }
 
-        // Applies the who-may-roll policy for a use event, then rolls RollUseEscalation on the limb the
-        // event stresses (ChestArms for ArmUse, Legs otherwise). Nobody rolls in creative or spectator
-        // mode or with an uninjured limb, and a mounted player's own legs do not roll (the mount
-        // carries them). A splinted limb stops rolling from ArmUse and Footstep; Jump and HardLanding
-        // roll for any injured leg, splinted or not. Server only.
-        public bool RollFromUse(UseKind kind)
+        // Rolls RollUseEscalation on the legs after a hard landing, splinted or not. Nobody rolls in
+        // creative or spectator mode or with uninjured legs, and a mounted player's own legs do not
+        // roll (the mount carries them). Server only.
+        public bool RollHardLanding()
         {
             if (entity.World.Side != EnumAppSide.Server || !entity.Alive) return false;
             if (IsCreativeOrSpectator(entity)) return false;
-            if (kind != UseKind.ArmUse && (entity as EntityPlayer)?.MountedOn != null) return false;
+            if ((entity as EntityPlayer)?.MountedOn != null) return false;
+            if (GetTier(BoneLocation.Legs) == InjuryTier.None) return false;
 
-            BoneLocation limb = kind == UseKind.ArmUse ? BoneLocation.ChestArms : BoneLocation.Legs;
-            if (GetTier(limb) == InjuryTier.None) return false;
-            if ((kind == UseKind.ArmUse || kind == UseKind.Footstep) && IsSplinted(limb)) return false;
-
-            return RollUseEscalation(limb);
+            return RollUseEscalation(BoneLocation.Legs);
         }
 
         private static bool IsCreativeOrSpectator(Entity entity)
@@ -638,7 +622,7 @@ namespace Remedy_And_Ruin.RRBehaviors
             // Fall damage is a hard landing: an extra use roll on top of the hit roll, splinted or not.
             if (source?.Source == EnumDamageSource.Fall && hit.Value.Location == BoneLocation.Legs)
             {
-                bones.RollFromUse(UseKind.HardLanding);
+                bones.RollHardLanding();
             }
         }
 
