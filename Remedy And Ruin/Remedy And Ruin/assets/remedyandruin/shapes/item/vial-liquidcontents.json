@@ -12,15 +12,15 @@
 	"elements": [
 		{
 			"name": "Content",
-			"from": [ 7.5, -0.3, 7.5 ],
-			"to": [ 8.5, 5.0, 8.5 ],
+			"from": [ 7.55, 1.0, 7.55 ],
+			"to": [ 8.45, 5.0, 8.45 ],
 			"renderPass": 4,
 			"rotationOrigin": [ 8.0, 0.0, 8.0 ],
 			"faces": {
-				"north": { "texture": "#content", "uv": [ 0.0, 0.0, 0.5, 5.0 ] },
-				"east": { "texture": "#content", "uv": [ 0.0, 0.0, 0.5, 5.0 ] },
-				"south": { "texture": "#content", "uv": [ 0.0, 0.0, 0.5, 5.0 ] },
-				"west": { "texture": "#content", "uv": [ 0.0, 0.0, 0.5, 5.0 ] },
+				"north": { "texture": "#content", "uv": [ 0.0, 0.0, 0.5, 4.0 ] },
+				"east": { "texture": "#content", "uv": [ 0.0, 0.0, 0.5, 4.0 ] },
+				"south": { "texture": "#content", "uv": [ 0.0, 0.0, 0.5, 4.0 ] },
+				"west": { "texture": "#content", "uv": [ 0.0, 0.0, 0.5, 4.0 ] },
 				"up": { "texture": "#content", "uv": [ 0.0, 0.0, 0.5, 0.5 ] },
 				"down": { "texture": "#null", "uv": [ 0.0, 0.0, 0.5, 0.5 ], "enabled": false }
 			}

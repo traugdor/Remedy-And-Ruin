@@ -795,6 +795,28 @@ sliver):
 Cardiac Poison and Neurotoxic Poison have no mushroom members — both clusters are flowers only —
 so no per-ingredient table applies to them.
 
+**Strength and intensity for Noxious, Cardiac, Neurotoxic and Mind Poison.** These four use the
+same strength unit as Toxic: **1.0 is one charge of regular potion**, and the Effect × values in
+the tables above are the strength a mushroom contributes. A vial contributes its charge count times
+the potion's own strength (regular 1.0, concentrated 2.0, diluted 0.0); a poisoned arrow carries the
+potion's strength as-is. Intensity scales linearly with the strength left after tolerance. Duration
+never scales: it is fixed per cluster.
+
+| Cluster | Duration | Intensity per 1.0 strength |
+|---|---|---|
+| Noxious | 24h | Fever +2 C above normal body temperature, psychedelic tripping 2.0 (never above 2), a vomit about every 45 seconds (the interval divides by strength) |
+| Cardiac | 6h | Max HP -5, walk speed -40% and mining speed -40% (each limited to -90%); each exertion stack costs 5 max HP times the strength and adds 1h |
+| Neurotoxic | 6h, 12h or 24h by rung | Walk speed -40%, ranged aim accuracy -15% (limited to -90%), dizziness (never above 1) |
+| Mind | 24h | Hunger rate +100%, a 20% chance per movement attempt to vomit (never above 90%), fog and severity (never above 1), psychedelic tripping 2.0 (never above 2) |
+
+Neurotoxic's rung follows the dose's strength: under 2.0 is Weakness (6h), 2.0 up to 3.0 is
+Paralysis (12h), and 3.0 or more is Cardiac Arrest (24h), which swaps the walk speed penalty for
+Cardiac Poison's package. A poisoned arrow's half-weight Neurotoxic instance is always bare
+Weakness for 3h. Cardiac Arrest's flat -5 max HP and its exertion stacks are not scaled by strength.
+
+All walk speed penalties, including a broken leg's, share one floor: the blended walk speed never
+drops below 20%, and a penalty that would breach it is reduced instead.
+
 Rationale for scaled-onset delivery generally:
 
 - **Gives the player a real reaction window** to recognize something's wrong and drink the
@@ -849,17 +871,18 @@ per-exposure ramp), so all three exposures within a tier apply the same discount
 before it advances. Full progression is 9 tiers × 3 exposures = **27 total exposures for complete
 (9/9) immunity** to that cluster.
 
-- **Below** the crossing point for a given dose size: only duration scales down as tolerance
-  rises; magnitude and any flat/instant component (e.g. Cardiac Poison's flat HP hit) stay at
-  full strength.
-- **At or above** the crossing point for that exact dose size: the entire effect is voided,
-  including flat/instant components — a true all-or-nothing cutoff, not a fade. Cardiac Poison's
-  flat -5 current/max HP hit is the clearest example: it stays fixed through partial tolerance
-  (representing real, lasting cardiac damage) and only the recovery window shortens, until full
-  crossing, at which point the HP hit itself is waived too.
-- **Poisoned arrows** always apply the full, tolerance-discounted effect on a hit (no exemption
-  short of 9/9 tolerance for that cluster), but never contribute toward building tolerance —
-  bloodstream-direct delivery doesn't train resistance.
+- **Each tier cancels 1.0 strength**, one regular charge's worth, from every exposure to that
+  cluster. The strength left over drives the intensity of the effect (including its flat
+  components, such as Cardiac Poison's max HP cut), and duration never changes. A dose therefore
+  takes 3 times its strength, rounded up, in survived exposures to cancel: 3 for a regular charge,
+  6 for a concentrated one. Tolerance stops at tier 9, so a strength above 9 (a concentrated full
+  vial is 18) is never fully cancelled.
+- **A fully cancelled exposure does nothing.** Noxious, Cardiac, Neurotoxic and Mind Poison record
+  no effect at all and earn no tolerance credit. A mushroom's incidental Toxic sliver is judged
+  against Toxic tolerance on its own.
+- **Poisoned arrows** get the same discount, so a tolerant target takes less or nothing, but they
+  never contribute toward building tolerance — bloodstream-direct delivery doesn't train
+  resistance.
 - **Eating something for its primary effect still builds tolerance toward that primary cluster**
   even when an incidental secondary Toxic sliver rides along uninvited (e.g. eating Fly Agaric
   for the trip) — the secondary risk is real and unmanaged unless separately trained.
@@ -1441,10 +1464,10 @@ needs no new shader work, just a new strength input.
 | Cluster | Product | Coated-arrow effect | Drinking effect |
 |---|---|---|---|
 | Deadly Hepatotoxic | **Toxic Poison** (= Liver Failure) | +1.5 HP flat bonus damage per hit, applied immediately, plus a **chance** to also inject a smaller version of the delayed DoT below. **Hunting risk**: if the smaller DoT is what finishes off a killed animal, it drops Discolored Meat instead of its normal meat (Discolored Meat, below) — the poison taints it, deliberately making poisoned-arrow hunting a real risk (faster potential kill vs. a dangerous, tainted carcass) rather than a free efficiency upgrade | Delayed onset with a mild early warning (small `healingeffectivness` dip during the delay window), then **1.5 HP/sec continuous drain — no natural end, only stops via Antidote or death**. Two triggers: the deadly mushrooms directly, or a liver toxicity meter built up by eating cooked bushmeat (see Liver Disease, which uses a gentler, meter-bound version of this drain) |
-| GI-toxic / Emetic | **Noxious Poison** (= Food Poisoning) | High chance of the same as drinking | Fever + genuine psychedelic tripping (vanilla's own `psychedelic`-attribute mushroom effect, not the mod's Hallucination condition) + vomiting (via the same `ConsumeSaturation` mechanic as Upset Stomach), lasting 24h, ends via Antidote or death from other causes. **No DoT** — deliberately not lethal on its own; not every poison needs to be a death spiral, some should be annoying and disruptive but survivable on purpose |
-| Cardiac Glycoside | **Cardiac Poison** (= Cardiac Strain) | **25-35% chance** of cardiac arrest: -5 current *and* max HP (instant death if current HP is already below 5), heavy movement-speed debuff, considerably slowed tool use, 6h duration, may lead to death. Exertion stacking below applies the same way | **100% guaranteed** cardiac arrest, same effect. Trigger model changed from the original design: no longer gated behind exertion — it fires directly on drink/hit, with exertion now a *worsening* factor (both duration and severity) rather than the sole trigger, see below |
-| Neurotoxic / Alkaloid | **Neurotoxic Poison** (= Weakness/Paralysis) | **25-35% chance** per hit of contributing toxicity toward the escalation ladder — each successful proc adds **half a stage's worth** (two arrow procs ≈ one drunk dose) | The 3-stage escalation ladder (numbered below): Weakness → Paralysis → Cardiac Arrest. **Each drunk dose advances the ladder by exactly one full stage**, expressed as toxicity-per-dose on the same counter used for potion overdose (Part 2 §5), which is already weighted rather than a raw dose count, so this needs no new mechanic. **Also causes headache and dizziness** (mouse-sway via `TemporalVignetteRenderer.DrunkWobbleStrength`) throughout, at every stage. Confusion and mind-fog are *not* part of this poison — moved to Mind Poison below, since those specifically drive Hallucination/Temporal Fog rather than this ladder's physical debuffs |
-| Psychoactive | **Mind Poison** (= Hallucination) | **40-55% chance** of the same as drinking — higher than Cardiac/Neurotoxic's 25-35% since Mind Poison is non-lethal by design, less reason to gate it as tightly | Confusion and mind-fog — the actual driver of both Hallucination's apparition spawns *and* Temporal Fog's screen wobble/pulsating vignette together, not just one or the other — plus genuine psychedelic tripping and dizziness. **Attempting to move during the effect has a 15-25% chance per attempt of inducing vomiting.** Doubles hunger rate. Lasts 24h, ends via Antidote or death from other causes. **No DoT, deliberately non-lethal by design** — same as Noxious, and per the same rule (below) |
+| GI-toxic / Emetic | **Noxious Poison** (= Food Poisoning) | High chance of the same as drinking | Fever + genuine psychedelic tripping (vanilla's own `psychedelic`-attribute mushroom effect, not the mod's Hallucination condition) + vomiting (each vomit voids the stomach, as with Upset Stomach), all scaling with strength, lasting 24h, ends via Antidote or death from other causes. Vomiting empties saturation, and vanilla deals 0.125 HP every 6 seconds at zero saturation, so a player who cannot eat can starve. **No DoT** — deliberately not lethal on its own; not every poison needs to be a death spiral, some should be annoying and disruptive but survivable on purpose |
+| Cardiac Glycoside | **Cardiac Poison** (= Cardiac Strain) | **25-35% chance** of cardiac arrest: -5 max HP per strength (current HP falls with it, and the player dies if the cut takes max HP to zero), heavy movement-speed debuff, considerably slowed tool use, 6h duration, may lead to death. Exertion stacking below applies the same way | **100% guaranteed** cardiac arrest, same effect. Trigger model changed from the original design: no longer gated behind exertion — it fires directly on drink/hit, with exertion now a *worsening* factor (both duration and severity) rather than the sole trigger, see below |
+| Neurotoxic / Alkaloid | **Neurotoxic Poison** (= Weakness/Paralysis) | **25-35% chance** per hit of contributing toxicity toward the escalation ladder — each successful proc adds **half a stage's worth** (two arrow procs ≈ one drunk dose) | The 3-rung escalation ladder (numbered below): Weakness → Paralysis → Cardiac Arrest. **The dose's strength sets the rung.** **Also causes headache and dizziness** (mouse-sway via `TemporalVignetteRenderer.DrunkWobbleStrength`) throughout, at every stage. Confusion and mind-fog are *not* part of this poison — moved to Mind Poison below, since those specifically drive Hallucination/Temporal Fog rather than this ladder's physical debuffs |
+| Psychoactive | **Mind Poison** (= Hallucination) | **40-55% chance** of the same as drinking — higher than Cardiac/Neurotoxic's 25-35% since Mind Poison is non-lethal by design, less reason to gate it as tightly | Confusion and mind-fog — the actual driver of both Hallucination's apparition spawns *and* Temporal Fog's screen wobble/pulsating vignette together, not just one or the other — plus genuine psychedelic tripping and dizziness. **Attempting to move during the effect has a 20% chance per attempt, per strength, of inducing vomiting (never above 90%).** Raises hunger rate by 100% per strength. Lasts 24h, ends via Antidote or death from other causes. **No DoT, deliberately non-lethal by design** — same as Noxious, and per the same rule (below) |
 | Situational/Conditional | *(reuses Noxious Poison at lower severity, no dedicated effect)* | — | — |
 
 **Standing rule**: a poison is only lethal-capable if its own description explicitly says so
@@ -1456,9 +1479,9 @@ added to this roster too, not just the current five.
 **Cardiac Poison's exertion-stacking mechanic, numbered**: exertion — sprinting or using any
 tool — during an active episode adds a stack roughly every 10 seconds of exertion (a per-attempt
 cooldown between stacks, not a free-form tick); ordinary walking is exempt and never stacks.
-Each stack adds **+1 hour to the duration and -5 HP to both current and max health**, with
+Each stack adds **+1 hour to the duration and -5 HP times the strength to both current and max health**, with
 **no cap on stack count** — it's always eventually lethal no matter how much health the player
-has, just a matter of how long they keep exerting. On the base game's default 15 max HP,
+has, just a matter of how long they keep exerting. At 1.0 strength on the base game's default 15 max HP,
 avoiding exertion isn't optional: the initial hit already costs -5, one stack brings a fresh
 player to 5/5 (right at the instant-death threshold), and a second stack ends it — roughly 15-20
 seconds of continued exertion from full health. Players with more max health (from nutrition's
@@ -1466,19 +1489,18 @@ seconds of continued exertion from full health. Players with more max health (fr
 uncapped stacking catches up with them — the mechanic scales with the player's health pool
 without needing separate tuning for modded/high-health setups.
 
-**Neurotoxic Poison's 3-stage ladder, numbered**: dose #1 applies **Weakness** — a `walkSpeed`
-penalty lasting a baseline 6h, scaled by the dose's own effect multiplier and discounted by
-Neurotoxic tolerance (per Tolerance above). Dose #2 (**Paralysis**) layers a second,
-independently-timed Weakness-strength instance on top, at double the base duration (12h baseline)
-— while both instances overlap the combined penalty reads as full paralysis; the original instance
-still expires on its own schedule underneath. Dose #3 (**Cardiac Arrest**) adds Cardiac Poison's
-own effect package on top of whatever's still active — the same -5 current/max HP hit,
-movement-speed debuff, and slowed tool use, but at quadruple the base duration (24h baseline, same
-discounted multiplier) instead of Cardiac Poison's normal 6h — and **inherits Cardiac Poison's
-exertion-stacking rule**: sprinting or using any tool during this stage adds stacks the same way,
-worsening duration and HP loss, uncapped; ordinary walking is exempt. A player who avoids exertion
-can survive a full 3-dose ladder; one who sprints or works through it risks the same uncapped
-death spiral Cardiac Poison itself has.
+**Neurotoxic Poison's 3-rung ladder, numbered**: the strength left after tolerance picks one rung
+for the dose. Under 2.0 is **Weakness** — a `walkSpeed` penalty of -40% per strength lasting 6h.
+From 2.0 up to 3.0 is **Paralysis**, the same penalty lasting 12h; at that strength the penalty
+reads as near-full paralysis. From 3.0 up is **Cardiac Arrest**: Cardiac Poison's own effect
+package replaces the Weakness penalty — a flat -5 max HP hit, the movement-speed debuff and slowed
+tool use — lasting 24h instead of Cardiac Poison's normal 6h, and **inheriting Cardiac Poison's
+exertion-stacking rule**: sprinting or using any tool during this rung adds stacks the same way,
+worsening duration and HP loss, uncapped; ordinary walking is exempt. Headache (a ranged aim
+accuracy penalty) and dizziness apply at every rung. A player who avoids exertion can survive
+Cardiac Arrest; one who sprints or works through it risks the same uncapped death spiral Cardiac
+Poison itself has. A poisoned arrow's instance is always bare Weakness for 3h, whatever its
+strength; only a drunk dose can reach Paralysis or Cardiac Arrest.
 
 **Mind Poison's Hallucination severity scaling, numbered**: the same tolerance-discounted effect
 multiplier (0-1+) that already scales Temporal Fog's screen wobble/vignette strength, the doubled

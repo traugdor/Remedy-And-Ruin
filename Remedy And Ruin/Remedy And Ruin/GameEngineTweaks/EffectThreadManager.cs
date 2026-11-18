@@ -731,6 +731,11 @@ namespace Remedy_And_Ruin.GameEngineTweaks
             {
                 float clampedAlready = healthBeforeClamp - health.Health;
                 float remainingDamage = -value - clampedAlready;
+
+                // The clamp alone can take a full-health player to zero or below without a damage
+                // event, and the engine only kills through one, so a lethal reduction needs a damage
+                // call to trigger death.
+                if (remainingDamage <= 0f && health.Health <= 0f && entity.Alive) remainingDamage = 0.01f;
                 if (remainingDamage > 0f)
                 {
                     entity.ReceiveDamage(new DamageSource

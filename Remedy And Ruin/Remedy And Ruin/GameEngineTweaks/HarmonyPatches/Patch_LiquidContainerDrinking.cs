@@ -51,7 +51,7 @@ namespace Remedy_And_Ruin.GameEngineTweaks.HarmonyPatches
             if (__instance is BlockVial && slot?.Itemstack != null)
             {
                 // Drinking always fully drains the Vial's content, so the original tryEatStop call
-                // above already emptied it via SetContent(null), which Patch_VialChargeNormalization
+                // above already emptied it via SetContent(null), which BlockVial.SetContents
                 // has already cleared poisonCharges for - no need to touch the attribute here.
                 potencyScale = __state.chargesBefore / 9f;
             }
